@@ -91,9 +91,10 @@ build-docker-lean:
     # Очистка локальных образов для экономии места
     - docker system prune -f || true
   rules:
+    # Автоматический запуск при push в ветку feature/mixed-chart-v2
     - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
-      when: on_success  # Автоматический запуск при push
-    - if: $CI_PIPELINE_SOURCE == "web"  # Разрешить ручной запуск через UI
+    # Разрешить ручной запуск через GitLab UI
+    - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
       allow_failure: false
   timeout: 2h  # Сборка может занять до 2 часов
