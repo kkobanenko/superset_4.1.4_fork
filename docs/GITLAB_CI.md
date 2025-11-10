@@ -110,29 +110,115 @@ docker login gitlab.gdpgroup.ru:5050 -u <username> -p <token>
 
 ## Настройка GitLab Runner
 
-Убедитесь, что GitLab Runner настроен с тегом `docker`:
+### Вариант 1: Использование Shared Runners (если доступны)
+
+Если в вашем GitLab настроены shared runners, они должны автоматически подхватить job. Проверьте настройки проекта:
+- Перейдите: `Settings` → `CI/CD` → `Runners`
+- Убедитесь, что "Enable shared runners for this project" включено
+
+### Вариант 2: Настройка собственного GitLab Runner
+
+Если shared runners недоступны, нужно настроить собственный runner:
+
+#### Шаг 1: Установка GitLab Runner
+
+На сервере с Docker выполните:
+
+```bash
+# Для Linux
+curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+sudo apt-get install gitlab-runner
+
+# Или используйте Docker образ
+docker run -d --name gitlab-runner --restart always \
+  -v /srv/gitlab-runner/config:/etc/gitlab-runner \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  gitlab/gitlab-runner:latest
+```
+
+#### Шаг 2: Регистрация Runner
+
+```bash
+# Получите registration token из GitLab:
+# Settings → CI/CD → Runners → Expand "Set up a specific runner manually"
+
+sudo gitlab-runner register
+```
+
+При регистрации укажите:
+- GitLab URL: `https://gitlab.gdpgroup.ru/`
+- Registration token: (из настроек проекта)
+- Description: `docker-runner`
+- Tags: `docker` (или оставьте пустым)
+- Executor: `docker`
+- Default Docker image: `docker:24-dind`
+
+#### Шаг 3: Настройка конфигурации Runner
+
+Отредактируйте `/etc/gitlab-runner/config.toml`:
 
 ```toml
 [[runners]]
   name = "docker-runner"
   url = "https://gitlab.gdpgroup.ru/"
-  token = "..."
+  token = "YOUR_RUNNER_TOKEN"
   executor = "docker"
   [runners.docker]
     image = "docker:24-dind"
     privileged = true
-  [runners.tags]
-    tags = ["docker"]
+    volumes = ["/cache"]
+  [runners.cache]
+    [runners.cache.s3]
+    # или используйте local cache
+```
+
+#### Шаг 4: Перезапуск Runner
+
+```bash
+sudo gitlab-runner restart
+```
+
+### Вариант 3: Использование Docker на локальной машине
+
+Если нет возможности настроить runner на сервере, можно использовать локальную машину:
+
+```bash
+# Установите GitLab Runner локально
+# Зарегистрируйте его как описано выше
+# Runner будет работать только когда ваша машина включена
 ```
 
 ## Устранение проблем
+
+### Проблема: Job застрял - нет активных runners
+
+**Решение:**
+1. **Проверьте настройки проекта:**
+   - Перейдите: `Settings` → `CI/CD` → `Runners`
+   - Убедитесь, что включены shared runners или настроен project runner
+   - Проверьте, что runner активен (зеленый индикатор)
+
+2. **Настройте GitLab Runner:**
+   - См. раздел "Настройка GitLab Runner" выше
+   - Убедитесь, что runner зарегистрирован и активен
+   - Проверьте логи runner: `sudo gitlab-runner status`
+
+3. **Альтернатива - сборка вручную:**
+   - Если нет возможности настроить runner, соберите образ локально:
+   ```bash
+   git clone https://gitlab.gdpgroup.ru/gdpgroup/superset_4.1.4_fork.git
+   cd superset_4.1.4_fork
+   git checkout feature/mixed-chart-v2
+   docker build --target lean -t superset-custom:feature-mixed-chart-v2 -f Dockerfile .
+   ```
 
 ### Проблема: Пайплайн не запускается
 
 **Решение:**
 - Убедитесь, что файл `.gitlab-ci.yml` находится в корне репозитория
-- Проверьте, что GitLab Runner активен и имеет тег `docker`
+- Проверьте, что GitLab Runner активен
 - Проверьте настройки CI/CD в проекте GitLab
+- Убедитесь, что ветка называется точно `feature/mixed-chart-v2`
 
 ### Проблема: Ошибка при сборке образа
 
