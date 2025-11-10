@@ -379,7 +379,8 @@ export function transformSeries(
     symbolSize: markerSize,
     label: (() => {
       // Определяем позицию label для stacked bar charts
-      let labelPosition: string = isHorizontal ? 'right' : 'top';
+      let labelPosition: 'top' | 'bottom' | 'left' | 'right' | 'inside' =
+        isHorizontal ? 'right' : 'top';
       if (
         stack &&
         seriesType === EchartsTimeseriesSeriesType.Bar &&
