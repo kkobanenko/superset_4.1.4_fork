@@ -25,6 +25,7 @@ export { default as EchartsTimeseriesScatterChartPlugin } from './Timeseries/Reg
 export { default as EchartsTimeseriesSmoothLineChartPlugin } from './Timeseries/Regular/SmoothLine';
 export { default as EchartsTimeseriesStepChartPlugin } from './Timeseries/Step';
 export { default as EchartsMixedTimeseriesChartPlugin } from './MixedTimeseries';
+export { default as EchartsMixedTimeseriesV2ChartPlugin } from './MixedTimeseriesV2';
 export { default as EchartsPieChartPlugin } from './Pie';
 export { default as EchartsGraphChartPlugin } from './Graph';
 export { default as EchartsGaugeChartPlugin } from './Gauge';

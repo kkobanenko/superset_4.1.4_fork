@@ -62,6 +62,7 @@ import {
   EchartsSankeyChartPlugin,
   EchartsTreemapChartPlugin,
   EchartsMixedTimeseriesChartPlugin,
+  EchartsMixedTimeseriesV2ChartPlugin,
   EchartsTreeChartPlugin,
   EchartsSunburstChartPlugin,
   EchartsBubbleChartPlugin,
@@ -123,6 +124,9 @@ export default class MainPreset extends Preset {
         new EchartsRadarChartPlugin().configure({ key: VizType.Radar }),
         new EchartsMixedTimeseriesChartPlugin().configure({
           key: VizType.MixedTimeseries,
+        }),
+        new EchartsMixedTimeseriesV2ChartPlugin().configure({
+          key: VizType.MixedTimeseriesV2,
         }),
         new HorizonChartPlugin().configure({ key: VizType.Horizon }),
         new MapBoxChartPlugin().configure({ key: VizType.MapBox }),

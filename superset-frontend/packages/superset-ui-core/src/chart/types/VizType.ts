@@ -42,6 +42,7 @@ export enum VizType {
   Line = 'echarts_timeseries_line',
   MapBox = 'mapbox',
   MixedTimeseries = 'mixed_timeseries',
+  MixedTimeseriesV2 = 'mixed_timeseries_v2',
   PairedTTest = 'paired_ttest',
   ParallelCoordinates = 'para',
   Partition = 'partition',

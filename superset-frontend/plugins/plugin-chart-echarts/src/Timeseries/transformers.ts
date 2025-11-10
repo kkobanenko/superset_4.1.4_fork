@@ -69,6 +69,18 @@ import {
   TIMESERIES_CONSTANTS,
 } from '../constants';
 
+// Константы для размеров шрифта labels
+const LABEL_FONT_SIZES = {
+  normal: 12, // Текущее значение по умолчанию ECharts
+  small: 8, // 70% от нормального (12 * 0.7 = 8.4px ≈ 8px)
+  micro: 5, // 40% от нормального (12 * 0.4 = 4.8px ≈ 5px)
+} as const;
+
+function getLabelFontSize(size?: 'normal' | 'small' | 'micro'): number | undefined {
+  if (!size) return undefined;
+  return LABEL_FONT_SIZES[size];
+}
+
 // based on weighted wiggle algorithm
 // source: https://ieeexplore.ieee.org/document/4658136
 export const getBaselineSeriesForStream = (
@@ -196,6 +208,9 @@ export function transformSeries(
     timeCompare?: string[];
     timeShiftColor?: boolean;
     theme?: SupersetTheme;
+    stackedLabelPosition?: 'top' | 'middle';
+    hideZeroValues?: boolean;
+    labelFontSize?: 'normal' | 'small' | 'micro';
   },
 ): SeriesOption | undefined {
   const { name, data } = series;
@@ -226,6 +241,9 @@ export function transformSeries(
     timeCompare = [],
     timeShiftColor,
     theme,
+    stackedLabelPosition,
+    hideZeroValues,
+    labelFontSize,
   } = opts;
   const contexts = seriesContexts[name || ''] || [];
   const hasForecast =
@@ -359,46 +377,77 @@ export function transformSeries(
     showSymbol,
     symbol,
     symbolSize: markerSize,
-    label: {
-      show: !!showValue,
-      position: isHorizontal ? 'right' : 'top',
-      color: theme?.colorText,
-      textBorderWidth: 0,
-      formatter: (params: any) => {
-        // don't show confidence band value labels, as they're already visible on the tooltip
-        if (
-          [
-            ForecastSeriesEnum.ForecastUpper,
-            ForecastSeriesEnum.ForecastLower,
-          ].includes(forecastSeries.type)
-        ) {
-          return '';
+    label: (() => {
+      // Определяем позицию label для stacked bar charts
+      let labelPosition: string = isHorizontal ? 'right' : 'top';
+      if (
+        stack &&
+        seriesType === EchartsTimeseriesSeriesType.Bar &&
+        stackedLabelPosition
+      ) {
+        if (stackedLabelPosition === 'middle') {
+          labelPosition = 'inside';
+        } else {
+          labelPosition = isHorizontal ? 'right' : 'top';
         }
-        const { value, dataIndex, seriesIndex, seriesName } = params;
-        const numericValue = isHorizontal ? value[0] : value[1];
-        const isSelectedLegend = !legendState || legendState[seriesName];
-        const isAreaExpand = stack === StackControlsValue.Expand;
-        if (!formatter) {
-          return numericValue;
-        }
-        if (!stack && isSelectedLegend) {
-          return formatter(numericValue);
-        }
-        if (!onlyTotal) {
+      }
+
+      // Определяем размер шрифта
+      const fontSize = getLabelFontSize(labelFontSize);
+
+      return {
+        show: !!showValue,
+        position: labelPosition,
+        color: theme?.colorText,
+        textBorderWidth: 0,
+        ...(fontSize !== undefined && { fontSize }),
+        formatter: (params: any) => {
+          // don't show confidence band value labels, as they're already visible on the tooltip
           if (
-            numericValue >=
-            (thresholdValues[dataIndex] || Number.MIN_SAFE_INTEGER)
+            [
+              ForecastSeriesEnum.ForecastUpper,
+              ForecastSeriesEnum.ForecastLower,
+            ].includes(forecastSeries.type)
           ) {
+            return '';
+          }
+          const { value, dataIndex, seriesIndex, seriesName } = params;
+          const numericValue = isHorizontal ? value[0] : value[1];
+          const isSelectedLegend = !legendState || legendState[seriesName];
+          const isAreaExpand = stack === StackControlsValue.Expand;
+
+          // Скрывать нулевые значения, если hideZeroValues включен (только для stacked bar charts)
+          if (
+            hideZeroValues &&
+            stack &&
+            seriesType === EchartsTimeseriesSeriesType.Bar &&
+            numericValue === 0
+          ) {
+            return '';
+          }
+
+          if (!formatter) {
+            return numericValue;
+          }
+          if (!stack && isSelectedLegend) {
             return formatter(numericValue);
           }
+          if (!onlyTotal) {
+            if (
+              numericValue >=
+              (thresholdValues[dataIndex] || Number.MIN_SAFE_INTEGER)
+            ) {
+              return formatter(numericValue);
+            }
+            return '';
+          }
+          if (seriesIndex === showValueIndexes[dataIndex]) {
+            return formatter(isAreaExpand ? 1 : totalStackedValues[dataIndex]);
+          }
           return '';
-        }
-        if (seriesIndex === showValueIndexes[dataIndex]) {
-          return formatter(isAreaExpand ? 1 : totalStackedValues[dataIndex]);
-        }
-        return '';
-      },
-    },
+        },
+      };
+    })(),
   };
 }
 
