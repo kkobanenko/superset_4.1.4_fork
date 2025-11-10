@@ -35,6 +35,9 @@ build-docker-lean:
     - docker:24-dind
   variables:
     DOCKER_BUILDKIT: 1
+    # Переменные для настройки сборки (можно переопределить в GitLab UI)
+    BUILD_TARGET: "lean"
+    BUILD_PLATFORM: "linux/amd64"
   before_script:
     # Вход в GitLab Container Registry
     - echo "Logging to GitLab Container Registry..."
@@ -54,14 +57,14 @@ build-docker-lean:
     # Сборка образа с таргетом lean (production образ)
     - |
       docker build \
-        --target lean \
-        --build-arg BUILD_TRANSLATIONS=false \
-        --build-arg LOAD_EXAMPLES_DUCKDB=false \
-        --build-arg INCLUDE_CHROMIUM=false \
+        --target ${BUILD_TARGET} \
+        --build-arg BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS:-false} \
+        --build-arg LOAD_EXAMPLES_DUCKDB=${LOAD_EXAMPLES_DUCKDB:-false} \
+        --build-arg INCLUDE_CHROMIUM=${INCLUDE_CHROMIUM:-false} \
         --tag ${IMAGE_TAG_BRANCH} \
         --tag ${IMAGE_TAG_LATEST} \
         --tag ${IMAGE_TAG_COMMIT} \
-        --platform linux/amd64 \
+        --platform ${BUILD_PLATFORM} \
         -f Dockerfile .
     
     # Отправка образов в GitLab Container Registry
@@ -87,10 +90,12 @@ build-docker-lean:
   after_script:
     # Очистка локальных образов для экономии места
     - docker system prune -f || true
-  only:
-    - feature/mixed-chart-v2
-  tags:
-    - docker
+  rules:
+    - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
+      when: on_success  # Автоматический запуск при push
+    - if: $CI_PIPELINE_SOURCE == "web"  # Разрешить ручной запуск через UI
+      when: manual
+      allow_failure: false
   timeout: 2h  # Сборка может занять до 2 часов
 
 # Опциональная сборка dev образа (для разработки)
@@ -138,7 +143,6 @@ build-docker-dev:
   only:
     - feature/mixed-chart-v2
   when: manual  # Ручной запуск для dev образа
-  tags:
-    - docker
+  # tags: []  # Убрано требование тега docker для совместимости с разными runner'ами
   timeout: 2h
 
