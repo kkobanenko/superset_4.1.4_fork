@@ -17,6 +17,11 @@
 
 # GitLab CI/CD конфигурация для автоматической сборки Docker образа Superset
 # с поддержкой Mixed Chart 2.0
+#
+# ТРЕБОВАНИЯ:
+# - GitLab Runner с поддержкой Docker (docker executor)
+# - Если нет runner, см. RUNNER_SETUP.md для инструкций по настройке
+# - Или используйте shared runners (если доступны в вашем GitLab)
 
 variables:
   DOCKER_DRIVER: overlay2
