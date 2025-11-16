@@ -20,6 +20,13 @@
 #
 # ТРЕБОВАНИЯ:
 # - GitLab Runner с поддержкой Docker (docker executor)
+# - Runner ДОЛЖЕН быть настроен с privileged = true в config.toml
+#   Пример конфигурации:
+#   [[runners]]
+#     executor = "docker"
+#     [runners.docker]
+#       privileged = true
+#       image = "docker:24-dind"
 # - Если нет runner, см. RUNNER_SETUP.md для инструкций по настройке
 # - Или используйте shared runners (если доступны в вашем GitLab)
 
@@ -44,6 +51,15 @@ build-docker-lean:
     BUILD_TARGET: "lean"
     BUILD_PLATFORM: "linux/amd64"
   before_script:
+    # Ожидание готовности Docker daemon
+    - echo "Waiting for Docker daemon to be ready..."
+    - |
+      until docker info > /dev/null 2>&1; do
+        echo "Docker daemon is not ready yet, waiting..."
+        sleep 1
+      done
+    - echo "Docker daemon is ready!"
+    - docker info
     # Вход в GitLab Container Registry
     - echo "Logging to GitLab Container Registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -113,6 +129,16 @@ build-docker-dev:
   variables:
     DOCKER_BUILDKIT: 1
   before_script:
+    # Ожидание готовности Docker daemon
+    - echo "Waiting for Docker daemon to be ready..."
+    - |
+      until docker info > /dev/null 2>&1; do
+        echo "Docker daemon is not ready yet, waiting..."
+        sleep 1
+      done
+    - echo "Docker daemon is ready!"
+    - docker info
+    # Вход в GitLab Container Registry
     - echo "Logging to GitLab Container Registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:

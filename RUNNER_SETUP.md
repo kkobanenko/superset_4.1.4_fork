@@ -37,15 +37,19 @@ sudo gitlab-runner register
 #### Вариант B: Установка через Docker
 
 ```bash
-# Запустите GitLab Runner в Docker
+# Запустите GitLab Runner в Docker с поддержкой Docker-in-Docker
+# ВАЖНО: Используйте --privileged для поддержки Docker-in-Docker
 docker run -d --name gitlab-runner --restart always \
+  --privileged \
   -v /srv/gitlab-runner/config:/etc/gitlab-runner \
-  -v /var/run/docker.sock:/var/run/docker.sock \
   gitlab/gitlab-runner:latest
 
 # Регистрация
 docker exec -it gitlab-runner gitlab-runner register
 ```
+
+**Примечание:** При использовании Docker-in-Docker НЕ монтируйте `/var/run/docker.sock`, 
+так как Docker daemon будет запущен в отдельном сервисе контейнере.
 
 ### Шаг 3: Настройка конфигурации
 
@@ -66,8 +70,16 @@ docker exec -it gitlab-runner nano /etc/gitlab-runner/config.toml
   executor = "docker"
   [runners.docker]
     image = "docker:24-dind"
-    privileged = true
-    volumes = ["/cache", "/var/run/docker.sock:/var/run/docker.sock"]
+    privileged = true  # КРИТИЧЕСКИ ВАЖНО для Docker-in-Docker!
+    volumes = ["/cache"]
+    # НЕ монтируйте /var/run/docker.sock при использовании Docker-in-Docker
+    # Docker daemon будет запущен в отдельном сервисе
+```
+
+**ВАЖНО:** Параметр `privileged = true` обязателен для работы Docker-in-Docker. 
+Без него сервис `docker:24-dind` не сможет запустить Docker daemon, и вы получите ошибку:
+```
+Health check error: service "docker" timeout
 ```
 
 ### Шаг 4: Перезапуск Runner
@@ -112,6 +124,38 @@ docker login gitlab.gdpgroup.ru:5050
 
 # Отправьте образ
 docker push gitlab.gdpgroup.ru:5050/gdpgroup/superset_4.1.4_fork:feature-mixed-chart-v2
+```
+
+## Устранение проблем
+
+### Проблема: Health check error - service "docker" timeout
+
+Если вы видите ошибку:
+```
+*** WARNING: Service runner-...-docker-0 probably didn't start properly.
+Health check error: service "docker" timeout
+```
+
+**Причина:** GitLab Runner не настроен с `privileged = true`.
+
+**Решение:**
+1. Проверьте конфигурацию runner: `/etc/gitlab-runner/config.toml`
+2. Убедитесь, что в секции `[runners.docker]` есть `privileged = true`
+3. Если runner запущен в Docker, убедитесь, что контейнер запущен с флагом `--privileged`
+4. Перезапустите runner: `sudo gitlab-runner restart` или `docker restart gitlab-runner`
+5. Проверьте логи runner: `sudo gitlab-runner run --debug` (для диагностики)
+
+### Проверка конфигурации runner
+
+```bash
+# Просмотр конфигурации
+sudo cat /etc/gitlab-runner/config.toml
+# или для Docker:
+docker exec gitlab-runner cat /etc/gitlab-runner/config.toml
+
+# Убедитесь, что видите:
+# [runners.docker]
+#   privileged = true
 ```
 
 ## Дополнительная помощь
