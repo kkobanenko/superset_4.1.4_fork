@@ -137,3 +137,7 @@ PROJECT.md
 .claude_rc*
 .env.local
 oxc-custom-build/
+
+# Dev environment data directories
+postgres_data_dev/
+superset_data_dev/

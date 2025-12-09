@@ -22,7 +22,6 @@ import {
   extractTimegrain,
   getTimeFormatter,
   getTimeFormatterForGranularity,
-  QueryFormData,
   SMART_DATE_ID,
   TimeFormats,
 } from '@superset-ui/core';
@@ -109,6 +108,8 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     allowRenderHtml,
     fieldGroupingSettings,
     globalTableSettings,
+    legacy_order_by,
+    order_desc,
   } = formData;
   const { selectedFilters } = filterState;
   const granularity = extractTimegrain(rawFormData);
@@ -153,6 +154,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
   return {
     width,
     height,
+    margin: 0, // Default margin, можно сделать настраиваемым
     data,
     groupbyRows,
     groupbyColumns,
@@ -185,5 +187,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     allowRenderHtml,
     fieldGroupingSettings,
     globalTableSettings,
+    legacy_order_by: legacy_order_by || null,
+    order_desc: order_desc ?? true,
   };
 }

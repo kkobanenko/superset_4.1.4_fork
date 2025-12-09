@@ -397,25 +397,25 @@ export function transformSeries(
       const fontSize = getLabelFontSize(labelFontSize);
 
       return {
-        show: !!showValue,
+      show: !!showValue,
         position: labelPosition,
-        color: theme?.colorText,
-        textBorderWidth: 0,
+      color: theme?.colorText,
+      textBorderWidth: 0,
         ...(fontSize !== undefined && { fontSize }),
-        formatter: (params: any) => {
-          // don't show confidence band value labels, as they're already visible on the tooltip
-          if (
-            [
-              ForecastSeriesEnum.ForecastUpper,
-              ForecastSeriesEnum.ForecastLower,
-            ].includes(forecastSeries.type)
-          ) {
-            return '';
-          }
-          const { value, dataIndex, seriesIndex, seriesName } = params;
-          const numericValue = isHorizontal ? value[0] : value[1];
-          const isSelectedLegend = !legendState || legendState[seriesName];
-          const isAreaExpand = stack === StackControlsValue.Expand;
+      formatter: (params: any) => {
+        // don't show confidence band value labels, as they're already visible on the tooltip
+        if (
+          [
+            ForecastSeriesEnum.ForecastUpper,
+            ForecastSeriesEnum.ForecastLower,
+          ].includes(forecastSeries.type)
+        ) {
+          return '';
+        }
+        const { value, dataIndex, seriesIndex, seriesName } = params;
+        const numericValue = isHorizontal ? value[0] : value[1];
+        const isSelectedLegend = !legendState || legendState[seriesName];
+        const isAreaExpand = stack === StackControlsValue.Expand;
 
           // Скрывать нулевые значения, если hideZeroValues включен (только для stacked bar charts)
           if (
@@ -427,26 +427,26 @@ export function transformSeries(
             return '';
           }
 
-          if (!formatter) {
-            return numericValue;
-          }
-          if (!stack && isSelectedLegend) {
+        if (!formatter) {
+          return numericValue;
+        }
+        if (!stack && isSelectedLegend) {
+          return formatter(numericValue);
+        }
+        if (!onlyTotal) {
+          if (
+            numericValue >=
+            (thresholdValues[dataIndex] || Number.MIN_SAFE_INTEGER)
+          ) {
             return formatter(numericValue);
           }
-          if (!onlyTotal) {
-            if (
-              numericValue >=
-              (thresholdValues[dataIndex] || Number.MIN_SAFE_INTEGER)
-            ) {
-              return formatter(numericValue);
-            }
-            return '';
-          }
-          if (seriesIndex === showValueIndexes[dataIndex]) {
-            return formatter(isAreaExpand ? 1 : totalStackedValues[dataIndex]);
-          }
           return '';
-        },
+        }
+        if (seriesIndex === showValueIndexes[dataIndex]) {
+          return formatter(isAreaExpand ? 1 : totalStackedValues[dataIndex]);
+        }
+        return '';
+      },
       };
     })(),
   };

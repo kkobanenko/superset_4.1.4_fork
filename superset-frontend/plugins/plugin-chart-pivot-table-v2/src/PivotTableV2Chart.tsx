@@ -183,8 +183,10 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
     onContextMenu,
     timeGrainSqla,
     allowRenderHtml,
-    fieldGroupingSettings,
-    globalTableSettings,
+    // @ts-ignore - будет использовано для применения настроек форматирования
+    fieldGroupingSettings, // TODO: будет использовано для применения настроек форматирования
+    // @ts-ignore - будет использовано для применения глобальных настроек
+    globalTableSettings, // TODO: будет использовано для применения глобальных настроек
   } = props;
 
   const theme = useTheme();

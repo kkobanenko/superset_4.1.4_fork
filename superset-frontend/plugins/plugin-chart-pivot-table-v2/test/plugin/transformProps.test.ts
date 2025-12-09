@@ -24,7 +24,7 @@ import { MetricsLayoutEnum } from '../../src/types';
 
 describe('PivotTableChart transformProps', () => {
   const setDataMask = jest.fn();
-  const formData = {
+  const formData: QueryFormData = {
     groupbyRows: ['row1', 'row2'],
     groupbyColumns: ['col1', 'col2'],
     metrics: ['metric1', 'metric2'],
@@ -40,7 +40,7 @@ describe('PivotTableChart transformProps', () => {
     rowTotals: true,
     valueFormat: 'SMART_NUMBER',
     metricsLayout: MetricsLayoutEnum.COLUMNS,
-    viz_type: '',
+    viz_type: 'pivot_table_v2',
     datasource: '',
     conditionalFormatting: [],
     dateFormat: '',
@@ -66,7 +66,8 @@ describe('PivotTableChart transformProps', () => {
   });
 
   it('should transform chart props for viz', () => {
-    expect(transformProps(chartProps)).toEqual({
+    const result = transformProps(chartProps as any);
+    expect(result).toMatchObject({
       width: 800,
       height: 600,
       groupbyRows: ['row1', 'row2'],

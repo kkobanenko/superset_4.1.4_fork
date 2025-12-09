@@ -37,8 +37,11 @@ import {
 import { MetricsLayoutEnum } from '../types';
 
 // Функция для создания секции настроек конкретного поля группировки
+// TODO: будет использована для динамического создания секций
+// @ts-ignore - функция будет использована в будущем
 function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
-  const fieldKey = `field_${fieldName.replace(/[^a-zA-Z0-9]/g, '_')}`;
+  // @ts-ignore
+  const _fieldKey = `field_${fieldName.replace(/[^a-zA-Z0-9]/g, '_')}`;
   return {
     label: t('Field: %s', fieldLabel),
     expanded: false,
@@ -103,7 +106,7 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
             renderTrigger: true,
             default: t('Subtotal'),
             description: t('Label for subtotal row/column'),
-            visibility: ({ controls }) => {
+            visibility: ({ controls }: { controls?: any }) => {
               const fieldSettings = controls?.fieldGroupingSettings?.value || {};
               return fieldSettings[fieldName]?.subtotalEnabled === true;
             },
@@ -122,7 +125,7 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
               ['min', t('Minimum')],
             ],
             description: t('Aggregation type for subtotals'),
-            visibility: ({ controls }) => {
+            visibility: ({ controls }: { controls?: any }) => {
               const fieldSettings = controls?.fieldGroupingSettings?.value || {};
               return fieldSettings[fieldName]?.subtotalEnabled === true;
             },
@@ -160,7 +163,7 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
               ['parent_column', t('Of parent column')],
             ],
             description: t('Type of percentage calculation'),
-            visibility: ({ controls }) => {
+            visibility: ({ controls }: { controls?: any }) => {
               const fieldSettings = controls?.fieldGroupingSettings?.value || {};
               const cellValueType = fieldSettings[fieldName]?.cellValueType;
               return (
@@ -217,7 +220,7 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
         },
       ],
     ],
-    visibility: ({ controls }) => {
+    visibility: ({ controls }: { controls?: any }) => {
       // Показывать секцию только если поле выбрано
       const groupbyRows = ensureIsArray(controls?.groupbyRows?.value);
       const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value);
@@ -230,9 +233,11 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
 }
 
 // Функция для получения всех выбранных полей
-function getAllGroupingFields(controls: any): string[] {
-  const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
-  const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+// TODO: будет использована для динамического создания секций
+// @ts-ignore - функция будет использована в будущем
+function getAllGroupingFields(_controls: any): string[] {
+  const groupbyRows = ensureIsArray(_controls?.groupbyRows?.value || []);
+  const groupbyColumns = ensureIsArray(_controls?.groupbyColumns?.value || []);
   const allFields = [...groupbyRows, ...groupbyColumns];
   return Array.from(
     new Set(
@@ -717,11 +722,9 @@ const config: ControlPanelConfig = {
                 ['bottom', t('Bottom')],
               ],
               description: t('Position of column totals'),
-              visibility: ({ controls }) => {
-                return (
-                  controls?.globalTableSettings?.value?.columnTotalsEnabled ===
-                  true
-                );
+              visibility: ({ controls }: { controls?: any }) => {
+                const settings = controls?.globalTableSettings?.value as any;
+                return settings?.columnTotalsEnabled === true;
               },
             },
           },
@@ -733,11 +736,9 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: t('Total'),
               description: t('Label for column totals row'),
-              visibility: ({ controls }) => {
-                return (
-                  controls?.globalTableSettings?.value?.columnTotalsEnabled ===
-                  true
-                );
+              visibility: ({ controls }: { controls?: any }) => {
+                const settings = controls?.globalTableSettings?.value as any;
+                return settings?.columnTotalsEnabled === true;
               },
             },
           },
@@ -767,10 +768,9 @@ const config: ControlPanelConfig = {
                 ['right', t('Right')],
               ],
               description: t('Position of row totals'),
-              visibility: ({ controls }) => {
-                return (
-                  controls?.globalTableSettings?.value?.rowTotalsEnabled === true
-                );
+              visibility: ({ controls }: { controls?: any }) => {
+                const settings = controls?.globalTableSettings?.value as any;
+                return settings?.rowTotalsEnabled === true;
               },
             },
           },
@@ -782,10 +782,9 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               default: t('Total'),
               description: t('Label for row totals column'),
-              visibility: ({ controls }) => {
-                return (
-                  controls?.globalTableSettings?.value?.rowTotalsEnabled === true
-                );
+              visibility: ({ controls }: { controls?: any }) => {
+                const settings = controls?.globalTableSettings?.value as any;
+                return settings?.rowTotalsEnabled === true;
               },
             },
           },

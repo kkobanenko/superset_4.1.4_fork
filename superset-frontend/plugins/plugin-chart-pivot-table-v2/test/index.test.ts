@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { PivotTableChartPlugin } from '../src';
+import { PivotTableV2ChartPlugin } from '../src';
 
 /**
  * The example tests in this file act as a starting point, and
@@ -26,8 +26,8 @@ import { PivotTableChartPlugin } from '../src';
  * treated correctly (e.g. formData from plugin controls
  * properly transform the data and/or any resulting props).
  */
-describe('@superset-ui/plugin-chart-pivot-table', () => {
+describe('@superset-ui/plugin-chart-pivot-table-v2', () => {
   it('exists', () => {
-    expect(PivotTableChartPlugin).toBeDefined();
+    expect(PivotTableV2ChartPlugin).toBeDefined();
   });
 });

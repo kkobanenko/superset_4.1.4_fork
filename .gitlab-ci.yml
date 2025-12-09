@@ -64,11 +64,16 @@ build-docker-lean:
     - echo "Logging to GitLab Container Registry..."
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    # Определяем теги для образа
+    # Определяем теги для образа в зависимости от ветки
     - |
-      IMAGE_TAG_BRANCH="${CI_REGISTRY_IMAGE}:feature-mixed-chart-v2"
-      IMAGE_TAG_LATEST="${CI_REGISTRY_IMAGE}:feature-mixed-chart-v2-latest"
-      IMAGE_TAG_COMMIT="${CI_REGISTRY_IMAGE}:feature-mixed-chart-v2-${CI_COMMIT_SHORT_SHA}"
+      if [ "$CI_COMMIT_BRANCH" = "feature/pivot-table-v2" ]; then
+        BRANCH_TAG="feature-pivot-table-v2"
+      else
+        BRANCH_TAG="feature-mixed-chart-v2"
+      fi
+      IMAGE_TAG_BRANCH="${CI_REGISTRY_IMAGE}:${BRANCH_TAG}"
+      IMAGE_TAG_LATEST="${CI_REGISTRY_IMAGE}:${BRANCH_TAG}-latest"
+      IMAGE_TAG_COMMIT="${CI_REGISTRY_IMAGE}:${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA}"
       
       echo "Building Docker image with tags:"
       echo "  - ${IMAGE_TAG_BRANCH}"
@@ -112,8 +117,9 @@ build-docker-lean:
     # Очистка локальных образов для экономии места
     - docker system prune -f || true
   rules:
-    # Автоматический запуск при push в ветку feature/mixed-chart-v2
+    # Автоматический запуск при push в ветку feature/mixed-chart-v2 или feature/pivot-table-v2
     - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
+    - if: $CI_COMMIT_BRANCH == "feature/pivot-table-v2"
     # Разрешить ручной запуск через GitLab UI
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
@@ -143,8 +149,13 @@ build-docker-dev:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
     - |
-      IMAGE_TAG_DEV="${CI_REGISTRY_IMAGE}:feature-mixed-chart-v2-dev"
-      IMAGE_TAG_DEV_COMMIT="${CI_REGISTRY_IMAGE}:feature-mixed-chart-v2-dev-${CI_COMMIT_SHORT_SHA}"
+      if [ "$CI_COMMIT_BRANCH" = "feature/pivot-table-v2" ]; then
+        BRANCH_TAG="feature-pivot-table-v2"
+      else
+        BRANCH_TAG="feature-mixed-chart-v2"
+      fi
+      IMAGE_TAG_DEV="${CI_REGISTRY_IMAGE}:${BRANCH_TAG}-dev"
+      IMAGE_TAG_DEV_COMMIT="${CI_REGISTRY_IMAGE}:${BRANCH_TAG}-dev-${CI_COMMIT_SHORT_SHA}"
       
       echo "Building Docker dev image with tags:"
       echo "  - ${IMAGE_TAG_DEV}"
@@ -172,9 +183,12 @@ build-docker-dev:
       echo "  - ${IMAGE_TAG_DEV_COMMIT}"
   after_script:
     - docker system prune -f || true
-  only:
-    - feature/mixed-chart-v2
-  when: manual  # Ручной запуск для dev образа
+  rules:
+    # Ручной запуск для веток feature/mixed-chart-v2 или feature/pivot-table-v2
+    - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
+      when: manual
+    - if: $CI_COMMIT_BRANCH == "feature/pivot-table-v2"
+      when: manual
   # tags: []  # Убрано требование тега docker для совместимости с разными runner'ами
   timeout: 2h
 
