@@ -81,6 +81,9 @@ COPY superset-frontend /app/superset-frontend
 ######################################################################
 FROM superset-node-ci AS superset-node
 
+# Set Node.js memory limit for frontend build
+ENV NODE_OPTIONS=--max_old_space_size=8192
+
 # Build the frontend if not in dev mode
 RUN --mount=type=cache,target=/root/.npm \
     if [ "${DEV_MODE}" = "false" ]; then \
