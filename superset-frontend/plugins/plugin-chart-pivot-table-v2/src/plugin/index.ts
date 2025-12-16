@@ -56,13 +56,15 @@ export default class PivotTableV2ChartPlugin extends ChartPlugin<
       ],
       category: t('Table'),
       description: t(
-        'Enhanced pivot table with advanced formatting options for each grouping field. Supports custom column widths, sorting, subtotals, value formatting (absolute/percentage/combined), font and background styling, and configurable totals.',
+        'Enhanced pivot table with advanced formatting options for each grouping field. Supports custom column widths, sorting, subtotals, value formatting (absolute/percentage/combined), font and background styling, and configurable totals. Version 0.0.1',
       ),
       exampleGallery: [{ url: example, urlDark: exampleDark }],
       name: t('Pivot Table V2'),
       tags: [t('Additive'), t('Report'), t('Tabular'), t('Featured')],
       thumbnail,
       thumbnailDark,
+      // Добавляем версию плагина в метаданные
+      version: '0.0.1',
     });
 
     super({

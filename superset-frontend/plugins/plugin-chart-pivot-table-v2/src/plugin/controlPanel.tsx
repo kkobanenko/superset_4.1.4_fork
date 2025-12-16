@@ -670,14 +670,11 @@ const config: ControlPanelConfig = {
       ],
     },
     // Секция настроек форматирования полей
-    // Примечание: из-за статической структуры controlPanel, мы создаем одну секцию
-    // с динамическими контролами, которые показываются/скрываются в зависимости от выбранных полей
+    // Используем динамические контролы с visibility функциями
     {
       label: t('Field Formatting Settings'),
       expanded: false,
       controlSetRows: [
-        // Эти контролы будут динамически показываться для каждого выбранного поля
-        // Используем функцию visibility для каждого контрола
         [
           {
             name: 'field_formatting_info',
@@ -685,8 +682,91 @@ const config: ControlPanelConfig = {
               type: 'InfoControl',
               label: t('Field Formatting'),
               description: t(
-                'Configure formatting settings for each grouping field. Settings will appear below when fields are selected.',
+                'Configure formatting settings for each grouping field. Select fields in Rows or Columns above, then configure their formatting below.',
               ),
+            },
+          },
+        ],
+        // Контролы для первого поля группировки
+        // Используем стандартный подход с правильными именами и formDataOverrides для синхронизации
+        [
+          {
+            name: 'field_formatting_field1_maxWidth',
+            config: {
+              type: 'NumberControl',
+              label: t('First Field: Max width (px)'),
+              renderTrigger: true,
+              default: undefined,
+              description: t('Maximum column width in pixels for first grouping field'),
+              visibility: ({ controls }: { controls?: any }) => {
+                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                return groupbyRows.length > 0 || groupbyColumns.length > 0;
+              },
+            },
+          },
+          {
+            name: 'field_formatting_field1_truncate',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Truncate values'),
+              renderTrigger: true,
+              default: false,
+              description: t('Truncate values that exceed max width'),
+              visibility: ({ controls }: { controls?: any }) => {
+                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                return groupbyRows.length > 0 || groupbyColumns.length > 0;
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'field_formatting_field1_fontSize',
+            config: {
+              type: 'NumberControl',
+              label: t('Font size (px)'),
+              renderTrigger: true,
+              default: undefined,
+              description: t('Font size in pixels'),
+              visibility: ({ controls }: { controls?: any }) => {
+                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                return groupbyRows.length > 0 || groupbyColumns.length > 0;
+              },
+            },
+          },
+          {
+            name: 'field_formatting_field1_fontColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Font color'),
+              renderTrigger: true,
+              default: undefined,
+              description: t('Font color'),
+              visibility: ({ controls }: { controls?: any }) => {
+                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                return groupbyRows.length > 0 || groupbyColumns.length > 0;
+              },
+            },
+          },
+        ],
+        [
+          {
+            name: 'field_formatting_field1_backgroundColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Background color'),
+              renderTrigger: true,
+              default: undefined,
+              description: t('Background color for column/row'),
+              visibility: ({ controls }: { controls?: any }) => {
+                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                return groupbyRows.length > 0 || groupbyColumns.length > 0;
+              },
             },
           },
         ],
@@ -800,10 +880,52 @@ const config: ControlPanelConfig = {
       getStandardizedControls().controls.columns.filter(
         col => !groupbyColumns.includes(col),
       );
+    
+    // Синхронизируем значения временных контролов с fieldGroupingSettings
+    const groupbyRows = ensureIsArray(formData.groupbyRows || []);
+    const groupbyCols = ensureIsArray(formData.groupbyColumns || []);
+    const allFields = [...groupbyRows, ...groupbyCols];
+    const fieldGroupingSettings = formData.fieldGroupingSettings || {};
+    
+    if (allFields.length > 0) {
+      const firstFieldName = getColumnLabel(allFields[0] as QueryFormColumn);
+      const firstFieldSettings = fieldGroupingSettings[firstFieldName] || {};
+      
+      // Синхронизируем значения из временных контролов
+      if (formData.field_formatting_field1_maxWidth !== undefined) {
+        firstFieldSettings.maxWidth = formData.field_formatting_field1_maxWidth;
+      }
+      if (formData.field_formatting_field1_truncate !== undefined) {
+        firstFieldSettings.truncate = formData.field_formatting_field1_truncate;
+      }
+      if (formData.field_formatting_field1_fontSize !== undefined) {
+        firstFieldSettings.fontSize = formData.field_formatting_field1_fontSize;
+      }
+      if (formData.field_formatting_field1_fontColor !== undefined) {
+        firstFieldSettings.fontColor = formData.field_formatting_field1_fontColor;
+      }
+      if (formData.field_formatting_field1_backgroundColor !== undefined) {
+        firstFieldSettings.backgroundColor = formData.field_formatting_field1_backgroundColor;
+      }
+      
+      fieldGroupingSettings[firstFieldName] = firstFieldSettings;
+    }
+    
+    // Инициализируем значения временных контролов из fieldGroupingSettings
+    const firstFieldName = allFields.length > 0 ? getColumnLabel(allFields[0] as QueryFormColumn) : null;
+    const firstFieldSettings = firstFieldName ? fieldGroupingSettings[firstFieldName] : {};
+    
     return {
       ...formData,
       metrics: getStandardizedControls().popAllMetrics(),
       groupbyColumns,
+      fieldGroupingSettings,
+      // Инициализируем значения временных контролов
+      field_formatting_field1_maxWidth: firstFieldSettings?.maxWidth,
+      field_formatting_field1_truncate: firstFieldSettings?.truncate ?? false,
+      field_formatting_field1_fontSize: firstFieldSettings?.fontSize,
+      field_formatting_field1_fontColor: firstFieldSettings?.fontColor,
+      field_formatting_field1_backgroundColor: firstFieldSettings?.backgroundColor,
     };
   },
 };
