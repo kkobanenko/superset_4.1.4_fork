@@ -687,89 +687,209 @@ const config: ControlPanelConfig = {
             },
           },
         ],
-        // Контролы для первого поля группировки
-        // Используем стандартный подход с правильными именами и formDataOverrides для синхронизации
-        [
-          {
-            name: 'field_formatting_field1_maxWidth',
-            config: {
-              type: 'NumberControl',
-              label: t('First Field: Max width (px)'),
-              renderTrigger: true,
-              default: undefined,
-              description: t('Maximum column width in pixels for first grouping field'),
-              visibility: ({ controls }: { controls?: any }) => {
-                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
-                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
-                return groupbyRows.length > 0 || groupbyColumns.length > 0;
-              },
-            },
-          },
-          {
-            name: 'field_formatting_field1_truncate',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Truncate values'),
-              renderTrigger: true,
-              default: false,
-              description: t('Truncate values that exceed max width'),
-              visibility: ({ controls }: { controls?: any }) => {
-                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
-                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
-                return groupbyRows.length > 0 || groupbyColumns.length > 0;
-              },
-            },
-          },
-        ],
-        [
-          {
-            name: 'field_formatting_field1_fontSize',
-            config: {
-              type: 'NumberControl',
-              label: t('Font size (px)'),
-              renderTrigger: true,
-              default: undefined,
-              description: t('Font size in pixels'),
-              visibility: ({ controls }: { controls?: any }) => {
-                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
-                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
-                return groupbyRows.length > 0 || groupbyColumns.length > 0;
-              },
-            },
-          },
-          {
-            name: 'field_formatting_field1_fontColor',
-            config: {
-              type: 'ColorPickerControl',
-              label: t('Font color'),
-              renderTrigger: true,
-              default: undefined,
-              description: t('Font color'),
-              visibility: ({ controls }: { controls?: any }) => {
-                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
-                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
-                return groupbyRows.length > 0 || groupbyColumns.length > 0;
-              },
-            },
-          },
-        ],
-        [
-          {
-            name: 'field_formatting_field1_backgroundColor',
-            config: {
-              type: 'ColorPickerControl',
-              label: t('Background color'),
-              renderTrigger: true,
-              default: undefined,
-              description: t('Background color for column/row'),
-              visibility: ({ controls }: { controls?: any }) => {
-                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
-                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
-                return groupbyRows.length > 0 || groupbyColumns.length > 0;
-              },
-            },
-          },
-        ],
+        // Динамические контролы для каждого выбранного поля
+        // Используем функцию для генерации контролов на основе выбранных полей
+        ...(function generateFieldControls() {
+          const controls: any[] = [];
+          // Генерируем контролы для до 5 полей (можно увеличить при необходимости)
+          for (let i = 0; i < 5; i++) {
+            const fieldIndex = i;
+            controls.push(
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_info`,
+                  config: {
+                    type: 'InfoControl',
+                    label: t('Field %s formatting', fieldIndex + 1),
+                    description: t('Formatting settings for field %s', fieldIndex + 1),
+                    visibility: ({ controls: ctrl }: { controls?: any }) => {
+                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      return allFields.length > fieldIndex;
+                    },
+                    mapStateToProps: (state: any) => {
+                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      const fieldName = allFields.length > fieldIndex 
+                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
+                        : null;
+                      return {
+                        label: fieldName 
+                          ? t('Field: %s', fieldName)
+                          : t('Field %s formatting', fieldIndex + 1),
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_maxWidth`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Max width (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Maximum column width in pixels'),
+                    visibility: ({ controls: ctrl }: { controls?: any }) => {
+                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      return allFields.length > fieldIndex;
+                    },
+                    // Используем rerender для обновления при изменении полей
+                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      const fieldName = allFields.length > fieldIndex 
+                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
+                        : null;
+                      const fieldSettings = fieldName 
+                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                        : {};
+                      return {
+                        value: fieldSettings.maxWidth,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_truncate`,
+                  config: {
+                    type: 'CheckboxControl',
+                    label: t('Truncate values'),
+                    renderTrigger: true,
+                    default: false,
+                    description: t('Truncate values that exceed max width'),
+                    visibility: ({ controls: ctrl }: { controls?: any }) => {
+                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      return allFields.length > fieldIndex;
+                    },
+                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      const fieldName = allFields.length > fieldIndex 
+                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
+                        : null;
+                      const fieldSettings = fieldName 
+                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                        : {};
+                      return {
+                        value: fieldSettings.truncate ?? false,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_fontSize`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Font size (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font size in pixels'),
+                    visibility: ({ controls: ctrl }: { controls?: any }) => {
+                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      return allFields.length > fieldIndex;
+                    },
+                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      const fieldName = allFields.length > fieldIndex 
+                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
+                        : null;
+                      const fieldSettings = fieldName 
+                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                        : {};
+                      return {
+                        value: fieldSettings.fontSize,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_fontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color'),
+                    visibility: ({ controls: ctrl }: { controls?: any }) => {
+                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      return allFields.length > fieldIndex;
+                    },
+                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      const fieldName = allFields.length > fieldIndex 
+                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
+                        : null;
+                      const fieldSettings = fieldName 
+                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                        : {};
+                      return {
+                        value: fieldSettings.fontColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_backgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for column/row'),
+                    visibility: ({ controls: ctrl }: { controls?: any }) => {
+                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      return allFields.length > fieldIndex;
+                    },
+                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
+                      const allFields = [...groupbyRows, ...groupbyColumns];
+                      const fieldName = allFields.length > fieldIndex 
+                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
+                        : null;
+                      const fieldSettings = fieldName 
+                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                        : {};
+                      return {
+                        value: fieldSettings.backgroundColor,
+                      };
+                    },
+                  },
+                },
+              ],
+            );
+          }
+          return controls;
+        })(),
       ],
     },
     // Секция глобальных настроек таблицы
@@ -881,52 +1001,67 @@ const config: ControlPanelConfig = {
         col => !groupbyColumns.includes(col),
       );
     
-    // Синхронизируем значения временных контролов с fieldGroupingSettings
+    // Синхронизируем значения временных контролов с fieldGroupingSettings для всех полей
     const groupbyRows = ensureIsArray(formData.groupbyRows || []);
     const groupbyCols = ensureIsArray(formData.groupbyColumns || []);
     const allFields = [...groupbyRows, ...groupbyCols];
     const fieldGroupingSettings = formData.fieldGroupingSettings || {};
     
-    if (allFields.length > 0) {
-      const firstFieldName = getColumnLabel(allFields[0] as QueryFormColumn);
-      const firstFieldSettings = fieldGroupingSettings[firstFieldName] || {};
+    // Синхронизируем значения из временных контролов для каждого поля (до 5 полей)
+    for (let i = 0; i < Math.min(allFields.length, 5); i++) {
+      const fieldName = getColumnLabel(allFields[i] as QueryFormColumn);
+      const fieldSettings = fieldGroupingSettings[fieldName] || {};
       
       // Синхронизируем значения из временных контролов
-      if (formData.field_formatting_field1_maxWidth !== undefined) {
-        firstFieldSettings.maxWidth = formData.field_formatting_field1_maxWidth;
+      const maxWidthKey = `field_formatting_field${i}_maxWidth` as keyof typeof formData;
+      const truncateKey = `field_formatting_field${i}_truncate` as keyof typeof formData;
+      const fontSizeKey = `field_formatting_field${i}_fontSize` as keyof typeof formData;
+      const fontColorKey = `field_formatting_field${i}_fontColor` as keyof typeof formData;
+      const backgroundColorKey = `field_formatting_field${i}_backgroundColor` as keyof typeof formData;
+      
+      if (formData[maxWidthKey] !== undefined) {
+        fieldSettings.maxWidth = formData[maxWidthKey] as number;
       }
-      if (formData.field_formatting_field1_truncate !== undefined) {
-        firstFieldSettings.truncate = formData.field_formatting_field1_truncate;
+      if (formData[truncateKey] !== undefined) {
+        fieldSettings.truncate = formData[truncateKey] as boolean;
       }
-      if (formData.field_formatting_field1_fontSize !== undefined) {
-        firstFieldSettings.fontSize = formData.field_formatting_field1_fontSize;
+      if (formData[fontSizeKey] !== undefined) {
+        fieldSettings.fontSize = formData[fontSizeKey] as number;
       }
-      if (formData.field_formatting_field1_fontColor !== undefined) {
-        firstFieldSettings.fontColor = formData.field_formatting_field1_fontColor;
+      if (formData[fontColorKey] !== undefined) {
+        fieldSettings.fontColor = formData[fontColorKey] as string;
       }
-      if (formData.field_formatting_field1_backgroundColor !== undefined) {
-        firstFieldSettings.backgroundColor = formData.field_formatting_field1_backgroundColor;
+      if (formData[backgroundColorKey] !== undefined) {
+        fieldSettings.backgroundColor = formData[backgroundColorKey] as string;
       }
       
-      fieldGroupingSettings[firstFieldName] = firstFieldSettings;
+      // Сохраняем настройки только если есть хотя бы одно значение
+      if (Object.keys(fieldSettings).length > 0) {
+        fieldGroupingSettings[fieldName] = fieldSettings;
+      }
     }
     
     // Инициализируем значения временных контролов из fieldGroupingSettings
-    const firstFieldName = allFields.length > 0 ? getColumnLabel(allFields[0] as QueryFormColumn) : null;
-    const firstFieldSettings = firstFieldName ? fieldGroupingSettings[firstFieldName] : {};
-    
-    return {
+    const resultFormData: any = {
       ...formData,
       metrics: getStandardizedControls().popAllMetrics(),
       groupbyColumns,
       fieldGroupingSettings,
-      // Инициализируем значения временных контролов
-      field_formatting_field1_maxWidth: firstFieldSettings?.maxWidth,
-      field_formatting_field1_truncate: firstFieldSettings?.truncate ?? false,
-      field_formatting_field1_fontSize: firstFieldSettings?.fontSize,
-      field_formatting_field1_fontColor: firstFieldSettings?.fontColor,
-      field_formatting_field1_backgroundColor: firstFieldSettings?.backgroundColor,
     };
+    
+    // Инициализируем значения временных контролов для каждого поля
+    for (let i = 0; i < Math.min(allFields.length, 5); i++) {
+      const fieldName = getColumnLabel(allFields[i] as QueryFormColumn);
+      const fieldSettings = fieldGroupingSettings[fieldName] || {};
+      
+      resultFormData[`field_formatting_field${i}_maxWidth`] = fieldSettings.maxWidth;
+      resultFormData[`field_formatting_field${i}_truncate`] = fieldSettings.truncate ?? false;
+      resultFormData[`field_formatting_field${i}_fontSize`] = fieldSettings.fontSize;
+      resultFormData[`field_formatting_field${i}_fontColor`] = fieldSettings.fontColor;
+      resultFormData[`field_formatting_field${i}_backgroundColor`] = fieldSettings.backgroundColor;
+    }
+    
+    return resultFormData;
   },
 };
 
