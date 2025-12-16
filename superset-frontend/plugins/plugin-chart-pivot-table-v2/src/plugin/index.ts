@@ -63,8 +63,6 @@ export default class PivotTableV2ChartPlugin extends ChartPlugin<
       tags: [t('Additive'), t('Report'), t('Tabular'), t('Featured')],
       thumbnail,
       thumbnailDark,
-      // Добавляем версию плагина в метаданные
-      version: '0.0.1',
     });
 
     super({
