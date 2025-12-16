@@ -88,9 +88,9 @@ ENV NODE_OPTIONS=--max_old_space_size=8192
 RUN --mount=type=cache,target=/root/.npm \
     if [ "${DEV_MODE}" = "false" ]; then \
         echo "Building plugins..."; \
-        npm run plugins:build; \
+        NODE_OPTIONS=--max_old_space_size=8192 npm run plugins:build; \
         echo "Running 'npm run ${BUILD_CMD}'"; \
-        npm run ${BUILD_CMD}; \
+        NODE_OPTIONS=--max_old_space_size=8192 npm run ${BUILD_CMD}; \
     else \
         echo "Skipping frontend build in dev mode"; \
     fi;
