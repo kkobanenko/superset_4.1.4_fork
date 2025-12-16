@@ -18,7 +18,8 @@
 # Dev Dockerfile for Superset with ClickHouse and MSSQL drivers
 # Based on the GitLab CI/CD dev image
 
-FROM gitlab.gdpgroup.ru:5050/gdpgroup/superset_4.1.4_fork:feature-pivot-table-v2-dev
+# Используем lean образ, так как dev может быть еще не собран
+FROM gitlab.gdpgroup.ru:5050/gdpgroup/superset_4.1.4_fork:feature-pivot-table-v2
 
 USER root
 
@@ -63,7 +64,7 @@ RUN set -ex; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python drivers for ClickHouse and MSSQL
+# Install Python drivers for ClickHouse, MSSQL and PostgreSQL
 # Using uv pip (as in base image) or regular pip as fallback
 RUN set -ex; \
     if [ -f /app/.venv/bin/activate ]; then \
@@ -71,25 +72,30 @@ RUN set -ex; \
         if command -v uv >/dev/null 2>&1; then \
             uv pip install --no-cache-dir \
                 clickhouse-connect \
-                pyodbc; \
+                pyodbc \
+                psycopg2-binary; \
         else \
             pip install --no-cache-dir \
                 clickhouse-connect \
-                pyodbc; \
+                pyodbc \
+                psycopg2-binary; \
         fi; \
     else \
         if command -v python3 >/dev/null 2>&1; then \
             python3 -m pip install --no-cache-dir \
                 clickhouse-connect \
-                pyodbc; \
+                pyodbc \
+                psycopg2-binary; \
         elif command -v python >/dev/null 2>&1; then \
             python -m pip install --no-cache-dir \
                 clickhouse-connect \
-                pyodbc; \
+                pyodbc \
+                psycopg2-binary; \
         else \
             pip install --no-cache-dir \
                 clickhouse-connect \
-                pyodbc; \
+                pyodbc \
+                psycopg2-binary; \
         fi; \
     fi
 
