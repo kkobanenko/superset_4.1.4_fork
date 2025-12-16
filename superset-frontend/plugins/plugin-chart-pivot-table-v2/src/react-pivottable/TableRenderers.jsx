@@ -195,6 +195,62 @@ export class TableRenderer extends Component {
     };
   }
 
+  // Получить настройки форматирования для поля группировки
+  getFieldSettings(attrName) {
+    const { tableOptions } = this.props;
+    const fieldGroupingSettings =
+      tableOptions?.fieldGroupingSettings || {};
+    return fieldGroupingSettings[attrName] || {};
+  }
+
+  // Получить стиль для заголовка колонки/строки
+  getHeaderStyle(attrName) {
+    const settings = this.getFieldSettings(attrName);
+    const style = {};
+    if (settings.fontSize) {
+      style.fontSize = `${settings.fontSize}px`;
+    }
+    if (settings.fontColor) {
+      style.color = settings.fontColor;
+    }
+    if (settings.backgroundColor) {
+      style.backgroundColor = settings.backgroundColor;
+    }
+    if (settings.maxWidth) {
+      style.maxWidth = `${settings.maxWidth}px`;
+      style.overflow = settings.truncate ? 'hidden' : 'visible';
+      style.textOverflow = settings.truncate ? 'ellipsis' : 'clip';
+      style.whiteSpace = settings.truncate ? 'nowrap' : 'normal';
+    }
+    return style;
+  }
+
+  // Получить стиль для ячейки данных
+  getCellStyle(attrName) {
+    const settings = this.getFieldSettings(attrName);
+    const style = {};
+    if (settings.fontSize) {
+      style.fontSize = `${settings.fontSize}px`;
+    }
+    if (settings.fontColor) {
+      style.color = settings.fontColor;
+    }
+    if (settings.backgroundColor) {
+      style.backgroundColor = settings.backgroundColor;
+    }
+    return style;
+  }
+
+  // Обрезать текст значения, если нужно
+  truncateValue(value, attrName) {
+    const settings = this.getFieldSettings(attrName);
+    if (settings.truncate && settings.maxWidth && typeof value === 'string') {
+      // Простая обрезка на уровне CSS, более точная обрезка будет через CSS
+      return value;
+    }
+    return value;
+  }
+
   clickHandler(pivotData, rowValues, colValues) {
     const colAttrs = this.props.cols;
     const rowAttrs = this.props.rows;
@@ -394,8 +450,10 @@ export class TableRenderer extends Component {
           : this.expandAttr(false, attrIdx, colKeys);
       subArrow = attrIdx + 1 < maxColVisible ? arrowExpanded : arrowCollapsed;
     }
+    // Применяем стили форматирования к заголовку колонки
+    const headerStyle = this.getHeaderStyle(attrName);
     const attrNameCell = (
-      <th key="label" className="pvtAxisLabel">
+      <th key="label" className="pvtAxisLabel" style={headerStyle}>
         {displayHeaderCell(
           needToggle,
           subArrow,
@@ -444,6 +502,8 @@ export class TableRenderer extends Component {
           typeof dateFormatters[attrName] === 'function'
             ? dateFormatters[attrName](colKey[attrIdx])
             : colKey[attrIdx];
+        // Применяем стили форматирования к значениям заголовков колонок
+        const valueHeaderStyle = this.getHeaderStyle(attrName);
         attrValueCells.push(
           <th
             className={colLabelClass}
@@ -451,6 +511,7 @@ export class TableRenderer extends Component {
             colSpan={colSpan}
             rowSpan={rowSpan}
             role="columnheader button"
+            style={valueHeaderStyle}
             onClick={this.clickHeaderHandler(
               pivotData,
               colKey,
@@ -474,6 +535,9 @@ export class TableRenderer extends Component {
         );
       } else if (attrIdx === colKey.length) {
         const rowSpan = colAttrs.length - colKey.length + rowIncrSpan;
+        // Получаем кастомную метку подытога для этого поля, если она задана
+        const fieldSettings = this.getFieldSettings(attrName);
+        const subtotalLabel = fieldSettings?.subtotalLabel || t('Subtotal');
         attrValueCells.push(
           <th
             className={`${colLabelClass} pvtSubtotalLabel`}
@@ -490,7 +554,7 @@ export class TableRenderer extends Component {
               true,
             )}
           >
-            {t('Subtotal')}
+            {subtotalLabel}
           </th>,
         );
       }
@@ -498,6 +562,13 @@ export class TableRenderer extends Component {
       i += colSpan;
     }
 
+    // Получаем глобальные настройки для итогов колонок
+    const { globalTableSettings } = this.props.tableOptions || {};
+    const colTotalsLabel =
+      globalTableSettings?.columnTotalsLabel ||
+      t('Total (%(aggregatorName)s)', {
+        aggregatorName: t(this.props.aggregatorName),
+      });
     const totalCell =
       attrIdx === 0 && rowTotals ? (
         <th
@@ -515,9 +586,7 @@ export class TableRenderer extends Component {
             true,
           )}
         >
-          {t('Total (%(aggregatorName)s)', {
-            aggregatorName: t(this.props.aggregatorName),
-          })}
+          {colTotalsLabel}
         </th>
       ) : null;
 
@@ -555,8 +624,10 @@ export class TableRenderer extends Component {
                 : this.expandAttr(true, i, rowKeys);
             subArrow = i + 1 < maxRowVisible ? arrowExpanded : arrowCollapsed;
           }
+          // Применяем стили форматирования к заголовкам строк
+          const rowHeaderStyle = this.getHeaderStyle(r);
           return (
-            <th className="pvtAxisLabel" key={`rowAttr-${i}`}>
+            <th className="pvtAxisLabel" key={`rowAttr-${i}`} style={rowHeaderStyle}>
               {displayHeaderCell(
                 needLabelToggle,
                 subArrow,
@@ -654,6 +725,8 @@ export class TableRenderer extends Component {
           dateFormatters && dateFormatters[rowAttrs[i]]
             ? dateFormatters[rowAttrs[i]](r)
             : r;
+        // Применяем стили форматирования к значениям заголовков строк
+        const rowValueHeaderStyle = this.getHeaderStyle(rowAttrs[i]);
         return (
           <th
             key={`rowKeyLabel-${i}`}
@@ -661,6 +734,7 @@ export class TableRenderer extends Component {
             rowSpan={rowSpan}
             colSpan={colSpan}
             role="columnheader button"
+            style={rowValueHeaderStyle}
             onClick={this.clickHeaderHandler(
               pivotData,
               rowKey,
@@ -686,6 +760,15 @@ export class TableRenderer extends Component {
       return null;
     });
 
+    // Получаем кастомную метку подытога для строки, если она задана
+    const rowSubtotalAttrName =
+      rowKey.length > 0 && rowKey.length <= rowAttrs.length
+        ? rowAttrs[rowKey.length - 1]
+        : null;
+    const rowFieldSettings = rowSubtotalAttrName
+      ? this.getFieldSettings(rowSubtotalAttrName)
+      : {};
+    const rowSubtotalLabel = rowFieldSettings?.subtotalLabel || t('Subtotal');
     const attrValuePaddingCell =
       rowKey.length < rowAttrs.length ? (
         <th
@@ -703,7 +786,7 @@ export class TableRenderer extends Component {
             true,
           )}
         >
-          {t('Subtotal')}
+          {rowSubtotalLabel}
         </th>
       ) : null;
 
@@ -735,9 +818,17 @@ export class TableRenderer extends Component {
         });
       }
 
-      const style = agg.isSubtotal
-        ? { fontWeight: 'bold' }
-        : { backgroundColor };
+      // Применяем стили форматирования к ячейкам данных
+      // Определяем, к какому полю относится ячейка (колонка или строка)
+      const cellAttrName = colKey.length > 0 ? colAttrs[colKey.length - 1] : null;
+      const cellStyle = cellAttrName ? this.getCellStyle(cellAttrName) : {};
+      
+      // Объединяем стили: сначала стили форматирования, затем цвет фона из formatter
+      const finalStyle = {
+        ...cellStyle,
+        ...(agg.isSubtotal ? { fontWeight: 'bold' } : {}),
+        ...(backgroundColor ? { backgroundColor } : {}),
+      };
 
       return (
         <td
@@ -746,7 +837,7 @@ export class TableRenderer extends Component {
           key={`pvtVal-${flatColKey}`}
           onClick={rowClickHandlers[flatColKey]}
           onContextMenu={e => this.props.onContextMenu(e, colKey, rowKey)}
-          style={style}
+          style={finalStyle}
         >
           {displayCell(agg.format(aggValue), allowRenderHtml)}
         </td>
@@ -793,6 +884,14 @@ export class TableRenderer extends Component {
       grandTotalCallback,
     } = pivotSettings;
 
+    // Получаем глобальные настройки таблицы
+    const { globalTableSettings } = this.props.tableOptions || {};
+    const rowTotalsLabel =
+      globalTableSettings?.rowTotalsLabel ||
+      t('Total (%(aggregatorName)s)', {
+        aggregatorName: t(this.props.aggregatorName),
+      });
+
     const totalLabelCell = (
       <th
         key="label"
@@ -809,9 +908,7 @@ export class TableRenderer extends Component {
           true,
         )}
       >
-        {t('Total (%(aggregatorName)s)', {
-          aggregatorName: t(this.props.aggregatorName),
-        })}
+        {rowTotalsLabel}
       </th>
     );
 

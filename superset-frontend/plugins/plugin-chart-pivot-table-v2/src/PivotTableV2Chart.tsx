@@ -183,10 +183,8 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
     onContextMenu,
     timeGrainSqla,
     allowRenderHtml,
-    // @ts-ignore - будет использовано для применения настроек форматирования
-    fieldGroupingSettings, // TODO: будет использовано для применения настроек форматирования
-    // @ts-ignore - будет использовано для применения глобальных настроек
-    globalTableSettings, // TODO: будет использовано для применения глобальных настроек
+    fieldGroupingSettings,
+    globalTableSettings,
   } = props;
 
   const theme = useTheme();
@@ -466,9 +464,16 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
     () => ({
       clickRowHeaderCallback: toggleFilter,
       clickColumnHeaderCallback: toggleFilter,
-      colTotals,
+      // Используем глобальные настройки для итогов, если они заданы
+      colTotals:
+        globalTableSettings?.columnTotalsEnabled !== undefined
+          ? globalTableSettings.columnTotalsEnabled
+          : colTotals,
       colSubTotals,
-      rowTotals,
+      rowTotals:
+        globalTableSettings?.rowTotalsEnabled !== undefined
+          ? globalTableSettings.rowTotalsEnabled
+          : rowTotals,
       rowSubTotals,
       highlightHeaderCellsOnHover:
         emitCrossFilters ||
@@ -478,12 +483,18 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
       omittedHighlightHeaderGroups: [METRIC_KEY],
       cellColorFormatters: { [METRIC_KEY]: metricColorFormatters },
       dateFormatters,
+      // Передаем настройки форматирования полей группировки
+      fieldGroupingSettings: fieldGroupingSettings || {},
+      // Передаем глобальные настройки таблицы
+      globalTableSettings: globalTableSettings || {},
     }),
     [
       colTotals,
       colSubTotals,
       dateFormatters,
       emitCrossFilters,
+      fieldGroupingSettings,
+      globalTableSettings,
       metricColorFormatters,
       rowTotals,
       rowSubTotals,
