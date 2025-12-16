@@ -84,13 +84,15 @@ FROM superset-node-ci AS superset-node
 # Set Node.js memory limit for frontend build
 ENV NODE_OPTIONS=--max_old_space_size=8192
 
-# Build the frontend if not in dev mode
+# Build plugins first, then the main frontend if not in dev mode
 RUN --mount=type=cache,target=/root/.npm \
     if [ "${DEV_MODE}" = "false" ]; then \
+        echo "Building plugins..."; \
+        npm run plugins:build; \
         echo "Running 'npm run ${BUILD_CMD}'"; \
         npm run ${BUILD_CMD}; \
     else \
-        echo "Skipping 'npm run ${BUILD_CMD}' in dev mode"; \
+        echo "Skipping frontend build in dev mode"; \
     fi;
 
 # Copy translation files
