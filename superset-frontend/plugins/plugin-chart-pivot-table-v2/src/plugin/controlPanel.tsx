@@ -670,7 +670,7 @@ const config: ControlPanelConfig = {
       ],
     },
     // Секция настроек форматирования полей
-    // Используем динамические контролы с visibility функциями
+    // Каждый набор настроек позволяет выбрать конкретное поле и настроить его форматирование
     {
       label: t('Field Formatting Settings'),
       expanded: false,
@@ -682,43 +682,120 @@ const config: ControlPanelConfig = {
               type: 'InfoControl',
               label: t('Field Formatting'),
               description: t(
-                'Configure formatting settings for each grouping field. Select fields in Rows or Columns above, then configure their formatting below.',
+                'Configure formatting settings for specific fields. Select a field from Rows, Columns, or Metrics, then configure its formatting below. You can configure up to 10 fields.',
               ),
             },
           },
         ],
-        // Динамические контролы для каждого выбранного поля
-        // Используем функцию для генерации контролов на основе выбранных полей
+        // Генерируем до 10 наборов настроек, каждый с выбором поля
         ...(function generateFieldControls() {
           const controls: any[] = [];
-          // Генерируем контролы для до 5 полей (можно увеличить при необходимости)
-          for (let i = 0; i < 5; i++) {
+          // Генерируем контролы для до 10 полей
+          for (let i = 0; i < 10; i++) {
             const fieldIndex = i;
             controls.push(
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_selector`,
+                  config: {
+                    type: 'SelectControl',
+                    label: t('Field %s', fieldIndex + 1),
+                    renderTrigger: true,
+                    clearable: true,
+                    description: t('Select a field to configure formatting'),
+                    placeholder: t('Select field...'),
+                    rerender: ['groupbyRows', 'groupbyColumns', 'metrics', 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      // Получаем все доступные поля: rows, columns и metrics
+                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
+                      const metrics = ensureIsArray(state.controls?.metrics?.value || []);
+                      
+                      // Получаем verbose_map для отображения понятных названий
+                      const datasource = state.datasource as Dataset | undefined;
+                      const verboseMap = datasource?.verbose_map || {};
+                      
+                      // Формируем список всех доступных полей с метками
+                      const allFields: Array<{ value: string; label: string; type: string }> = [];
+                      
+                      // Добавляем поля из Rows
+                      groupbyRows.forEach((field: QueryFormColumn) => {
+                        const fieldLabel = getColumnLabel(field);
+                        const displayLabel = typeof verboseMap[fieldLabel] === 'string' 
+                          ? `${verboseMap[fieldLabel]} (Row)`
+                          : `${fieldLabel} (Row)`;
+                        allFields.push({
+                          value: fieldLabel,
+                          label: displayLabel,
+                          type: 'row',
+                        });
+                      });
+                      
+                      // Добавляем поля из Columns
+                      groupbyColumns.forEach((field: QueryFormColumn) => {
+                        const fieldLabel = getColumnLabel(field);
+                        const displayLabel = typeof verboseMap[fieldLabel] === 'string' 
+                          ? `${verboseMap[fieldLabel]} (Column)`
+                          : `${fieldLabel} (Column)`;
+                        allFields.push({
+                          value: fieldLabel,
+                          label: displayLabel,
+                          type: 'column',
+                        });
+                      });
+                      
+                      // Добавляем метрики
+                      metrics.forEach((metric: QueryFormMetric) => {
+                        const metricLabel = typeof metric === 'string' ? metric : metric.label || metric.expression || '';
+                        const displayLabel = typeof verboseMap[metricLabel] === 'string' 
+                          ? `${verboseMap[metricLabel]} (Metric)`
+                          : `${metricLabel} (Metric)`;
+                        allFields.push({
+                          value: metricLabel,
+                          label: displayLabel,
+                          type: 'metric',
+                        });
+                      });
+                      
+                      // Получаем выбранное поле для этого набора настроек
+                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      
+                      // Получаем настройки для выбранного поля
+                      const fieldSettings = selectedField 
+                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
+                        : {};
+                      
+                      return {
+                        choices: allFields.map(field => [field.value, field.label]),
+                        value: selectedField,
+                      };
+                    },
+                  },
+                },
+              ],
               [
                 {
                   name: `field_formatting_field${fieldIndex}_info`,
                   config: {
                     type: 'InfoControl',
-                    label: t('Field %s formatting', fieldIndex + 1),
-                    description: t('Formatting settings for field %s', fieldIndex + 1),
+                    label: t('Formatting for selected field'),
+                    description: t('Configure formatting options below'),
                     visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      return allFields.length > fieldIndex;
+                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      return !!selectedField;
                     },
                     mapStateToProps: (state: any) => {
-                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      const fieldName = allFields.length > fieldIndex 
-                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
-                        : null;
+                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return { label: t('Select a field above') };
+                      }
+                      const datasource = state.datasource as Dataset | undefined;
+                      const verboseMap = datasource?.verbose_map || {};
+                      const displayName = typeof verboseMap[selectedField] === 'string' 
+                        ? verboseMap[selectedField]
+                        : selectedField;
                       return {
-                        label: fieldName 
-                          ? t('Field: %s', fieldName)
-                          : t('Field %s formatting', fieldIndex + 1),
+                        label: t('Formatting for: %s', displayName),
                       };
                     },
                   },
@@ -734,22 +811,14 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     description: t('Maximum column width in pixels'),
                     visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      return allFields.length > fieldIndex;
+                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      return !!selectedField;
                     },
-                    // Используем rerender для обновления при изменении полей
-                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      const fieldName = allFields.length > fieldIndex 
-                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
-                        : null;
-                      const fieldSettings = fieldName 
-                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      const fieldSettings = selectedField 
+                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
                         : {};
                       return {
                         value: fieldSettings.maxWidth,
@@ -766,21 +835,14 @@ const config: ControlPanelConfig = {
                     default: false,
                     description: t('Truncate values that exceed max width'),
                     visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      return allFields.length > fieldIndex;
+                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      return !!selectedField;
                     },
-                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      const fieldName = allFields.length > fieldIndex 
-                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
-                        : null;
-                      const fieldSettings = fieldName 
-                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      const fieldSettings = selectedField 
+                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
                         : {};
                       return {
                         value: fieldSettings.truncate ?? false,
@@ -799,21 +861,14 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     description: t('Font size in pixels'),
                     visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      return allFields.length > fieldIndex;
+                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      return !!selectedField;
                     },
-                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      const fieldName = allFields.length > fieldIndex 
-                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
-                        : null;
-                      const fieldSettings = fieldName 
-                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      const fieldSettings = selectedField 
+                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
                         : {};
                       return {
                         value: fieldSettings.fontSize,
@@ -830,21 +885,14 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     description: t('Font color'),
                     visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      return allFields.length > fieldIndex;
+                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      return !!selectedField;
                     },
-                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      const fieldName = allFields.length > fieldIndex 
-                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
-                        : null;
-                      const fieldSettings = fieldName 
-                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      const fieldSettings = selectedField 
+                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
                         : {};
                       return {
                         value: fieldSettings.fontColor,
@@ -863,21 +911,14 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     description: t('Background color for column/row'),
                     visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const groupbyRows = ensureIsArray(ctrl?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(ctrl?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      return allFields.length > fieldIndex;
+                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      return !!selectedField;
                     },
-                    rerender: ['groupbyRows', 'groupbyColumns', 'fieldGroupingSettings'],
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
-                      const allFields = [...groupbyRows, ...groupbyColumns];
-                      const fieldName = allFields.length > fieldIndex 
-                        ? getColumnLabel(allFields[fieldIndex] as QueryFormColumn)
-                        : null;
-                      const fieldSettings = fieldName 
-                        ? state.controls?.fieldGroupingSettings?.value?.[fieldName] || {}
+                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      const fieldSettings = selectedField 
+                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
                         : {};
                       return {
                         value: fieldSettings.backgroundColor,
@@ -1001,16 +1042,20 @@ const config: ControlPanelConfig = {
         col => !groupbyColumns.includes(col),
       );
     
-    // Синхронизируем значения временных контролов с fieldGroupingSettings для всех полей
-    const groupbyRows = ensureIsArray(formData.groupbyRows || []);
-    const groupbyCols = ensureIsArray(formData.groupbyColumns || []);
-    const allFields = [...groupbyRows, ...groupbyCols];
+    // Синхронизируем значения временных контролов с fieldGroupingSettings
     const fieldGroupingSettings = formData.fieldGroupingSettings || {};
     
-    // Синхронизируем значения из временных контролов для каждого поля (до 5 полей)
-    for (let i = 0; i < Math.min(allFields.length, 5); i++) {
-      const fieldName = getColumnLabel(allFields[i] as QueryFormColumn);
-      const fieldSettings = fieldGroupingSettings[fieldName] || {};
+    // Синхронизируем значения из временных контролов для каждого набора настроек (до 10)
+    for (let i = 0; i < 10; i++) {
+      // Получаем выбранное поле для этого набора настроек
+      const selectorKey = `field_formatting_field${i}_selector` as keyof typeof formData;
+      const selectedField = formData[selectorKey] as string | undefined;
+      
+      if (!selectedField) {
+        continue; // Пропускаем, если поле не выбрано
+      }
+      
+      const fieldSettings = fieldGroupingSettings[selectedField] || {};
       
       // Синхронизируем значения из временных контролов
       const maxWidthKey = `field_formatting_field${i}_maxWidth` as keyof typeof formData;
@@ -1037,7 +1082,7 @@ const config: ControlPanelConfig = {
       
       // Сохраняем настройки только если есть хотя бы одно значение
       if (Object.keys(fieldSettings).length > 0) {
-        fieldGroupingSettings[fieldName] = fieldSettings;
+        fieldGroupingSettings[selectedField] = fieldSettings;
       }
     }
     
@@ -1049,10 +1094,22 @@ const config: ControlPanelConfig = {
       fieldGroupingSettings,
     };
     
-    // Инициализируем значения временных контролов для каждого поля
-    for (let i = 0; i < Math.min(allFields.length, 5); i++) {
-      const fieldName = getColumnLabel(allFields[i] as QueryFormColumn);
-      const fieldSettings = fieldGroupingSettings[fieldName] || {};
+    // Инициализируем значения временных контролов для каждого набора настроек
+    for (let i = 0; i < 10; i++) {
+      const selectorKey = `field_formatting_field${i}_selector` as keyof typeof formData;
+      const selectedField = formData[selectorKey] as string | undefined;
+      
+      if (!selectedField) {
+        // Если поле не выбрано, очищаем значения контролов
+        resultFormData[`field_formatting_field${i}_maxWidth`] = undefined;
+        resultFormData[`field_formatting_field${i}_truncate`] = false;
+        resultFormData[`field_formatting_field${i}_fontSize`] = undefined;
+        resultFormData[`field_formatting_field${i}_fontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_backgroundColor`] = undefined;
+        continue;
+      }
+      
+      const fieldSettings = fieldGroupingSettings[selectedField] || {};
       
       resultFormData[`field_formatting_field${i}_maxWidth`] = fieldSettings.maxWidth;
       resultFormData[`field_formatting_field${i}_truncate`] = fieldSettings.truncate ?? false;
