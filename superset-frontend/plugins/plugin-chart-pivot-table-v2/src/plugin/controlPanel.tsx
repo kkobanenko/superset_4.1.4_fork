@@ -706,13 +706,14 @@ const config: ControlPanelConfig = {
                     placeholder: t('Select field...'),
                     rerender: ['groupbyRows', 'groupbyColumns', 'metrics', 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      // Получаем все доступные поля: rows, columns и metrics
-                      const groupbyRows = ensureIsArray(state.controls?.groupbyRows?.value || []);
-                      const groupbyColumns = ensureIsArray(state.controls?.groupbyColumns?.value || []);
-                      const metrics = ensureIsArray(state.controls?.metrics?.value || []);
+                      // Безопасно получаем все доступные поля: rows, columns и metrics
+                      const controls = state?.controls || {};
+                      const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                      const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
                       
                       // Получаем verbose_map для отображения понятных названий
-                      const datasource = state.datasource as Dataset | undefined;
+                      const datasource = state?.datasource as Dataset | undefined;
                       const verboseMap = datasource?.verbose_map || {};
                       
                       // Формируем список всех доступных полей с метками
@@ -750,9 +751,9 @@ const config: ControlPanelConfig = {
                         let metricLabel: string;
                         if (typeof metric === 'string') {
                           metricLabel = metric;
-                        } else if (metric.label) {
+                        } else if (metric?.label) {
                           metricLabel = metric.label;
-                        } else if ('sqlExpression' in metric && metric.sqlExpression) {
+                        } else if (metric && 'sqlExpression' in metric && metric.sqlExpression) {
                           metricLabel = metric.sqlExpression;
                         } else {
                           metricLabel = 'Unknown Metric';
@@ -767,8 +768,9 @@ const config: ControlPanelConfig = {
                         });
                       });
                       
-                      // Получаем выбранное поле для этого набора настроек
-                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      // Безопасно получаем выбранное поле для этого набора настроек
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       
                       return {
                         choices: allFields.map(field => [field.value, field.label]),
@@ -790,11 +792,13 @@ const config: ControlPanelConfig = {
                       return !!selectedField;
                     },
                     mapStateToProps: (state: any) => {
-                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      const controls = state?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       if (!selectedField) {
                         return { label: t('Select a field above') };
                       }
-                      const datasource = state.datasource as Dataset | undefined;
+                      const datasource = state?.datasource as Dataset | undefined;
                       const verboseMap = datasource?.verbose_map || {};
                       const displayName = typeof verboseMap[selectedField] === 'string' 
                         ? verboseMap[selectedField]
@@ -821,10 +825,15 @@ const config: ControlPanelConfig = {
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
-                      const fieldSettings = selectedField 
-                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
-                        : {};
+                      const controls = state?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings = fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
                       return {
                         value: fieldSettings.maxWidth,
                       };
@@ -845,10 +854,15 @@ const config: ControlPanelConfig = {
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
-                      const fieldSettings = selectedField 
-                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
-                        : {};
+                      const controls = state?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return { value: false };
+                      }
+                      const fieldGroupingSettingsControl = controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings = fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
                       return {
                         value: fieldSettings.truncate ?? false,
                       };
@@ -871,10 +885,15 @@ const config: ControlPanelConfig = {
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
-                      const fieldSettings = selectedField 
-                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
-                        : {};
+                      const controls = state?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings = fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
                       return {
                         value: fieldSettings.fontSize,
                       };
@@ -895,10 +914,15 @@ const config: ControlPanelConfig = {
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
-                      const fieldSettings = selectedField 
-                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
-                        : {};
+                      const controls = state?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings = fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
                       return {
                         value: fieldSettings.fontColor,
                       };
@@ -921,10 +945,15 @@ const config: ControlPanelConfig = {
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
-                      const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
-                      const fieldSettings = selectedField 
-                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
-                        : {};
+                      const controls = state?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings = fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
                       return {
                         value: fieldSettings.backgroundColor,
                       };
