@@ -746,7 +746,17 @@ const config: ControlPanelConfig = {
                       
                       // Добавляем метрики
                       metrics.forEach((metric: QueryFormMetric) => {
-                        const metricLabel = typeof metric === 'string' ? metric : metric.label || metric.expression || '';
+                        // Получаем метку метрики: строка или объект с label/sqlExpression
+                        let metricLabel: string;
+                        if (typeof metric === 'string') {
+                          metricLabel = metric;
+                        } else if (metric.label) {
+                          metricLabel = metric.label;
+                        } else if ('sqlExpression' in metric && metric.sqlExpression) {
+                          metricLabel = metric.sqlExpression;
+                        } else {
+                          metricLabel = 'Unknown Metric';
+                        }
                         const displayLabel = typeof verboseMap[metricLabel] === 'string' 
                           ? `${verboseMap[metricLabel]} (Metric)`
                           : `${metricLabel} (Metric)`;
@@ -759,11 +769,6 @@ const config: ControlPanelConfig = {
                       
                       // Получаем выбранное поле для этого набора настроек
                       const selectedField = state.controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
-                      
-                      // Получаем настройки для выбранного поля
-                      const fieldSettings = selectedField 
-                        ? state.controls?.fieldGroupingSettings?.value?.[selectedField] || {}
-                        : {};
                       
                       return {
                         choices: allFields.map(field => [field.value, field.label]),
