@@ -35,6 +35,10 @@ variables:
   DOCKER_TLS_CERTDIR: "/certs"
   # Используем GitLab Container Registry
   CI_REGISTRY_IMAGE: ${CI_REGISTRY}/gdpgroup/superset_4.1.4_fork
+  # Таймаут для сборки (может быть переопределен на уровне проекта или runner)
+  # Если сборка все еще прерывается, проверьте настройки таймаута в:
+  # - GitLab Project Settings -> CI/CD -> General pipelines -> Timeout
+  # - GitLab Runner config.toml -> [runners] -> timeout
 
 stages:
   - build
@@ -124,7 +128,7 @@ build-docker-lean:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
       allow_failure: false
-  timeout: 2h  # Сборка может занять до 2 часов
+  timeout: 3h  # Сборка может занять до 3 часов (frontend build может быть долгим)
 
 # Опциональная сборка dev образа (для разработки)
 build-docker-dev:
@@ -190,5 +194,5 @@ build-docker-dev:
     - if: $CI_COMMIT_BRANCH == "feature/pivot-table-v2"
       when: manual
   # tags: []  # Убрано требование тега docker для совместимости с разными runner'ами
-  timeout: 2h
+  timeout: 3h  # Сборка может занять до 3 часов (frontend build может быть долгим)
 
