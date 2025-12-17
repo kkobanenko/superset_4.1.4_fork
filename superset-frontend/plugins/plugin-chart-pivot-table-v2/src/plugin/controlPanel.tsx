@@ -787,8 +787,10 @@ const config: ControlPanelConfig = {
                     type: 'InfoControl',
                     label: t('Formatting for selected field'),
                     description: t('Configure formatting options below'),
-                    visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       return !!selectedField;
                     },
                     mapStateToProps: (state: any) => {
@@ -819,8 +821,10 @@ const config: ControlPanelConfig = {
                     renderTrigger: true,
                     default: undefined,
                     description: t('Maximum column width in pixels'),
-                    visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       return !!selectedField;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
@@ -848,8 +852,10 @@ const config: ControlPanelConfig = {
                     renderTrigger: true,
                     default: false,
                     description: t('Truncate values that exceed max width'),
-                    visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       return !!selectedField;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
@@ -879,8 +885,10 @@ const config: ControlPanelConfig = {
                     renderTrigger: true,
                     default: undefined,
                     description: t('Font size in pixels'),
-                    visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       return !!selectedField;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
@@ -908,8 +916,10 @@ const config: ControlPanelConfig = {
                     renderTrigger: true,
                     default: undefined,
                     description: t('Font color'),
-                    visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       return !!selectedField;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
@@ -939,8 +949,10 @@ const config: ControlPanelConfig = {
                     renderTrigger: true,
                     default: undefined,
                     description: t('Background color for column/row'),
-                    visibility: ({ controls: ctrl }: { controls?: any }) => {
-                      const selectedField = ctrl?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
                       return !!selectedField;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
