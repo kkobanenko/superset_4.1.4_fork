@@ -705,76 +705,113 @@ const config: ControlPanelConfig = {
                     description: t('Select a field to configure formatting'),
                     placeholder: t('Select field...'),
                     rerender: ['groupbyRows', 'groupbyColumns', 'metrics', 'fieldGroupingSettings'],
-                    mapStateToProps: (state: any) => {
+                    mapStateToProps: (state: any, controlState?: any) => {
+                      // Безопасная проверка входных параметров
+                      if (!state || typeof state !== 'object') {
+                        return {
+                          choices: [],
+                          value: undefined,
+                        };
+                      }
+                      
                       // Безопасно получаем все доступные поля: rows, columns и metrics
-                      const controls = state?.controls || {};
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
                       const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
                       const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
                       const metrics = ensureIsArray(controls?.metrics?.value || []);
                       
                       // Получаем verbose_map для отображения понятных названий
-                      const datasource = state?.datasource as Dataset | undefined;
-                      const verboseMap = datasource?.verbose_map || {};
+                      const datasource = (state.datasource && typeof state.datasource === 'object')
+                        ? (state.datasource as Dataset)
+                        : undefined;
+                      const verboseMap = (datasource?.verbose_map && typeof datasource.verbose_map === 'object')
+                        ? datasource.verbose_map
+                        : {};
                       
                       // Формируем список всех доступных полей с метками
                       const allFields: Array<{ value: string; label: string; type: string }> = [];
                       
                       // Добавляем поля из Rows
-                      groupbyRows.forEach((field: QueryFormColumn) => {
-                        const fieldLabel = getColumnLabel(field);
-                        const displayLabel = typeof verboseMap[fieldLabel] === 'string' 
-                          ? `${verboseMap[fieldLabel]} (Row)`
-                          : `${fieldLabel} (Row)`;
-                        allFields.push({
-                          value: fieldLabel,
-                          label: displayLabel,
-                          type: 'row',
+                      if (Array.isArray(groupbyRows)) {
+                        groupbyRows.forEach((field: QueryFormColumn) => {
+                          try {
+                            const fieldLabel = getColumnLabel(field);
+                            const displayLabel = typeof verboseMap[fieldLabel] === 'string' 
+                              ? `${verboseMap[fieldLabel]} (Row)`
+                              : `${fieldLabel} (Row)`;
+                            allFields.push({
+                              value: fieldLabel,
+                              label: displayLabel,
+                              type: 'row',
+                            });
+                          } catch (e) {
+                            // Игнорируем ошибки при обработке полей
+                          }
                         });
-                      });
+                      }
                       
                       // Добавляем поля из Columns
-                      groupbyColumns.forEach((field: QueryFormColumn) => {
-                        const fieldLabel = getColumnLabel(field);
-                        const displayLabel = typeof verboseMap[fieldLabel] === 'string' 
-                          ? `${verboseMap[fieldLabel]} (Column)`
-                          : `${fieldLabel} (Column)`;
-                        allFields.push({
-                          value: fieldLabel,
-                          label: displayLabel,
-                          type: 'column',
+                      if (Array.isArray(groupbyColumns)) {
+                        groupbyColumns.forEach((field: QueryFormColumn) => {
+                          try {
+                            const fieldLabel = getColumnLabel(field);
+                            const displayLabel = typeof verboseMap[fieldLabel] === 'string' 
+                              ? `${verboseMap[fieldLabel]} (Column)`
+                              : `${fieldLabel} (Column)`;
+                            allFields.push({
+                              value: fieldLabel,
+                              label: displayLabel,
+                              type: 'column',
+                            });
+                          } catch (e) {
+                            // Игнорируем ошибки при обработке полей
+                          }
                         });
-                      });
+                      }
                       
                       // Добавляем метрики
-                      metrics.forEach((metric: QueryFormMetric) => {
-                        // Получаем метку метрики: строка или объект с label/sqlExpression
-                        let metricLabel: string;
-                        if (typeof metric === 'string') {
-                          metricLabel = metric;
-                        } else if (metric?.label) {
-                          metricLabel = metric.label;
-                        } else if (metric && 'sqlExpression' in metric && metric.sqlExpression) {
-                          metricLabel = metric.sqlExpression;
-                        } else {
-                          metricLabel = 'Unknown Metric';
-                        }
-                        const displayLabel = typeof verboseMap[metricLabel] === 'string' 
-                          ? `${verboseMap[metricLabel]} (Metric)`
-                          : `${metricLabel} (Metric)`;
-                        allFields.push({
-                          value: metricLabel,
-                          label: displayLabel,
-                          type: 'metric',
+                      if (Array.isArray(metrics)) {
+                        metrics.forEach((metric: QueryFormMetric) => {
+                          try {
+                            // Получаем метку метрики: строка или объект с label/sqlExpression
+                            let metricLabel: string;
+                            if (typeof metric === 'string') {
+                              metricLabel = metric;
+                            } else if (metric && typeof metric === 'object' && metric.label) {
+                              metricLabel = metric.label;
+                            } else if (metric && typeof metric === 'object' && 'sqlExpression' in metric && metric.sqlExpression) {
+                              metricLabel = metric.sqlExpression;
+                            } else {
+                              metricLabel = 'Unknown Metric';
+                            }
+                            const displayLabel = typeof verboseMap[metricLabel] === 'string' 
+                              ? `${verboseMap[metricLabel]} (Metric)`
+                              : `${metricLabel} (Metric)`;
+                            allFields.push({
+                              value: metricLabel,
+                              label: displayLabel,
+                              type: 'metric',
+                            });
+                          } catch (e) {
+                            // Игнорируем ошибки при обработке метрик
+                          }
                         });
-                      });
+                      }
                       
                       // Безопасно получаем выбранное поле для этого набора настроек
-                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
-                      const selectedField = selectorControl?.value;
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && typeof controls === 'object' && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
                       
                       return {
                         choices: allFields.map(field => [field.value, field.label]),
-                        value: selectedField,
+                        value: selectedField !== null && selectedField !== undefined ? selectedField : undefined,
                       };
                     },
                   },
