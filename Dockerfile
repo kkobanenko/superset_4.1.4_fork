@@ -83,14 +83,41 @@ FROM superset-node-ci AS superset-node
 
 # Set Node.js memory limit for frontend build
 ENV NODE_OPTIONS=--max_old_space_size=8192
+# Increase npm network timeouts and retries for better reliability
+ENV NPM_CONFIG_FETCH_TIMEOUT=300000
+ENV NPM_CONFIG_FETCH_RETRIES=5
+ENV NPM_CONFIG_FETCH_RETRY_FACTOR=2
 
 # Build plugins first, then the main frontend if not in dev mode
+# Use retry logic to handle network errors
 RUN --mount=type=cache,target=/root/.npm \
     if [ "${DEV_MODE}" = "false" ]; then \
         echo "Building plugins..."; \
-        NODE_OPTIONS=--max_old_space_size=8192 npm run plugins:build; \
+        for i in 1 2 3; do \
+            if NODE_OPTIONS=--max_old_space_size=8192 npm run plugins:build; then \
+                break; \
+            else \
+                echo "Plugins build attempt $i failed, retrying..."; \
+                if [ $i -eq 3 ]; then \
+                    echo "Plugins build failed after 3 attempts"; \
+                    exit 1; \
+                fi; \
+                sleep 5; \
+            fi; \
+        done; \
         echo "Running 'npm run ${BUILD_CMD}'"; \
-        NODE_OPTIONS=--max_old_space_size=8192 npm run ${BUILD_CMD}; \
+        for i in 1 2 3; do \
+            if NODE_OPTIONS=--max_old_space_size=8192 npm run ${BUILD_CMD}; then \
+                break; \
+            else \
+                echo "Frontend build attempt $i failed, retrying..."; \
+                if [ $i -eq 3 ]; then \
+                    echo "Frontend build failed after 3 attempts"; \
+                    exit 1; \
+                fi; \
+                sleep 5; \
+            fi; \
+        done; \
     else \
         echo "Skipping frontend build in dev mode"; \
     fi;
