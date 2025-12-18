@@ -44,6 +44,37 @@ function isNumeric(key: string, data: DataRecord[] = []) {
   );
 }
 
+// Преобразовать цвет, который приходит из ColorPickerControl (RGBColor), в CSS-строку.
+// Это нужно потому, что в Explore ColorPickerControl возвращает объект вида:
+// { r: number, g: number, b: number, a?: number }
+// а TableRenderers ожидает строку для style.color / style.backgroundColor.
+function toCssColor(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const v = value as { r?: unknown; g?: unknown; b?: unknown; a?: unknown };
+  if (
+    typeof v.r !== 'number' ||
+    typeof v.g !== 'number' ||
+    typeof v.b !== 'number'
+  ) {
+    return undefined;
+  }
+
+  const r = Math.round(v.r);
+  const g = Math.round(v.g);
+  const b = Math.round(v.b);
+  const a = typeof v.a === 'number' ? v.a : 1;
+
+  // rgba работает и для alpha=1
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
 /**
  * Собрать итоговые настройки форматирования полей (fieldGroupingSettings) из:
  * 1) formData.fieldGroupingSettings (если она есть)
@@ -104,13 +135,15 @@ function buildEffectiveFieldGroupingSettings(
     }
 
     const fontColor = fd[`field_formatting_field${i}_fontColor`];
-    if (typeof fontColor === 'string') {
-      nextFieldSettings.fontColor = fontColor;
+    const fontColorCss = toCssColor(fontColor);
+    if (typeof fontColorCss === 'string') {
+      nextFieldSettings.fontColor = fontColorCss;
     }
 
     const backgroundColor = fd[`field_formatting_field${i}_backgroundColor`];
-    if (typeof backgroundColor === 'string') {
-      nextFieldSettings.backgroundColor = backgroundColor;
+    const backgroundColorCss = toCssColor(backgroundColor);
+    if (typeof backgroundColorCss === 'string') {
+      nextFieldSettings.backgroundColor = backgroundColorCss;
     }
 
     merged[selectedField] = nextFieldSettings;
