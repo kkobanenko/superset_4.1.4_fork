@@ -675,15 +675,17 @@ const config: ControlPanelConfig = {
       label: t('Field Formatting Settings'),
       expanded: false,
       controlSetRows: [
+        // ВАЖНО: `fieldGroupingSettings` — это объект, который используется как источник истины
+        // для форматирования. Он должен существовать в `controls`, иначе при выборе значения
+        // в селекторе Superset попытается перерассчитать `rerender`-контролы и упадет на
+        // `newState.controls[controlName].value` (controlName = 'fieldGroupingSettings').
         [
           {
-            name: 'field_formatting_info',
+            name: 'fieldGroupingSettings',
             config: {
-              type: 'InfoControl',
-              label: t('Field Formatting'),
-              description: t(
-                'Configure formatting settings for specific fields. Select a field from Rows, Columns, or Metrics, then configure its formatting below. You can configure up to 10 fields.',
-              ),
+              type: 'HiddenControl',
+              default: {},
+              renderTrigger: true,
             },
           },
         ],
@@ -812,52 +814,6 @@ const config: ControlPanelConfig = {
                       return {
                         choices: allFields.map(field => [field.value, field.label]),
                         value: selectedField !== null && selectedField !== undefined ? selectedField : undefined,
-                      };
-                    },
-                  },
-                },
-              ],
-              [
-                {
-                  name: `field_formatting_field${fieldIndex}_info`,
-                  config: {
-                    type: 'InfoControl',
-                    label: t('Formatting for selected field'),
-                    description: t('Configure formatting options below'),
-                    visibility: (props: any) => {
-                      const controls = props?.controls || {};
-                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
-                      const selectedField = selectorControl?.value;
-                      return !!selectedField;
-                    },
-                    mapStateToProps: (state: any) => {
-                      if (!state || typeof state !== 'object') {
-                        return { label: t('Select a field above') };
-                      }
-                      const controls = (state.controls && typeof state.controls === 'object') 
-                        ? state.controls 
-                        : {};
-                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
-                      const selectorControl = (controls && selectorControlName in controls)
-                        ? controls[selectorControlName]
-                        : undefined;
-                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
-                        ? selectorControl.value
-                        : undefined;
-                      if (!selectedField) {
-                        return { label: t('Select a field above') };
-                      }
-                      const datasource = (state.datasource && typeof state.datasource === 'object')
-                        ? (state.datasource as Dataset)
-                        : undefined;
-                      const verboseMap = (datasource?.verbose_map && typeof datasource.verbose_map === 'object')
-                        ? datasource.verbose_map
-                        : {};
-                      const displayName = typeof verboseMap[selectedField] === 'string' 
-                        ? verboseMap[selectedField]
-                        : selectedField;
-                      return {
-                        label: t('Formatting for: %s', displayName),
                       };
                     },
                   },
