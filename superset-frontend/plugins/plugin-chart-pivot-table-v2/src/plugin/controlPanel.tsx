@@ -285,8 +285,8 @@ const config: ControlPanelConfig = {
                 );
 
                 return [
-                  ...ensureIsArray(controls?.groupbyColumns.value),
-                  ...ensureIsArray(controls?.groupbyRows.value),
+                  ...ensureIsArray(controls?.groupbyColumns?.value),
+                  ...ensureIsArray(controls?.groupbyRows?.value),
                 ]
                   .map(selection => {
                     if (isAdhocColumn(selection)) {
