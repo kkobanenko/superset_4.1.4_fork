@@ -203,9 +203,11 @@ export class TableRenderer extends Component {
     return fieldGroupingSettings[attrName] || {};
   }
 
-  // Получить стиль для заголовка колонки/строки
-  getHeaderStyle(attrName) {
-    const settings = this.getFieldSettings(attrName);
+  getMetricKey() {
+    return this.props.tableOptions?.metricKey;
+  }
+
+  buildTextStyle(settings, includeWidth = false) {
     const style = {};
     if (settings.fontSize) {
       style.fontSize = `${settings.fontSize}px`;
@@ -216,7 +218,7 @@ export class TableRenderer extends Component {
     if (settings.backgroundColor) {
       style.backgroundColor = settings.backgroundColor;
     }
-    if (settings.maxWidth) {
+    if (includeWidth && settings.maxWidth) {
       style.maxWidth = `${settings.maxWidth}px`;
       style.overflow = settings.truncate ? 'hidden' : 'visible';
       style.textOverflow = settings.truncate ? 'ellipsis' : 'clip';
@@ -225,20 +227,60 @@ export class TableRenderer extends Component {
     return style;
   }
 
+  // Получить стиль для заголовка колонки/строки
+  getHeaderStyle(attrName) {
+    const settings = this.getFieldSettings(attrName);
+    return this.buildTextStyle(settings, true);
+  }
+
   // Получить стиль для ячейки данных
   getCellStyle(attrName) {
     const settings = this.getFieldSettings(attrName);
-    const style = {};
-    if (settings.fontSize) {
-      style.fontSize = `${settings.fontSize}px`;
+    return this.buildTextStyle(settings, false);
+  }
+
+  getMetricHeaderStyle(metricName) {
+    const settings = this.getFieldSettings(metricName);
+    const normalized = {
+      ...settings,
+      fontSize: settings.metricHeaderFontSize ?? settings.fontSize,
+      fontColor: settings.metricHeaderFontColor ?? settings.fontColor,
+      backgroundColor:
+        settings.metricHeaderBackgroundColor ?? settings.backgroundColor,
+    };
+    // Header also supports width/truncation
+    return this.buildTextStyle(normalized, true);
+  }
+
+  getMetricValueStyle(metricName) {
+    const settings = this.getFieldSettings(metricName);
+    const normalized = {
+      ...settings,
+      fontSize: settings.metricValueFontSize ?? settings.fontSize,
+      fontColor: settings.metricValueFontColor ?? settings.fontColor,
+      backgroundColor:
+        settings.metricValueBackgroundColor ?? settings.backgroundColor,
+    };
+    return this.buildTextStyle(normalized, false);
+  }
+
+  getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs) {
+    const metricKey = this.getMetricKey();
+    if (!metricKey) {
+      return null;
     }
-    if (settings.fontColor) {
-      style.color = settings.fontColor;
+
+    const colIdx = colAttrs.indexOf(metricKey);
+    if (colIdx !== -1 && colIdx < colKey.length) {
+      return String(colKey[colIdx]);
     }
-    if (settings.backgroundColor) {
-      style.backgroundColor = settings.backgroundColor;
+
+    const rowIdx = rowAttrs.indexOf(metricKey);
+    if (rowIdx !== -1 && rowIdx < rowKey.length) {
+      return String(rowKey[rowIdx]);
     }
-    return style;
+
+    return null;
   }
 
   // Обрезать текст значения, если нужно
@@ -502,8 +544,15 @@ export class TableRenderer extends Component {
           typeof dateFormatters[attrName] === 'function'
             ? dateFormatters[attrName](colKey[attrIdx])
             : colKey[attrIdx];
-        // Применяем стили форматирования к значениям заголовков колонок
-        const valueHeaderStyle = this.getHeaderStyle(attrName);
+        // Apply metric-specific header formatting when this header belongs to a metric value.
+        const metricKey = this.getMetricKey();
+        const rawHeaderValue = colKey[attrIdx];
+        const valueHeaderStyle =
+          metricKey &&
+          attrName === metricKey &&
+          (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
+            ? this.getMetricHeaderStyle(String(rawHeaderValue))
+            : this.getHeaderStyle(attrName);
         attrValueCells.push(
           <th
             className={colLabelClass}
@@ -725,8 +774,14 @@ export class TableRenderer extends Component {
           dateFormatters && dateFormatters[rowAttrs[i]]
             ? dateFormatters[rowAttrs[i]](r)
             : r;
-        // Применяем стили форматирования к значениям заголовков строк
-        const rowValueHeaderStyle = this.getHeaderStyle(rowAttrs[i]);
+        // Apply metric-specific header formatting when metric dimension is placed on rows.
+        const metricKey = this.getMetricKey();
+        const rowValueHeaderStyle =
+          metricKey &&
+          rowAttrs[i] === metricKey &&
+          (typeof r === 'string' || typeof r === 'number')
+            ? this.getMetricHeaderStyle(String(r))
+            : this.getHeaderStyle(rowAttrs[i]);
         return (
           <th
             key={`rowKeyLabel-${i}`}
@@ -818,14 +873,27 @@ export class TableRenderer extends Component {
         });
       }
 
-      // Применяем стили форматирования к ячейкам данных
-      // Определяем, к какому полю относится ячейка (колонка или строка)
-      const cellAttrName = colKey.length > 0 ? colAttrs[colKey.length - 1] : null;
+      // Apply formatting to data cells:
+      // - field-based cell style (e.g. last col attr)
+      // - metric-specific value style (based on concrete metric name, like "Факт")
+      const cellAttrName =
+        colKey.length > 0 ? colAttrs[colKey.length - 1] : null;
       const cellStyle = cellAttrName ? this.getCellStyle(cellAttrName) : {};
+
+      const metricName = this.getMetricNameForCell(
+        rowKey,
+        colKey,
+        rowAttrs,
+        colAttrs,
+      );
+      const metricValueStyle = metricName
+        ? this.getMetricValueStyle(metricName)
+        : {};
       
       // Объединяем стили: сначала стили форматирования, затем цвет фона из formatter
       const finalStyle = {
         ...cellStyle,
+        ...metricValueStyle,
         ...(agg.isSubtotal ? { fontWeight: 'bold' } : {}),
         ...(backgroundColor ? { backgroundColor } : {}),
       };

@@ -481,6 +481,8 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
         isFeatureEnabled(FeatureFlag.DrillToDetail),
       highlightedHeaderCells: selectedFilters,
       omittedHighlightHeaderGroups: [METRIC_KEY],
+      // Used by TableRenderers to reliably detect metric dimension cells/headers
+      metricKey: METRIC_KEY,
       cellColorFormatters: { [METRIC_KEY]: metricColorFormatters },
       dateFormatters,
       // Передаем настройки форматирования полей группировки

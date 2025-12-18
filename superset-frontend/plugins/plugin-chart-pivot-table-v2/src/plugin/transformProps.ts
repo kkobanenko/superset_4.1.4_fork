@@ -146,6 +146,44 @@ function buildEffectiveFieldGroupingSettings(
       nextFieldSettings.backgroundColor = backgroundColorCss;
     }
 
+    // Metric-specific formatting: header styles
+    const metricHeaderFontSize = fd[`field_formatting_field${i}_metricHeaderFontSize`];
+    if (typeof metricHeaderFontSize === 'number') {
+      nextFieldSettings.metricHeaderFontSize = metricHeaderFontSize;
+    }
+
+    const metricHeaderFontColor = fd[`field_formatting_field${i}_metricHeaderFontColor`];
+    const metricHeaderFontColorCss = toCssColor(metricHeaderFontColor);
+    if (typeof metricHeaderFontColorCss === 'string') {
+      nextFieldSettings.metricHeaderFontColor = metricHeaderFontColorCss;
+    }
+
+    const metricHeaderBackgroundColor =
+      fd[`field_formatting_field${i}_metricHeaderBackgroundColor`];
+    const metricHeaderBackgroundColorCss = toCssColor(metricHeaderBackgroundColor);
+    if (typeof metricHeaderBackgroundColorCss === 'string') {
+      nextFieldSettings.metricHeaderBackgroundColor = metricHeaderBackgroundColorCss;
+    }
+
+    // Metric-specific formatting: value styles
+    const metricValueFontSize = fd[`field_formatting_field${i}_metricValueFontSize`];
+    if (typeof metricValueFontSize === 'number') {
+      nextFieldSettings.metricValueFontSize = metricValueFontSize;
+    }
+
+    const metricValueFontColor = fd[`field_formatting_field${i}_metricValueFontColor`];
+    const metricValueFontColorCss = toCssColor(metricValueFontColor);
+    if (typeof metricValueFontColorCss === 'string') {
+      nextFieldSettings.metricValueFontColor = metricValueFontColorCss;
+    }
+
+    const metricValueBackgroundColor =
+      fd[`field_formatting_field${i}_metricValueBackgroundColor`];
+    const metricValueBackgroundColorCss = toCssColor(metricValueBackgroundColor);
+    if (typeof metricValueBackgroundColorCss === 'string') {
+      nextFieldSettings.metricValueBackgroundColor = metricValueBackgroundColorCss;
+    }
+
     merged[selectedField] = nextFieldSettings;
   }
 
@@ -264,9 +302,14 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     theme,
   );
 
-  // Итоговые настройки форматирования, которые реально будут применяться в рендерере
+  // Итоговые настройки форматирования, которые реально будут применяться в рендерере.
+  //
+  // ВАЖНО: в Superset `chartProps.formData` часто является "нормализованной" формой
+  // и может НЕ включать UI-only контролы (например, динамические field_formatting_field{N}_*).
+  // При этом `rawFormData` содержит полную форму из Explore, включая эти контролы.
+  // Поэтому собираем настройки именно из `rawFormData`.
   const effectiveFieldGroupingSettings =
-    buildEffectiveFieldGroupingSettings(chartProps.formData as unknown as Record<string, unknown>);
+    buildEffectiveFieldGroupingSettings(rawFormData as unknown as Record<string, unknown>);
 
   return {
     width,

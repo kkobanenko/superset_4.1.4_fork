@@ -113,6 +113,16 @@ export interface FieldGroupingSettings {
   fontSize?: number; // размер шрифта в пикселях
   fontColor?: string; // цвет шрифта в hex формате (будет преобразован из RGBColor)
   backgroundColor?: string; // цвет фона в hex формате (будет преобразован из RGBColor)
+
+  // Metric-specific formatting:
+  // - `metricHeader*` applies to the metric header cell (e.g. "Факт" in the header)
+  // - `metricValue*` applies to the metric value cells (numbers)
+  metricHeaderFontSize?: number;
+  metricHeaderFontColor?: string;
+  metricHeaderBackgroundColor?: string;
+  metricValueFontSize?: number;
+  metricValueFontColor?: string;
+  metricValueBackgroundColor?: string;
 }
 
 // Глобальные настройки таблицы

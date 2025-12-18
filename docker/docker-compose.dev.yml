@@ -96,7 +96,9 @@ services:
       # Optional: Mount code for hot-reload (uncomment if needed)
       # Note: This requires rebuilding frontend assets inside container
       # - ../superset:/app/superset:ro
-      - ../superset-frontend:/app/superset-frontend:ro
+      # ВАЖНО: mount должен быть RW, иначе внутри контейнера нельзя пересобрать плагины/фронтенд
+      # (plugins:build пишет в lib/esm, а build пишет в кэш внутри superset-frontend).
+      - ../superset-frontend:/app/superset-frontend
     # Fix permissions for data directory
     user: "1000:1000"
     networks:

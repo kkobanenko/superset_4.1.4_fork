@@ -928,7 +928,31 @@ const config: ControlPanelConfig = {
                       const controls = props?.controls || {};
                       const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
                       const selectedField = selectorControl?.value;
-                      return !!selectedField;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      // Hide generic typography controls for metrics (they have separate header/value styling below)
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') {
+                            return m;
+                          }
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return !metricLabels.includes(String(selectedField));
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -975,7 +999,30 @@ const config: ControlPanelConfig = {
                       const controls = props?.controls || {};
                       const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
                       const selectedField = selectorControl?.value;
-                      return !!selectedField;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') {
+                            return m;
+                          }
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return !metricLabels.includes(String(selectedField));
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -1024,7 +1071,30 @@ const config: ControlPanelConfig = {
                       const controls = props?.controls || {};
                       const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
                       const selectedField = selectorControl?.value;
-                      return !!selectedField;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') {
+                            return m;
+                          }
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return !metricLabels.includes(String(selectedField));
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -1055,6 +1125,532 @@ const config: ControlPanelConfig = {
                         : {};
                       return {
                         value: (fieldSettings && 'backgroundColor' in fieldSettings) ? fieldSettings.backgroundColor : undefined,
+                      };
+                    },
+                  },
+                },
+              ],
+              // Metric-specific header formatting
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_metricHeaderFontSize`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Metric header font size (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font size for metric header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectedField =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'metricHeaderFontSize' in fieldSettings &&
+                          fieldSettings.metricHeaderFontSize !== undefined
+                            ? fieldSettings.metricHeaderFontSize
+                            : fieldSettings.fontSize,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_metricHeaderFontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Metric header font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color for metric header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectedField =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'metricHeaderFontColor' in fieldSettings &&
+                          fieldSettings.metricHeaderFontColor !== undefined
+                            ? fieldSettings.metricHeaderFontColor
+                            : fieldSettings.fontColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_metricHeaderBackgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Metric header background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for metric header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectedField =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'metricHeaderBackgroundColor' in fieldSettings &&
+                          fieldSettings.metricHeaderBackgroundColor !== undefined
+                            ? fieldSettings.metricHeaderBackgroundColor
+                            : fieldSettings.backgroundColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              // Metric-specific value formatting
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_metricValueFontSize`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Metric values font size (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font size for metric value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectedField =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'metricValueFontSize' in fieldSettings &&
+                          fieldSettings.metricValueFontSize !== undefined
+                            ? fieldSettings.metricValueFontSize
+                            : fieldSettings.fontSize,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_metricValueFontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Metric values font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color for metric value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectedField =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'metricValueFontColor' in fieldSettings &&
+                          fieldSettings.metricValueFontColor !== undefined
+                            ? fieldSettings.metricValueFontColor
+                            : fieldSettings.fontColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_metricValueBackgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Metric values background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for metric value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectedField =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'metricValueBackgroundColor' in fieldSettings &&
+                          fieldSettings.metricValueBackgroundColor !== undefined
+                            ? fieldSettings.metricValueBackgroundColor
+                            : fieldSettings.backgroundColor,
                       };
                     },
                   },
@@ -1196,6 +1792,18 @@ const config: ControlPanelConfig = {
       const fontSizeKey = `field_formatting_field${i}_fontSize` as keyof typeof formData;
       const fontColorKey = `field_formatting_field${i}_fontColor` as keyof typeof formData;
       const backgroundColorKey = `field_formatting_field${i}_backgroundColor` as keyof typeof formData;
+      const metricHeaderFontSizeKey =
+        `field_formatting_field${i}_metricHeaderFontSize` as keyof typeof formData;
+      const metricHeaderFontColorKey =
+        `field_formatting_field${i}_metricHeaderFontColor` as keyof typeof formData;
+      const metricHeaderBackgroundColorKey =
+        `field_formatting_field${i}_metricHeaderBackgroundColor` as keyof typeof formData;
+      const metricValueFontSizeKey =
+        `field_formatting_field${i}_metricValueFontSize` as keyof typeof formData;
+      const metricValueFontColorKey =
+        `field_formatting_field${i}_metricValueFontColor` as keyof typeof formData;
+      const metricValueBackgroundColorKey =
+        `field_formatting_field${i}_metricValueBackgroundColor` as keyof typeof formData;
       
       if (formData[maxWidthKey] !== undefined) {
         fieldSettings.maxWidth = formData[maxWidthKey] as number;
@@ -1211,6 +1819,27 @@ const config: ControlPanelConfig = {
       }
       if (formData[backgroundColorKey] !== undefined) {
         fieldSettings.backgroundColor = formData[backgroundColorKey] as string;
+      }
+
+      if (formData[metricHeaderFontSizeKey] !== undefined) {
+        fieldSettings.metricHeaderFontSize = formData[metricHeaderFontSizeKey] as number;
+      }
+      if (formData[metricHeaderFontColorKey] !== undefined) {
+        fieldSettings.metricHeaderFontColor = formData[metricHeaderFontColorKey] as string;
+      }
+      if (formData[metricHeaderBackgroundColorKey] !== undefined) {
+        fieldSettings.metricHeaderBackgroundColor =
+          formData[metricHeaderBackgroundColorKey] as string;
+      }
+      if (formData[metricValueFontSizeKey] !== undefined) {
+        fieldSettings.metricValueFontSize = formData[metricValueFontSizeKey] as number;
+      }
+      if (formData[metricValueFontColorKey] !== undefined) {
+        fieldSettings.metricValueFontColor = formData[metricValueFontColorKey] as string;
+      }
+      if (formData[metricValueBackgroundColorKey] !== undefined) {
+        fieldSettings.metricValueBackgroundColor =
+          formData[metricValueBackgroundColorKey] as string;
       }
       
       // Сохраняем настройки только если есть хотя бы одно значение
@@ -1239,6 +1868,12 @@ const config: ControlPanelConfig = {
         resultFormData[`field_formatting_field${i}_fontSize`] = undefined;
         resultFormData[`field_formatting_field${i}_fontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_backgroundColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_metricHeaderFontSize`] = undefined;
+        resultFormData[`field_formatting_field${i}_metricHeaderFontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_metricHeaderBackgroundColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_metricValueFontSize`] = undefined;
+        resultFormData[`field_formatting_field${i}_metricValueFontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] = undefined;
         continue;
       }
       
@@ -1249,6 +1884,18 @@ const config: ControlPanelConfig = {
       resultFormData[`field_formatting_field${i}_fontSize`] = fieldSettings.fontSize;
       resultFormData[`field_formatting_field${i}_fontColor`] = fieldSettings.fontColor;
       resultFormData[`field_formatting_field${i}_backgroundColor`] = fieldSettings.backgroundColor;
+      resultFormData[`field_formatting_field${i}_metricHeaderFontSize`] =
+        fieldSettings.metricHeaderFontSize;
+      resultFormData[`field_formatting_field${i}_metricHeaderFontColor`] =
+        fieldSettings.metricHeaderFontColor;
+      resultFormData[`field_formatting_field${i}_metricHeaderBackgroundColor`] =
+        fieldSettings.metricHeaderBackgroundColor;
+      resultFormData[`field_formatting_field${i}_metricValueFontSize`] =
+        fieldSettings.metricValueFontSize;
+      resultFormData[`field_formatting_field${i}_metricValueFontColor`] =
+        fieldSettings.metricValueFontColor;
+      resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] =
+        fieldSettings.metricValueBackgroundColor;
     }
     
     return resultFormData;
