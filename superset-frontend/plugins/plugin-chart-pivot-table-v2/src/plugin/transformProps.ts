@@ -27,7 +27,11 @@ import {
 } from '@superset-ui/core';
 import { GenericDataType } from '@apache-superset/core/api/core';
 import { getColorFormatters } from '@superset-ui/chart-controls';
-import { DateFormatter, PivotTableV2QueryFormData, PivotTableV2Props } from '../types';
+import {
+  DateFormatter,
+  PivotTableV2QueryFormData,
+  PivotTableV2Props,
+} from '../types';
 
 const { DATABASE_DATETIME } = TimeFormats;
 
@@ -38,6 +42,81 @@ function isNumeric(key: string, data: DataRecord[] = []) {
       record[key] === undefined ||
       typeof record[key] === 'number',
   );
+}
+
+/**
+ * Собрать итоговые настройки форматирования полей (fieldGroupingSettings) из:
+ * 1) formData.fieldGroupingSettings (если она есть)
+ * 2) "временных" контролов вида field_formatting_field{N}_*
+ *
+ * Почему так:
+ * - Superset не вызывает `formDataOverrides` на каждый чих (например, при renderTrigger)
+ * - Значит, чтобы изменения влияли на отрисовку сразу, мы собираем настройки
+ *   прямо здесь, на каждый вызов transformProps.
+ *
+ * Важно: ключи в fieldGroupingSettings должны совпадать с getColumnLabel(...) и
+ * названиями метрик (label), потому что именно эти строки используются как row/col attrs
+ * в PivotTable.
+ */
+function buildEffectiveFieldGroupingSettings(
+  // ChartProps.formData в рантайме может быть просто PlainObject, поэтому принимаем
+  // максимально безопасный тип и работаем через проверки/приведение.
+  formData: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  const baseSettingsRaw = formData.fieldGroupingSettings;
+  const baseSettings =
+    (typeof baseSettingsRaw === 'object' && baseSettingsRaw !== null
+      ? (baseSettingsRaw as Record<string, Record<string, unknown>>)
+      : {}) || {};
+
+  // Копируем, чтобы не мутировать исходный объект из formData
+  const merged: Record<string, Record<string, unknown>> = { ...baseSettings };
+
+  // Достаём динамические значения из formData по строковым ключам.
+  // Здесь intentionally используем Record<string, unknown>, чтобы не плодить any,
+  // но при этом иметь доступ к динамическим полям.
+  const fd = formData;
+
+  for (let i = 0; i < 10; i += 1) {
+    const selectorKey = `field_formatting_field${i}_selector`;
+    const selectedField = fd[selectorKey];
+    if (typeof selectedField !== 'string' || selectedField.length === 0) {
+      continue;
+    }
+
+    const nextFieldSettings: Record<string, unknown> = {
+      ...(merged[selectedField] || {}),
+    };
+
+    const maxWidth = fd[`field_formatting_field${i}_maxWidth`];
+    if (typeof maxWidth === 'number') {
+      nextFieldSettings.maxWidth = maxWidth;
+    }
+
+    const truncate = fd[`field_formatting_field${i}_truncate`];
+    if (typeof truncate === 'boolean') {
+      nextFieldSettings.truncate = truncate;
+    }
+
+    const fontSize = fd[`field_formatting_field${i}_fontSize`];
+    if (typeof fontSize === 'number') {
+      nextFieldSettings.fontSize = fontSize;
+    }
+
+    const fontColor = fd[`field_formatting_field${i}_fontColor`];
+    if (typeof fontColor === 'string') {
+      nextFieldSettings.fontColor = fontColor;
+    }
+
+    const backgroundColor = fd[`field_formatting_field${i}_backgroundColor`];
+    if (typeof backgroundColor === 'string') {
+      nextFieldSettings.backgroundColor = backgroundColor;
+    }
+
+    merged[selectedField] = nextFieldSettings;
+  }
+
+  return merged;
 }
 
 export default function transformProps(chartProps: ChartProps<PivotTableV2QueryFormData>): PivotTableV2Props {
@@ -74,7 +153,6 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     width,
     height,
     queriesData,
-    formData,
     rawFormData,
     hooks: { setDataMask = () => {}, onContextMenu },
     filterState,
@@ -83,6 +161,9 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     theme,
   } = chartProps;
   const { data, colnames, coltypes } = queriesData[0];
+  // Важно: chartProps.formData типизирован, но в рантайме/в generic типах Superset
+  // это может быть PlainObject, поэтому работаем через "typedFormData".
+  const typedFormData = chartProps.formData as unknown as PivotTableV2QueryFormData;
   const {
     groupbyRows,
     groupbyColumns,
@@ -106,11 +187,10 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     timeGrainSqla,
     currencyFormat,
     allowRenderHtml,
-    fieldGroupingSettings,
     globalTableSettings,
     legacy_order_by,
     order_desc,
-  } = formData;
+  } = typedFormData;
   const { selectedFilters } = filterState;
   const granularity = extractTimegrain(rawFormData);
 
@@ -151,6 +231,10 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     theme,
   );
 
+  // Итоговые настройки форматирования, которые реально будут применяться в рендерере
+  const effectiveFieldGroupingSettings =
+    buildEffectiveFieldGroupingSettings(chartProps.formData as unknown as Record<string, unknown>);
+
   return {
     width,
     height,
@@ -185,7 +269,8 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     onContextMenu,
     timeGrainSqla,
     allowRenderHtml,
-    fieldGroupingSettings,
+    // Используем "эффективные" настройки (из fieldGroupingSettings + динамических контролов)
+    fieldGroupingSettings: effectiveFieldGroupingSettings,
     globalTableSettings,
     legacy_order_by: legacy_order_by || null,
     order_desc: order_desc ?? true,
