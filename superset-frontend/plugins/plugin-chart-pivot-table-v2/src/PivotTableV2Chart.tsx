@@ -191,6 +191,8 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
     metrics,
     colOrder,
     rowOrder,
+    rowSortingMetric,
+    colSortingMetric,
     aggregateFunction,
     transposePivot,
     combineMetric,
@@ -723,6 +725,8 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
           vals={vals}
           colOrder={colOrder}
           rowOrder={rowOrder}
+          rowSortingMetric={rowSortingMetric}
+          colSortingMetric={colSortingMetric}
           sorters={sorters}
           tableOptions={tableOptions}
           subtotalOptions={subtotalOptions}

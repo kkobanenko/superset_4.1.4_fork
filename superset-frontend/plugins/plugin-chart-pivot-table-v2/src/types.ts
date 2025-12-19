@@ -57,6 +57,8 @@ interface PivotTableCustomizeProps {
   tableRenderer: string;
   colOrder: string;
   rowOrder: string;
+  rowSortingMetric?: string; // Имя метрики для сортировки строк по значениям
+  colSortingMetric?: string; // Имя метрики для сортировки колонок по значениям
   // Глобальная функция агрегации (legacy). В UI мы используем per-metric aggregation,
   // поэтому поле делаем необязательным для обратной совместимости со старыми slices.
   aggregateFunction?: string;

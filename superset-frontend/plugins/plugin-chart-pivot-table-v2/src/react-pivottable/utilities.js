@@ -734,6 +734,50 @@ class PivotData {
     if (!this.sorted) {
       this.sorted = true;
       const v = (r, c) => this.getAggregator(r, c).value();
+      
+      // Определяем, где находятся метрики (в cols или rows)
+      const metricKeyInCols = this.props.cols.indexOf('Metric') !== -1;
+      const metricKeyInRows = this.props.rows.indexOf('Metric') !== -1;
+      
+      // Для сортировки строк по значениям: если указана конкретная метрика и метрики в колонках,
+      // используем эту метрику вместо суммы по всем метрикам
+      const getRowSortingColKey = () => {
+        if (
+          this.props.rowSortingMetric &&
+          metricKeyInCols &&
+          (this.props.rowOrder === 'value_a_to_z' || this.props.rowOrder === 'value_z_to_a')
+        ) {
+          // Находим позицию Metric в cols
+          const metricIndex = this.props.cols.indexOf('Metric');
+          // Строим colKey с указанной метрикой
+          const colKey = new Array(this.props.cols.length).fill(null);
+          colKey[metricIndex] = this.props.rowSortingMetric;
+          return colKey;
+        }
+        return [];
+      };
+      
+      // Для сортировки колонок по значениям: если указана конкретная метрика и метрики в строках,
+      // используем эту метрику вместо суммы по всем метрикам
+      const getColSortingRowKey = () => {
+        if (
+          this.props.colSortingMetric &&
+          metricKeyInRows &&
+          (this.props.colOrder === 'value_a_to_z' || this.props.colOrder === 'value_z_to_a')
+        ) {
+          // Находим позицию Metric в rows
+          const metricIndex = this.props.rows.indexOf('Metric');
+          // Строим rowKey с указанной метрикой
+          const rowKey = new Array(this.props.rows.length).fill(null);
+          rowKey[metricIndex] = this.props.colSortingMetric;
+          return rowKey;
+        }
+        return [];
+      };
+      
+      const rowSortingColKey = getRowSortingColKey();
+      const colSortingRowKey = getColSortingRowKey();
+      
       switch (this.props.rowOrder) {
         case 'key_z_to_a':
           this.rowKeys.sort(
@@ -741,10 +785,22 @@ class PivotData {
           );
           break;
         case 'value_a_to_z':
-          this.rowKeys.sort((a, b) => naturalSort(v(a, []), v(b, [])));
+          if (rowSortingColKey.length > 0) {
+            // Используем конкретную метрику для сортировки
+            this.rowKeys.sort((a, b) => naturalSort(v(a, rowSortingColKey), v(b, rowSortingColKey)));
+          } else {
+            // Используем сумму по всем метрикам (старое поведение)
+            this.rowKeys.sort((a, b) => naturalSort(v(a, []), v(b, [])));
+          }
           break;
         case 'value_z_to_a':
-          this.rowKeys.sort((a, b) => -naturalSort(v(a, []), v(b, [])));
+          if (rowSortingColKey.length > 0) {
+            // Используем конкретную метрику для сортировки
+            this.rowKeys.sort((a, b) => -naturalSort(v(a, rowSortingColKey), v(b, rowSortingColKey)));
+          } else {
+            // Используем сумму по всем метрикам (старое поведение)
+            this.rowKeys.sort((a, b) => -naturalSort(v(a, []), v(b, [])));
+          }
           break;
         default:
           this.rowKeys.sort(
@@ -758,10 +814,22 @@ class PivotData {
           );
           break;
         case 'value_a_to_z':
-          this.colKeys.sort((a, b) => naturalSort(v([], a), v([], b)));
+          if (colSortingRowKey.length > 0) {
+            // Используем конкретную метрику для сортировки
+            this.colKeys.sort((a, b) => naturalSort(v(colSortingRowKey, a), v(colSortingRowKey, b)));
+          } else {
+            // Используем сумму по всем метрикам (старое поведение)
+            this.colKeys.sort((a, b) => naturalSort(v([], a), v([], b)));
+          }
           break;
         case 'value_z_to_a':
-          this.colKeys.sort((a, b) => -naturalSort(v([], a), v([], b)));
+          if (colSortingRowKey.length > 0) {
+            // Используем конкретную метрику для сортировки
+            this.colKeys.sort((a, b) => -naturalSort(v(colSortingRowKey, a), v(colSortingRowKey, b)));
+          } else {
+            // Используем сумму по всем метрикам (старое поведение)
+            this.colKeys.sort((a, b) => -naturalSort(v([], a), v([], b)));
+          }
           break;
         default:
           this.colKeys.sort(
@@ -900,6 +968,8 @@ PivotData.defaultProps = {
   sorters: {},
   rowOrder: 'key_a_to_z',
   colOrder: 'key_a_to_z',
+  rowSortingMetric: undefined,
+  colSortingMetric: undefined,
 };
 
 PivotData.propTypes = {

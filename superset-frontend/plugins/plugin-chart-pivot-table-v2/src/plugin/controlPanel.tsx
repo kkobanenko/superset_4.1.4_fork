@@ -26,6 +26,7 @@ import {
 import {
   ensureIsArray,
   getColumnLabel,
+  getMetricLabel,
   isAdhocColumn,
   isPhysicalColumn,
   QueryFormColumn,
@@ -852,6 +853,47 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'rowSortingMetric',
+            config: {
+              type: 'SelectControl',
+              label: t('Sorting row value'),
+              default: undefined,
+              freeForm: false,
+              mapStateToProps: (state: any) => {
+                try {
+                  const metrics = ensureIsArray(state?.controls?.metrics?.value || []);
+                  if (!metrics || metrics.length === 0) {
+                    return { choices: [] };
+                  }
+                  const choicesList = metrics
+                    .map((m: QueryFormMetric) => {
+                      try {
+                        const label = getMetricLabel(m);
+                        if (label && typeof label === 'string' && label.length > 0) {
+                          return [label, label];
+                        }
+                        return null;
+                      } catch (e) {
+                        return null;
+                      }
+                    })
+                    .filter((item): item is [string, string] => item !== null);
+                  return { choices: choicesList };
+                } catch (e) {
+                  return { choices: [] };
+                }
+              },
+              renderTrigger: true,
+              description: t('Select metric to use for sorting rows by value'),
+              visibility: ({ controls }: { controls?: any }) => {
+                const rowOrder = controls?.rowOrder?.value;
+                return rowOrder === 'value_a_to_z' || rowOrder === 'value_z_to_a';
+              },
+            },
+          },
+        ],
+        [
+          {
             name: 'colOrder',
             config: {
               type: 'SelectControl',
@@ -875,6 +917,47 @@ const config: ControlPanelConfig = {
                   </ul>
                 </>
               ),
+            },
+          },
+        ],
+        [
+          {
+            name: 'colSortingMetric',
+            config: {
+              type: 'SelectControl',
+              label: t('Sorting column value'),
+              default: undefined,
+              freeForm: false,
+              mapStateToProps: (state: any) => {
+                try {
+                  const metrics = ensureIsArray(state?.controls?.metrics?.value || []);
+                  if (!metrics || metrics.length === 0) {
+                    return { choices: [] };
+                  }
+                  const choicesList = metrics
+                    .map((m: QueryFormMetric) => {
+                      try {
+                        const label = getMetricLabel(m);
+                        if (label && typeof label === 'string' && label.length > 0) {
+                          return [label, label];
+                        }
+                        return null;
+                      } catch (e) {
+                        return null;
+                      }
+                    })
+                    .filter((item): item is [string, string] => item !== null);
+                  return { choices: choicesList };
+                } catch (e) {
+                  return { choices: [] };
+                }
+              },
+              renderTrigger: true,
+              description: t('Select metric to use for sorting columns by value'),
+              visibility: ({ controls }: { controls?: any }) => {
+                const colOrder = controls?.colOrder?.value;
+                return colOrder === 'value_a_to_z' || colOrder === 'value_z_to_a';
+              },
             },
           },
         ],
