@@ -780,41 +780,95 @@ class PivotData {
       const rowSortingColKey = getRowSortingColKey();
       const colSortingRowKey = getColSortingRowKey();
       
+      // Функции для проверки, является ли ключ subtotal или total
+      const isRowSubtotalOrTotal = (rowKey) => {
+        // Если длина ключа меньше максимальной длины строк, это subtotal или total для группы
+        if (rowKey.length < this.props.rows.length) {
+          const flatRowKey = flatKey(rowKey);
+          const rowTotal = this.rowTotals[flatRowKey];
+          // Если это subtotal или total (всегда true для таких ключей)
+          return rowTotal !== undefined;
+        }
+        // Если длина ключа равна 0, это глобальный total
+        if (rowKey.length === 0) {
+          return true;
+        }
+        // Обычная строка данных
+        return false;
+      };
+      
+      const isColSubtotalOrTotal = (colKey) => {
+        // Если длина ключа меньше максимальной длины колонок, это subtotal или total для группы
+        if (colKey.length < this.props.cols.length) {
+          const flatColKey = flatKey(colKey);
+          const colTotal = this.colTotals[flatColKey];
+          // Если это subtotal или total (всегда true для таких ключей)
+          return colTotal !== undefined;
+        }
+        // Если длина ключа равна 0, это глобальный total
+        if (colKey.length === 0) {
+          return true;
+        }
+        // Обычная колонка данных
+        return false;
+      };
+      
       // Функция для сортировки внутри родительских групп
-      const sortInsideParentGroups = (keys, getValue, reverse = false) => {
-        // Группируем ключи по их родительским группам (все элементы кроме последнего)
-        const groups = new Map();
-        const parentKeyOrder = []; // Сохраняем порядок родительских групп
+      const sortInsideParentGroups = (keys, getValue, reverse = false, isSubtotalOrTotalFn) => {
+        // Сохраняем исходные позиции для сохранения порядка subtotals/totals
+        const originalIndices = new Map();
+        keys.forEach((key, index) => {
+          originalIndices.set(JSON.stringify(key), index);
+        });
         
-        keys.forEach(key => {
-          // Родительская группа - это все элементы кроме последнего
-          const parentKey = key.length > 1 ? JSON.stringify(key.slice(0, -1)) : (key.length === 1 ? null : JSON.stringify([]));
-          if (!groups.has(parentKey)) {
-            groups.set(parentKey, []);
-            parentKeyOrder.push(parentKey);
+        // Функция для получения родительской группы ключа
+        const getParentKey = (key) => {
+          return key.length > 1 ? JSON.stringify(key.slice(0, -1)) : (key.length === 1 ? null : JSON.stringify([]));
+        };
+        
+        // Используем стабильную сортировку с проверкой родительских групп
+        const sortedKeys = [...keys].sort((a, b) => {
+          const aIsSubtotalOrTotal = isSubtotalOrTotalFn(a);
+          const bIsSubtotalOrTotal = isSubtotalOrTotalFn(b);
+          
+          // Если оба - subtotals/totals, сохраняем исходный порядок
+          if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
           }
-          groups.get(parentKey).push(key);
+          
+          // Если один - subtotal/total, а другой - обычный, определяем родительские группы
+          const aParentKey = getParentKey(a);
+          const bParentKey = getParentKey(b);
+          
+          // Если они принадлежат разным группам, сохраняем исходный порядок
+          if (aParentKey !== bParentKey) {
+            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+          }
+          
+          // Если один - subtotal/total, а другой - обычный в той же группе
+          if (aIsSubtotalOrTotal) {
+            // a (subtotal/total) остается на своем месте относительно группы
+            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+          }
+          if (bIsSubtotalOrTotal) {
+            // b (subtotal/total) остается на своем месте относительно группы
+            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+          }
+          
+          // Оба - обычные ключи в одной группе, сортируем по значению
+          const valA = getValue(a);
+          const valB = getValue(b);
+          const valueComparison = reverse ? -naturalSort(valA, valB) : naturalSort(valA, valB);
+          
+          // Если значения равны, сохраняем исходный порядок для стабильности
+          if (valueComparison === 0) {
+            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+          }
+          
+          return valueComparison;
         });
         
-        // Сортируем каждую группу отдельно
-        const sortedGroups = new Map();
-        parentKeyOrder.forEach(parentKey => {
-          const groupKeys = groups.get(parentKey);
-          const sortedGroup = [...groupKeys].sort((a, b) => {
-            const valA = getValue(a);
-            const valB = getValue(b);
-            return reverse ? -naturalSort(valA, valB) : naturalSort(valA, valB);
-          });
-          sortedGroups.set(parentKey, sortedGroup);
-        });
-        
-        // Объединяем отсортированные группы обратно, сохраняя порядок родительских групп
-        const result = [];
-        parentKeyOrder.forEach(parentKey => {
-          const groupKeys = sortedGroups.get(parentKey);
-          groupKeys.forEach(key => result.push(key));
-        });
-        return result;
+        return sortedKeys;
       };
       
       switch (this.props.rowOrder) {
@@ -824,21 +878,74 @@ class PivotData {
           );
           break;
         case 'value_a_to_z':
-          if (rowSortingColKey.length > 0) {
-            // Используем конкретную метрику для сортировки
-            this.rowKeys.sort((a, b) => naturalSort(v(a, rowSortingColKey), v(b, rowSortingColKey)));
-          } else {
-            // Используем сумму по всем метрикам (старое поведение)
-            this.rowKeys.sort((a, b) => naturalSort(v(a, []), v(b, [])));
+          {
+            // Сохраняем исходные позиции для subtotals/totals
+            const originalIndices = new Map();
+            this.rowKeys.forEach((key, index) => {
+              originalIndices.set(JSON.stringify(key), index);
+            });
+            
+            if (rowSortingColKey.length > 0) {
+              // Используем конкретную метрику для сортировки, исключая subtotals и totals
+              this.rowKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isRowSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isRowSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  // Оба - subtotals/totals, сохраняем исходный порядок
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1; // a остается после b
+                if (bIsSubtotalOrTotal) return -1; // b остается после a
+                return naturalSort(v(a, rowSortingColKey), v(b, rowSortingColKey));
+              });
+            } else {
+              // Используем сумму по всем метрикам (старое поведение), исключая subtotals и totals
+              this.rowKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isRowSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isRowSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1;
+                if (bIsSubtotalOrTotal) return -1;
+                return naturalSort(v(a, []), v(b, []));
+              });
+            }
           }
           break;
         case 'value_z_to_a':
-          if (rowSortingColKey.length > 0) {
-            // Используем конкретную метрику для сортировки
-            this.rowKeys.sort((a, b) => -naturalSort(v(a, rowSortingColKey), v(b, rowSortingColKey)));
-          } else {
-            // Используем сумму по всем метрикам (старое поведение)
-            this.rowKeys.sort((a, b) => -naturalSort(v(a, []), v(b, [])));
+          {
+            // Сохраняем исходные позиции для subtotals/totals
+            const originalIndices = new Map();
+            this.rowKeys.forEach((key, index) => {
+              originalIndices.set(JSON.stringify(key), index);
+            });
+            
+            if (rowSortingColKey.length > 0) {
+              // Используем конкретную метрику для сортировки, исключая subtotals и totals
+              this.rowKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isRowSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isRowSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1;
+                if (bIsSubtotalOrTotal) return -1;
+                return -naturalSort(v(a, rowSortingColKey), v(b, rowSortingColKey));
+              });
+            } else {
+              // Используем сумму по всем метрикам (старое поведение), исключая subtotals и totals
+              this.rowKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isRowSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isRowSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1;
+                if (bIsSubtotalOrTotal) return -1;
+                return -naturalSort(v(a, []), v(b, []));
+              });
+            }
           }
           break;
         case 'value_a_to_z_inside_parent':
@@ -847,14 +954,16 @@ class PivotData {
             this.rowKeys = sortInsideParentGroups(
               this.rowKeys,
               (key) => v(key, rowSortingColKey),
-              false
+              false,
+              isRowSubtotalOrTotal
             );
           } else {
             // Сортируем внутри родительских групп с суммой по всем метрикам
             this.rowKeys = sortInsideParentGroups(
               this.rowKeys,
               (key) => v(key, []),
-              false
+              false,
+              isRowSubtotalOrTotal
             );
           }
           break;
@@ -864,14 +973,16 @@ class PivotData {
             this.rowKeys = sortInsideParentGroups(
               this.rowKeys,
               (key) => v(key, rowSortingColKey),
-              true
+              true,
+              isRowSubtotalOrTotal
             );
           } else {
             // Сортируем внутри родительских групп с суммой по всем метрикам (по убыванию)
             this.rowKeys = sortInsideParentGroups(
               this.rowKeys,
               (key) => v(key, []),
-              true
+              true,
+              isRowSubtotalOrTotal
             );
           }
           break;
@@ -887,21 +998,73 @@ class PivotData {
           );
           break;
         case 'value_a_to_z':
-          if (colSortingRowKey.length > 0) {
-            // Используем конкретную метрику для сортировки
-            this.colKeys.sort((a, b) => naturalSort(v(colSortingRowKey, a), v(colSortingRowKey, b)));
-          } else {
-            // Используем сумму по всем метрикам (старое поведение)
-            this.colKeys.sort((a, b) => naturalSort(v([], a), v([], b)));
+          {
+            // Сохраняем исходные позиции для subtotals/totals
+            const originalIndices = new Map();
+            this.colKeys.forEach((key, index) => {
+              originalIndices.set(JSON.stringify(key), index);
+            });
+            
+            if (colSortingRowKey.length > 0) {
+              // Используем конкретную метрику для сортировки, исключая subtotals и totals
+              this.colKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isColSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isColSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1;
+                if (bIsSubtotalOrTotal) return -1;
+                return naturalSort(v(colSortingRowKey, a), v(colSortingRowKey, b));
+              });
+            } else {
+              // Используем сумму по всем метрикам (старое поведение), исключая subtotals и totals
+              this.colKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isColSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isColSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1;
+                if (bIsSubtotalOrTotal) return -1;
+                return naturalSort(v([], a), v([], b));
+              });
+            }
           }
           break;
         case 'value_z_to_a':
-          if (colSortingRowKey.length > 0) {
-            // Используем конкретную метрику для сортировки
-            this.colKeys.sort((a, b) => -naturalSort(v(colSortingRowKey, a), v(colSortingRowKey, b)));
-          } else {
-            // Используем сумму по всем метрикам (старое поведение)
-            this.colKeys.sort((a, b) => -naturalSort(v([], a), v([], b)));
+          {
+            // Сохраняем исходные позиции для subtotals/totals
+            const originalIndices = new Map();
+            this.colKeys.forEach((key, index) => {
+              originalIndices.set(JSON.stringify(key), index);
+            });
+            
+            if (colSortingRowKey.length > 0) {
+              // Используем конкретную метрику для сортировки, исключая subtotals и totals
+              this.colKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isColSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isColSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1;
+                if (bIsSubtotalOrTotal) return -1;
+                return -naturalSort(v(colSortingRowKey, a), v(colSortingRowKey, b));
+              });
+            } else {
+              // Используем сумму по всем метрикам (старое поведение), исключая subtotals и totals
+              this.colKeys.sort((a, b) => {
+                const aIsSubtotalOrTotal = isColSubtotalOrTotal(a);
+                const bIsSubtotalOrTotal = isColSubtotalOrTotal(b);
+                if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
+                  return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+                }
+                if (aIsSubtotalOrTotal) return 1;
+                if (bIsSubtotalOrTotal) return -1;
+                return -naturalSort(v([], a), v([], b));
+              });
+            }
           }
           break;
         case 'value_a_to_z_inside_parent':
@@ -910,14 +1073,16 @@ class PivotData {
             this.colKeys = sortInsideParentGroups(
               this.colKeys,
               (key) => v(colSortingRowKey, key),
-              false
+              false,
+              isColSubtotalOrTotal
             );
           } else {
             // Сортируем внутри родительских групп с суммой по всем метрикам
             this.colKeys = sortInsideParentGroups(
               this.colKeys,
               (key) => v([], key),
-              false
+              false,
+              isColSubtotalOrTotal
             );
           }
           break;
@@ -927,14 +1092,16 @@ class PivotData {
             this.colKeys = sortInsideParentGroups(
               this.colKeys,
               (key) => v(colSortingRowKey, key),
-              true
+              true,
+              isColSubtotalOrTotal
             );
           } else {
             // Сортируем внутри родительских групп с суммой по всем метрикам (по убыванию)
             this.colKeys = sortInsideParentGroups(
               this.colKeys,
               (key) => v([], key),
-              true
+              true,
+              isColSubtotalOrTotal
             );
           }
           break;
