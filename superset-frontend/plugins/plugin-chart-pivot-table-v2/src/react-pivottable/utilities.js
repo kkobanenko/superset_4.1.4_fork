@@ -745,7 +745,8 @@ class PivotData {
         if (
           this.props.rowSortingMetric &&
           metricKeyInCols &&
-          (this.props.rowOrder === 'value_a_to_z' || this.props.rowOrder === 'value_z_to_a')
+          (this.props.rowOrder === 'value_a_to_z' || this.props.rowOrder === 'value_z_to_a' ||
+           this.props.rowOrder === 'value_a_to_z_inside_parent' || this.props.rowOrder === 'value_z_to_a_inside_parent')
         ) {
           // Находим позицию Metric в cols
           const metricIndex = this.props.cols.indexOf('Metric');
@@ -763,7 +764,8 @@ class PivotData {
         if (
           this.props.colSortingMetric &&
           metricKeyInRows &&
-          (this.props.colOrder === 'value_a_to_z' || this.props.colOrder === 'value_z_to_a')
+          (this.props.colOrder === 'value_a_to_z' || this.props.colOrder === 'value_z_to_a' ||
+           this.props.colOrder === 'value_a_to_z_inside_parent' || this.props.colOrder === 'value_z_to_a_inside_parent')
         ) {
           // Находим позицию Metric в rows
           const metricIndex = this.props.rows.indexOf('Metric');
@@ -777,6 +779,43 @@ class PivotData {
       
       const rowSortingColKey = getRowSortingColKey();
       const colSortingRowKey = getColSortingRowKey();
+      
+      // Функция для сортировки внутри родительских групп
+      const sortInsideParentGroups = (keys, getValue, reverse = false) => {
+        // Группируем ключи по их родительским группам (все элементы кроме последнего)
+        const groups = new Map();
+        const parentKeyOrder = []; // Сохраняем порядок родительских групп
+        
+        keys.forEach(key => {
+          // Родительская группа - это все элементы кроме последнего
+          const parentKey = key.length > 1 ? JSON.stringify(key.slice(0, -1)) : (key.length === 1 ? null : JSON.stringify([]));
+          if (!groups.has(parentKey)) {
+            groups.set(parentKey, []);
+            parentKeyOrder.push(parentKey);
+          }
+          groups.get(parentKey).push(key);
+        });
+        
+        // Сортируем каждую группу отдельно
+        const sortedGroups = new Map();
+        parentKeyOrder.forEach(parentKey => {
+          const groupKeys = groups.get(parentKey);
+          const sortedGroup = [...groupKeys].sort((a, b) => {
+            const valA = getValue(a);
+            const valB = getValue(b);
+            return reverse ? -naturalSort(valA, valB) : naturalSort(valA, valB);
+          });
+          sortedGroups.set(parentKey, sortedGroup);
+        });
+        
+        // Объединяем отсортированные группы обратно, сохраняя порядок родительских групп
+        const result = [];
+        parentKeyOrder.forEach(parentKey => {
+          const groupKeys = sortedGroups.get(parentKey);
+          groupKeys.forEach(key => result.push(key));
+        });
+        return result;
+      };
       
       switch (this.props.rowOrder) {
         case 'key_z_to_a':
@@ -800,6 +839,40 @@ class PivotData {
           } else {
             // Используем сумму по всем метрикам (старое поведение)
             this.rowKeys.sort((a, b) => -naturalSort(v(a, []), v(b, [])));
+          }
+          break;
+        case 'value_a_to_z_inside_parent':
+          if (rowSortingColKey.length > 0) {
+            // Сортируем внутри родительских групп с конкретной метрикой
+            this.rowKeys = sortInsideParentGroups(
+              this.rowKeys,
+              (key) => v(key, rowSortingColKey),
+              false
+            );
+          } else {
+            // Сортируем внутри родительских групп с суммой по всем метрикам
+            this.rowKeys = sortInsideParentGroups(
+              this.rowKeys,
+              (key) => v(key, []),
+              false
+            );
+          }
+          break;
+        case 'value_z_to_a_inside_parent':
+          if (rowSortingColKey.length > 0) {
+            // Сортируем внутри родительских групп с конкретной метрикой (по убыванию)
+            this.rowKeys = sortInsideParentGroups(
+              this.rowKeys,
+              (key) => v(key, rowSortingColKey),
+              true
+            );
+          } else {
+            // Сортируем внутри родительских групп с суммой по всем метрикам (по убыванию)
+            this.rowKeys = sortInsideParentGroups(
+              this.rowKeys,
+              (key) => v(key, []),
+              true
+            );
           }
           break;
         default:
@@ -829,6 +902,40 @@ class PivotData {
           } else {
             // Используем сумму по всем метрикам (старое поведение)
             this.colKeys.sort((a, b) => -naturalSort(v([], a), v([], b)));
+          }
+          break;
+        case 'value_a_to_z_inside_parent':
+          if (colSortingRowKey.length > 0) {
+            // Сортируем внутри родительских групп с конкретной метрикой
+            this.colKeys = sortInsideParentGroups(
+              this.colKeys,
+              (key) => v(colSortingRowKey, key),
+              false
+            );
+          } else {
+            // Сортируем внутри родительских групп с суммой по всем метрикам
+            this.colKeys = sortInsideParentGroups(
+              this.colKeys,
+              (key) => v([], key),
+              false
+            );
+          }
+          break;
+        case 'value_z_to_a_inside_parent':
+          if (colSortingRowKey.length > 0) {
+            // Сортируем внутри родительских групп с конкретной метрикой (по убыванию)
+            this.colKeys = sortInsideParentGroups(
+              this.colKeys,
+              (key) => v(colSortingRowKey, key),
+              true
+            );
+          } else {
+            // Сортируем внутри родительских групп с суммой по всем метрикам (по убыванию)
+            this.colKeys = sortInsideParentGroups(
+              this.colKeys,
+              (key) => v([], key),
+              true
+            );
           }
           break;
         default:
@@ -990,12 +1097,16 @@ PivotData.propTypes = {
     'key_z_to_a',
     'value_a_to_z',
     'value_z_to_a',
+    'value_a_to_z_inside_parent',
+    'value_z_to_a_inside_parent',
   ]),
   colOrder: PropTypes.oneOf([
     'key_a_to_z',
     'key_z_to_a',
     'value_a_to_z',
     'value_z_to_a',
+    'value_a_to_z_inside_parent',
+    'value_z_to_a_inside_parent',
   ]),
 };
 

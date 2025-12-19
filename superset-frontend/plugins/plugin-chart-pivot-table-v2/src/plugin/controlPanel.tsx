@@ -836,6 +836,8 @@ const config: ControlPanelConfig = {
                 ['key_z_to_a', t('key z-a')],
                 ['value_a_to_z', t('value ascending')],
                 ['value_z_to_a', t('value descending')],
+                ['value_a_to_z_inside_parent', t('value ascending inside parent group')],
+                ['value_z_to_a_inside_parent', t('value descending inside parent group')],
               ],
               renderTrigger: true,
               description: (
@@ -887,7 +889,8 @@ const config: ControlPanelConfig = {
               description: t('Select metric to use for sorting rows by value'),
               visibility: ({ controls }: { controls?: any }) => {
                 const rowOrder = controls?.rowOrder?.value;
-                return rowOrder === 'value_a_to_z' || rowOrder === 'value_z_to_a';
+                return rowOrder === 'value_a_to_z' || rowOrder === 'value_z_to_a' || 
+                       rowOrder === 'value_a_to_z_inside_parent' || rowOrder === 'value_z_to_a_inside_parent';
               },
             },
           },
@@ -905,6 +908,8 @@ const config: ControlPanelConfig = {
                 ['key_z_to_a', t('key z-a')],
                 ['value_a_to_z', t('value ascending')],
                 ['value_z_to_a', t('value descending')],
+                ['value_a_to_z_inside_parent', t('value ascending inside parent group')],
+                ['value_z_to_a_inside_parent', t('value descending inside parent group')],
               ],
               renderTrigger: true,
               description: (
@@ -956,7 +961,8 @@ const config: ControlPanelConfig = {
               description: t('Select metric to use for sorting columns by value'),
               visibility: ({ controls }: { controls?: any }) => {
                 const colOrder = controls?.colOrder?.value;
-                return colOrder === 'value_a_to_z' || colOrder === 'value_z_to_a';
+                return colOrder === 'value_a_to_z' || colOrder === 'value_z_to_a' || 
+                       colOrder === 'value_a_to_z_inside_parent' || colOrder === 'value_z_to_a_inside_parent';
               },
             },
           },
