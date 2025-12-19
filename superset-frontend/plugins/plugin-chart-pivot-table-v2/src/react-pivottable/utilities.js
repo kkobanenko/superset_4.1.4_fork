@@ -815,7 +815,7 @@ class PivotData {
       
       // Функция для сортировки внутри родительских групп
       const sortInsideParentGroups = (keys, getValue, reverse = false, isSubtotalOrTotalFn) => {
-        // Сохраняем исходные позиции для сохранения порядка subtotals/totals
+        // Сохраняем исходные позиции для сохранения порядка subtotals/totals и групп
         const originalIndices = new Map();
         keys.forEach((key, index) => {
           originalIndices.set(JSON.stringify(key), index);
@@ -823,52 +823,98 @@ class PivotData {
         
         // Функция для получения родительской группы ключа
         const getParentKey = (key) => {
-          return key.length > 1 ? JSON.stringify(key.slice(0, -1)) : (key.length === 1 ? null : JSON.stringify([]));
+          if (key.length === 0) return 'ROOT';
+          if (key.length === 1) return 'ROOT';
+          return JSON.stringify(key.slice(0, -1));
         };
         
-        // Используем стабильную сортировку с проверкой родительских групп
-        const sortedKeys = [...keys].sort((a, b) => {
-          const aIsSubtotalOrTotal = isSubtotalOrTotalFn(a);
-          const bIsSubtotalOrTotal = isSubtotalOrTotalFn(b);
-          
-          // Если оба - subtotals/totals, сохраняем исходный порядок
-          if (aIsSubtotalOrTotal && bIsSubtotalOrTotal) {
-            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
+        // Группируем ключи по их родительским группам
+        const groups = new Map();
+        const parentKeyOrder = []; // Сохраняем порядок родительских групп
+        
+        keys.forEach((key, index) => {
+          const parentKey = getParentKey(key);
+          if (!groups.has(parentKey)) {
+            groups.set(parentKey, []);
+            if (parentKey !== 'ROOT' || groups.size === 1) {
+              parentKeyOrder.push(parentKey);
+            }
           }
-          
-          // Если один - subtotal/total, а другой - обычный, определяем родительские группы
-          const aParentKey = getParentKey(a);
-          const bParentKey = getParentKey(b);
-          
-          // Если они принадлежат разным группам, сохраняем исходный порядок
-          if (aParentKey !== bParentKey) {
-            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
-          }
-          
-          // Если один - subtotal/total, а другой - обычный в той же группе
-          if (aIsSubtotalOrTotal) {
-            // a (subtotal/total) остается на своем месте относительно группы
-            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
-          }
-          if (bIsSubtotalOrTotal) {
-            // b (subtotal/total) остается на своем месте относительно группы
-            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
-          }
-          
-          // Оба - обычные ключи в одной группе, сортируем по значению
-          const valA = getValue(a);
-          const valB = getValue(b);
-          const valueComparison = reverse ? -naturalSort(valA, valB) : naturalSort(valA, valB);
-          
-          // Если значения равны, сохраняем исходный порядок для стабильности
-          if (valueComparison === 0) {
-            return originalIndices.get(JSON.stringify(a)) - originalIndices.get(JSON.stringify(b));
-          }
-          
-          return valueComparison;
+          groups.get(parentKey).push({ key, originalIndex: index });
         });
         
-        return sortedKeys;
+        // Сортируем каждую группу отдельно
+        const sortedGroups = new Map();
+        parentKeyOrder.forEach(parentKey => {
+          const groupItems = groups.get(parentKey);
+          
+          // Разделяем на обычные ключи и subtotals/totals
+          const regularKeys = [];
+          const subtotalsAndTotals = [];
+          
+          groupItems.forEach(item => {
+            if (isSubtotalOrTotalFn(item.key)) {
+              subtotalsAndTotals.push(item);
+            } else {
+              regularKeys.push(item);
+            }
+          });
+          
+          // Сортируем только обычные ключи по значению
+          const sortedRegularKeys = [...regularKeys].sort((a, b) => {
+            const valA = getValue(a.key);
+            const valB = getValue(b.key);
+            const valueComparison = reverse ? -naturalSort(valA, valB) : naturalSort(valA, valB);
+            
+            // Если значения равны, сохраняем исходный порядок для стабильности
+            if (valueComparison === 0) {
+              return a.originalIndex - b.originalIndex;
+            }
+            
+            return valueComparison;
+          });
+          
+          // Сохраняем subtotals/totals в исходном порядке
+          const sortedSubtotalsAndTotals = [...subtotalsAndTotals].sort(
+            (a, b) => a.originalIndex - b.originalIndex
+          );
+          
+          // Восстанавливаем порядок: вставляем subtotals/totals в их исходные позиции
+          // относительно отсортированных обычных ключей
+          
+          // Сортируем все элементы группы по исходным индексам для восстановления порядка
+          const allItems = [...regularKeys, ...subtotalsAndTotals].sort(
+            (a, b) => a.originalIndex - b.originalIndex
+          );
+          
+          // Создаем результат: заменяем обычные ключи на отсортированные, сохраняя subtotals/totals
+          const result = [];
+          let sortedRegularIndex = 0; // Индекс в отсортированном массиве обычных ключей
+          
+          allItems.forEach(item => {
+            if (isSubtotalOrTotalFn(item.key)) {
+              // Subtotal/total остается на своем месте
+              result.push(item.key);
+            } else {
+              // Обычный ключ - берем следующий из отсортированного массива
+              if (sortedRegularIndex < sortedRegularKeys.length) {
+                result.push(sortedRegularKeys[sortedRegularIndex].key);
+                sortedRegularIndex++;
+              }
+            }
+          });
+          
+          sortedGroups.set(parentKey, result);
+        });
+        
+        // Объединяем группы обратно, сохраняя порядок родительских групп
+        const finalResult = [];
+        parentKeyOrder.forEach(parentKey => {
+          const groupKeys = sortedGroups.get(parentKey);
+          groupKeys.forEach(key => finalResult.push(key));
+        });
+        
+        return finalResult;
       };
       
       switch (this.props.rowOrder) {
