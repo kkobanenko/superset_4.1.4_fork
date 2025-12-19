@@ -33,6 +33,7 @@ const propTypes = {
   savedMetricsOptions: PropTypes.arrayOf(savedMetricType),
   savedMetric: savedMetricType,
   datasource: PropTypes.object,
+  aggregateOptions: PropTypes.arrayOf(PropTypes.string),
   onMoveLabel: PropTypes.func,
   onDropLabel: PropTypes.func,
   index: PropTypes.number,
@@ -60,6 +61,7 @@ class AdhocMetricOption extends PureComponent {
       savedMetricsOptions,
       savedMetric,
       datasource,
+      aggregateOptions,
       onMoveLabel,
       onDropLabel,
       index,
@@ -77,6 +79,7 @@ class AdhocMetricOption extends PureComponent {
         savedMetricsOptions={savedMetricsOptions}
         savedMetric={savedMetric}
         datasource={datasource}
+        aggregateOptions={aggregateOptions}
       >
         <OptionControlLabel
           savedMetric={savedMetric}

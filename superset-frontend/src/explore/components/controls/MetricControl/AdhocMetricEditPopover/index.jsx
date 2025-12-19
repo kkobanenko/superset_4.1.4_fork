@@ -63,12 +63,14 @@ const propTypes = {
   datasource: PropTypes.object,
   isNewMetric: PropTypes.bool,
   isLabelModified: PropTypes.bool,
+  aggregateOptions: PropTypes.arrayOf(PropTypes.string),
 };
 
 const defaultProps = {
   columns: [],
   getCurrentTab: noOp,
   isNewMetric: false,
+  aggregateOptions: undefined,
 };
 
 const StyledSelect = styled(Select)`
@@ -299,6 +301,8 @@ export default class AdhocMetricEditPopover extends PureComponent {
     } = this.props;
     const { adhocMetric, savedMetric } = this.state;
     const keywords = sqlKeywords.concat(getColumnKeywords(columns));
+    const effectiveAggregateOptions =
+      this.props.aggregateOptions || AGGREGATES_OPTIONS;
 
     const columnValue =
       (adhocMetric.column && adhocMetric.column.column_name) ||
@@ -316,7 +320,7 @@ export default class AdhocMetricEditPopover extends PureComponent {
 
     const aggregateSelectProps = {
       ariaLabel: t('Select aggregate options'),
-      placeholder: t('%s aggregates(s)', AGGREGATES_OPTIONS.length),
+      placeholder: t('%s aggregates(s)', effectiveAggregateOptions.length),
       value: adhocMetric.aggregate || adhocMetric.inferSqlExpressionAggregate(),
       onChange: this.onAggregateChange,
       allowClear: true,
@@ -443,7 +447,7 @@ export default class AdhocMetricEditPopover extends PureComponent {
                   </FormItem>
                   <FormItem label={t('aggregate')}>
                     <Select
-                      options={AGGREGATES_OPTIONS.map(option => ({
+                      options={effectiveAggregateOptions.map(option => ({
                         value: option,
                         label: option,
                         key: option,

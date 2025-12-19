@@ -18,7 +18,7 @@
  */
 
 import { Component } from 'react';
-import { t, safeHtmlSpan } from '@superset-ui/core';
+import { getNumberFormatter, getTimeFormatter, SMART_DATE_ID, t, safeHtmlSpan } from '@superset-ui/core';
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
@@ -207,6 +207,10 @@ export class TableRenderer extends Component {
     return this.props.tableOptions?.metricKey;
   }
 
+  getGlobalTableSettings() {
+    return this.props.tableOptions?.globalTableSettings || {};
+  }
+
   buildTextStyle(settings, includeWidth = false) {
     const style = {};
     if (settings.fontSize) {
@@ -225,6 +229,100 @@ export class TableRenderer extends Component {
       style.whiteSpace = settings.truncate ? 'nowrap' : 'normal';
     }
     return style;
+  }
+
+  // Стиль для value-ячеек totals/subtotals (без maxWidth/truncate).
+  buildValueCellStyle(formatSettings) {
+    const style = {};
+    if (!formatSettings || typeof formatSettings !== 'object') {
+      return style;
+    }
+    if (formatSettings.fontSize) {
+      style.fontSize = `${formatSettings.fontSize}px`;
+    }
+    if (formatSettings.fontColor) {
+      style.color = formatSettings.fontColor;
+    }
+    if (formatSettings.backgroundColor) {
+      style.backgroundColor = formatSettings.backgroundColor;
+    }
+    return style;
+  }
+
+  // Форматировать значение заголовка (row/col) с учетом per-field настроек.
+  formatHeaderValue(attrName, rawValue, dateFormatters) {
+    const settings = this.getFieldSettings(attrName);
+
+    if (
+      dateFormatters &&
+      dateFormatters[attrName] &&
+      typeof dateFormatters[attrName] === 'function'
+    ) {
+      return dateFormatters[attrName](rawValue);
+    }
+
+    if (
+      settings &&
+      typeof settings.valueFormat === 'string' &&
+      settings.valueFormat.length > 0 &&
+      typeof rawValue === 'number'
+    ) {
+      try {
+        return getNumberFormatter(settings.valueFormat)(rawValue);
+      } catch (e) {
+        return rawValue;
+      }
+    }
+
+    if (
+      settings &&
+      typeof settings.dateFormat === 'string' &&
+      settings.dateFormat.length > 0 &&
+      settings.dateFormat !== SMART_DATE_ID
+    ) {
+      try {
+        return getTimeFormatter(settings.dateFormat)(rawValue);
+      } catch (e) {
+        return rawValue;
+      }
+    }
+
+    return rawValue;
+  }
+
+  // Форматировать агрегированное значение (metric value / totals/subtotals).
+  // Если formatSettings содержит dateFormat/valueFormat, они перекрывают agg.format(...).
+  formatAggValue(aggValue, formattedByAgg, formatSettings) {
+    if (!formatSettings || typeof formatSettings !== 'object') {
+      return formattedByAgg;
+    }
+
+    if (
+      formatSettings.dateFormat &&
+      typeof formatSettings.dateFormat === 'string' &&
+      formatSettings.dateFormat.length > 0 &&
+      formatSettings.dateFormat !== SMART_DATE_ID
+    ) {
+      try {
+        return getTimeFormatter(formatSettings.dateFormat)(aggValue);
+      } catch (e) {
+        return formattedByAgg;
+      }
+    }
+
+    if (
+      formatSettings.valueFormat &&
+      typeof formatSettings.valueFormat === 'string' &&
+      formatSettings.valueFormat.length > 0
+    ) {
+      try {
+        return getNumberFormatter(formatSettings.valueFormat)(aggValue);
+      } catch (e) {
+        return formattedByAgg;
+      }
+    }
+
+    return formattedByAgg;
   }
 
   // Получить стиль для заголовка колонки/строки
@@ -538,12 +636,11 @@ export class TableRenderer extends Component {
         const flatColKey = flatKey(colKey.slice(0, attrIdx + 1));
         const onArrowClick = needToggle ? this.toggleColKey(flatColKey) : null;
 
-        const headerCellFormattedValue =
-          dateFormatters &&
-          dateFormatters[attrName] &&
-          typeof dateFormatters[attrName] === 'function'
-            ? dateFormatters[attrName](colKey[attrIdx])
-            : colKey[attrIdx];
+        const headerCellFormattedValue = this.formatHeaderValue(
+          attrName,
+          colKey[attrIdx],
+          dateFormatters,
+        );
         // Apply metric-specific header formatting when this header belongs to a metric value.
         const metricKey = this.getMetricKey();
         const rawHeaderValue = colKey[attrIdx];
@@ -584,9 +681,13 @@ export class TableRenderer extends Component {
         );
       } else if (attrIdx === colKey.length) {
         const rowSpan = colAttrs.length - colKey.length + rowIncrSpan;
-        // Получаем кастомную метку подытога для этого поля, если она задана
+        // Подытог по колонкам: глобальная метка (если задана) перекрывает per-field subtotalLabel.
+        const globalTableSettings = this.getGlobalTableSettings();
         const fieldSettings = this.getFieldSettings(attrName);
-        const subtotalLabel = fieldSettings?.subtotalLabel || t('Subtotal');
+        const subtotalLabel =
+          globalTableSettings?.colSubTotalsLabel ||
+          fieldSettings?.subtotalLabel ||
+          t('Subtotal');
         attrValueCells.push(
           <th
             className={`${colLabelClass} pvtSubtotalLabel`}
@@ -611,10 +712,10 @@ export class TableRenderer extends Component {
       i += colSpan;
     }
 
-    // Получаем глобальные настройки для итогов колонок
-    const { globalTableSettings } = this.props.tableOptions || {};
-    const colTotalsLabel =
-      globalTableSettings?.columnTotalsLabel ||
+    // Итог по строкам (total колонка): используем rowTotalsLabel.
+    const globalTableSettings = this.getGlobalTableSettings();
+    const rowTotalsLabel =
+      globalTableSettings?.rowTotalsLabel ||
       t('Total (%(aggregatorName)s)', {
         aggregatorName: t(this.props.aggregatorName),
       });
@@ -635,7 +736,7 @@ export class TableRenderer extends Component {
             true,
           )}
         >
-          {colTotalsLabel}
+          {rowTotalsLabel}
         </th>
       ) : null;
 
@@ -739,6 +840,8 @@ export class TableRenderer extends Component {
       dateFormatters,
     } = this.props.tableOptions;
     const flatRowKey = flatKey(rowKey);
+    const globalTableSettings = this.getGlobalTableSettings();
+    const isRowSubtotalRow = rowKey.length < rowAttrs.length;
 
     const colIncrSpan = colAttrs.length !== 0 ? 1 : 0;
     const attrValueCells = rowKey.map((r, i) => {
@@ -770,10 +873,11 @@ export class TableRenderer extends Component {
           ? this.toggleRowKey(flatRowKey)
           : null;
 
-        const headerCellFormattedValue =
-          dateFormatters && dateFormatters[rowAttrs[i]]
-            ? dateFormatters[rowAttrs[i]](r)
-            : r;
+        const headerCellFormattedValue = this.formatHeaderValue(
+          rowAttrs[i],
+          r,
+          dateFormatters,
+        );
         // Apply metric-specific header formatting when metric dimension is placed on rows.
         const metricKey = this.getMetricKey();
         const rowValueHeaderStyle =
@@ -823,7 +927,10 @@ export class TableRenderer extends Component {
     const rowFieldSettings = rowSubtotalAttrName
       ? this.getFieldSettings(rowSubtotalAttrName)
       : {};
-    const rowSubtotalLabel = rowFieldSettings?.subtotalLabel || t('Subtotal');
+    const rowSubtotalLabel =
+      globalTableSettings?.rowSubTotalsLabel ||
+      rowFieldSettings?.subtotalLabel ||
+      t('Subtotal');
     const attrValuePaddingCell =
       rowKey.length < rowAttrs.length ? (
         <th
@@ -850,6 +957,7 @@ export class TableRenderer extends Component {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator(rowKey, colKey);
       const aggValue = agg.value();
+      const isColSubtotalCol = colKey.length < colAttrs.length;
 
       const keys = [...rowKey, ...colKey];
       let backgroundColor;
@@ -896,7 +1004,29 @@ export class TableRenderer extends Component {
         ...metricValueStyle,
         ...(agg.isSubtotal ? { fontWeight: 'bold' } : {}),
         ...(backgroundColor ? { backgroundColor } : {}),
+        ...(isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat
+          ? this.buildValueCellStyle(globalTableSettings.rowSubTotalsValueFormat)
+          : {}),
+        ...(isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
+          ? this.buildValueCellStyle(globalTableSettings.colSubTotalsValueFormat)
+          : {}),
       };
+
+      const formattedByAgg = agg.format(aggValue);
+      // Per-metric override для форматирования значений метрики:
+      // если у конкретной метрики задан valueFormat/dateFormat, применяем их к value-cell.
+      // Важно: totals/subtotals форматы (globalTableSettings.*ValueFormat) имеют приоритет.
+      const metricFormatSettings = metricName ? this.getFieldSettings(metricName) : undefined;
+      const overrideFormatSettings =
+        (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat) ||
+        (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat) ||
+        metricFormatSettings ||
+        undefined;
+      const formattedValue = this.formatAggValue(
+        aggValue,
+        formattedByAgg,
+        overrideFormatSettings,
+      );
 
       return (
         <td
@@ -907,7 +1037,7 @@ export class TableRenderer extends Component {
           onContextMenu={e => this.props.onContextMenu(e, colKey, rowKey)}
           style={finalStyle}
         >
-          {displayCell(agg.format(aggValue), allowRenderHtml)}
+          {displayCell(formattedValue, allowRenderHtml)}
         </td>
       );
     });
@@ -916,6 +1046,14 @@ export class TableRenderer extends Component {
     if (rowTotals) {
       const agg = pivotData.getAggregator(rowKey, []);
       const aggValue = agg.value();
+      const totalStyle = globalTableSettings?.rowTotalsValueFormat
+        ? this.buildValueCellStyle(globalTableSettings.rowTotalsValueFormat)
+        : {};
+      const totalFormattedValue = this.formatAggValue(
+        aggValue,
+        agg.format(aggValue),
+        globalTableSettings?.rowTotalsValueFormat,
+      );
       totalCell = (
         <td
           role="gridcell"
@@ -923,8 +1061,9 @@ export class TableRenderer extends Component {
           className="pvtTotal"
           onClick={rowTotalCallbacks[flatRowKey]}
           onContextMenu={e => this.props.onContextMenu(e, undefined, rowKey)}
+          style={totalStyle}
         >
-          {displayCell(agg.format(aggValue), allowRenderHtml)}
+          {displayCell(totalFormattedValue, allowRenderHtml)}
         </td>
       );
     }
@@ -952,10 +1091,10 @@ export class TableRenderer extends Component {
       grandTotalCallback,
     } = pivotSettings;
 
-    // Получаем глобальные настройки таблицы
-    const { globalTableSettings } = this.props.tableOptions || {};
-    const rowTotalsLabel =
-      globalTableSettings?.rowTotalsLabel ||
+    // Итог по колонкам (Total строка): используем columnTotalsLabel.
+    const globalTableSettings = this.getGlobalTableSettings();
+    const colTotalsLabel =
+      globalTableSettings?.columnTotalsLabel ||
       t('Total (%(aggregatorName)s)', {
         aggregatorName: t(this.props.aggregatorName),
       });
@@ -976,7 +1115,7 @@ export class TableRenderer extends Component {
           true,
         )}
       >
-        {rowTotalsLabel}
+        {colTotalsLabel}
       </th>
     );
 
@@ -984,6 +1123,14 @@ export class TableRenderer extends Component {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator([], colKey);
       const aggValue = agg.value();
+      const totalRowStyle = globalTableSettings?.columnTotalsValueFormat
+        ? this.buildValueCellStyle(globalTableSettings.columnTotalsValueFormat)
+        : {};
+      const totalRowFormattedValue = this.formatAggValue(
+        aggValue,
+        agg.format(aggValue),
+        globalTableSettings?.columnTotalsValueFormat,
+      );
 
       return (
         <td
@@ -992,9 +1139,9 @@ export class TableRenderer extends Component {
           key={`total-${flatColKey}`}
           onClick={colTotalCallbacks[flatColKey]}
           onContextMenu={e => this.props.onContextMenu(e, colKey, undefined)}
-          style={{ padding: '5px' }}
+          style={{ padding: '5px', ...totalRowStyle }}
         >
-          {displayCell(agg.format(aggValue), this.props.allowRenderHtml)}
+          {displayCell(totalRowFormattedValue, this.props.allowRenderHtml)}
         </td>
       );
     });
@@ -1003,6 +1150,14 @@ export class TableRenderer extends Component {
     if (rowTotals) {
       const agg = pivotData.getAggregator([], []);
       const aggValue = agg.value();
+      const grandTotalStyle = globalTableSettings?.columnTotalsValueFormat
+        ? this.buildValueCellStyle(globalTableSettings.columnTotalsValueFormat)
+        : {};
+      const grandTotalFormattedValue = this.formatAggValue(
+        aggValue,
+        agg.format(aggValue),
+        globalTableSettings?.columnTotalsValueFormat,
+      );
       grandTotalCell = (
         <td
           role="gridcell"
@@ -1010,8 +1165,9 @@ export class TableRenderer extends Component {
           className="pvtGrandTotal pvtRowTotal"
           onClick={grandTotalCallback}
           onContextMenu={e => this.props.onContextMenu(e, undefined, undefined)}
+          style={grandTotalStyle}
         >
-          {displayCell(agg.format(aggValue), this.props.allowRenderHtml)}
+          {displayCell(grandTotalFormattedValue, this.props.allowRenderHtml)}
         </td>
       );
     }

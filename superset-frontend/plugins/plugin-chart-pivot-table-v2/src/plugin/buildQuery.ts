@@ -26,6 +26,75 @@ import {
 } from '@superset-ui/core';
 import { PivotTableV2QueryFormData } from '../types';
 
+function normalizeAggregateForSql(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length === 0) {
+    return undefined;
+  }
+  const v = value.trim();
+
+  // If user picked pivot-specific options, map them to a safe SQL aggregate.
+  if (v.includes(' as Fraction of ') || v.includes(' as Share of Parent ')) {
+    if (v.startsWith('Count')) {
+      return 'COUNT';
+    }
+    return 'SUM';
+  }
+
+  // Pivot-friendly names -> SQL-ish names.
+  switch (v) {
+    case 'Sum':
+      return 'SUM';
+    case 'Average':
+      return 'AVG';
+    case 'Minimum':
+      return 'MIN';
+    case 'Maximum':
+      return 'MAX';
+    case 'Count':
+      return 'COUNT';
+    case 'Count Unique Values':
+      return 'COUNT_DISTINCT';
+    default:
+      break;
+  }
+
+  // Keep known SQL aggregates; normalize to upper-case.
+  switch (v.toUpperCase()) {
+    case 'AVG':
+    case 'COUNT':
+    case 'COUNT_DISTINCT':
+    case 'MAX':
+    case 'MIN':
+    case 'SUM':
+      return v.toUpperCase();
+    default:
+      break;
+  }
+
+  // Fallback: keep query safe; pivot rendering uses the original value for client-side aggregation.
+  return 'SUM';
+}
+
+function normalizeMetricsForQuery(metrics: unknown): unknown {
+  if (!Array.isArray(metrics)) {
+    return metrics;
+  }
+  return metrics.map(metric => {
+    if (!metric || typeof metric !== 'object') {
+      return metric;
+    }
+    const m = metric as Record<string, unknown>;
+    if (!('aggregate' in m)) {
+      return metric;
+    }
+    const normalized = normalizeAggregateForSql(m.aggregate);
+    if (!normalized) {
+      return metric;
+    }
+    return { ...m, aggregate: normalized };
+  });
+}
+
 export default function buildQuery(formData: PivotTableV2QueryFormData) {
   const { groupbyColumns = [], groupbyRows = [], extra_form_data } = formData;
   const time_grain_sqla =
@@ -55,7 +124,14 @@ export default function buildQuery(formData: PivotTableV2QueryFormData) {
     return col;
   });
 
-  return buildQueryContext(formData, baseQueryObject => {
+  // Normalize "Simple metric -> aggregate" for SQL query safety.
+  // Pivot-specific aggregates (e.g. "Sum as Share of Parent Row Group") are computed client-side.
+  const queryFormData = {
+    ...formData,
+    metrics: normalizeMetricsForQuery(formData.metrics) as PivotTableV2QueryFormData['metrics'],
+  };
+
+  return buildQueryContext(queryFormData, baseQueryObject => {
     const { series_limit_metric, metrics, order_desc } = baseQueryObject;
     let orderBy: QueryFormOrderBy[] | undefined;
     if (series_limit_metric) {

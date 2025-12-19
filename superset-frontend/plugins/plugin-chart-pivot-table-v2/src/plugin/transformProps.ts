@@ -75,6 +75,71 @@ function toCssColor(value: unknown): string | undefined {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
+// Нормализовать настройки форматирования value-ячеек (для total/subtotal).
+// ColorPickerControl возвращает RGBColor, поэтому конвертируем в CSS цвет.
+function normalizeValueCellFormatSettings(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const v = value as {
+    valueFormat?: unknown;
+    dateFormat?: unknown;
+    fontSize?: unknown;
+    fontColor?: unknown;
+    backgroundColor?: unknown;
+  };
+
+  const out: Record<string, unknown> = {};
+
+  if (typeof v.valueFormat === 'string' && v.valueFormat.length > 0) {
+    out.valueFormat = v.valueFormat;
+  }
+  if (typeof v.dateFormat === 'string' && v.dateFormat.length > 0) {
+    out.dateFormat = v.dateFormat;
+  }
+  if (typeof v.fontSize === 'number') {
+    out.fontSize = v.fontSize;
+  }
+  const fontColorCss = toCssColor(v.fontColor);
+  if (typeof fontColorCss === 'string') {
+    out.fontColor = fontColorCss;
+  }
+  const backgroundColorCss = toCssColor(v.backgroundColor);
+  if (typeof backgroundColorCss === 'string') {
+    out.backgroundColor = backgroundColorCss;
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function normalizeGlobalTableSettings(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+  const v = value as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...v };
+
+  out.rowTotalsValueFormat =
+    normalizeValueCellFormatSettings(v.rowTotalsValueFormat) ||
+    v.rowTotalsValueFormat;
+  out.columnTotalsValueFormat =
+    normalizeValueCellFormatSettings(v.columnTotalsValueFormat) ||
+    v.columnTotalsValueFormat;
+  out.rowSubTotalsValueFormat =
+    normalizeValueCellFormatSettings(v.rowSubTotalsValueFormat) ||
+    v.rowSubTotalsValueFormat;
+  out.colSubTotalsValueFormat =
+    normalizeValueCellFormatSettings(v.colSubTotalsValueFormat) ||
+    v.colSubTotalsValueFormat;
+
+  return out;
+}
+
 /**
  * Собрать итоговые настройки форматирования полей (fieldGroupingSettings) из:
  * 1) formData.fieldGroupingSettings (если она есть)
@@ -94,6 +159,25 @@ function buildEffectiveFieldGroupingSettings(
   // максимально безопасный тип и работаем через проверки/приведение.
   formData: Record<string, unknown>,
 ): Record<string, Record<string, unknown>> {
+  // Достать "человекочитаемое" имя метрики из QueryFormMetric (который может быть строкой или объектом).
+  // Пишем максимально просто и безопасно, без сложных паттернов.
+  function getMetricLabel(metric: unknown): string | null {
+    if (typeof metric === 'string' && metric.length > 0) {
+      return metric;
+    }
+    if (!metric || typeof metric !== 'object') {
+      return null;
+    }
+    const m = metric as { label?: unknown; sqlExpression?: unknown };
+    if (typeof m.label === 'string' && m.label.length > 0) {
+      return m.label;
+    }
+    if (typeof m.sqlExpression === 'string' && m.sqlExpression.length > 0) {
+      return m.sqlExpression;
+    }
+    return null;
+  }
+
   const baseSettingsRaw = formData.fieldGroupingSettings;
   const baseSettings =
     (typeof baseSettingsRaw === 'object' && baseSettingsRaw !== null
@@ -107,6 +191,35 @@ function buildEffectiveFieldGroupingSettings(
   // Здесь intentionally используем Record<string, unknown>, чтобы не плодить any,
   // но при этом иметь доступ к динамическим полям.
   const fd = formData;
+
+  function normalizeMetricAggregateToPivotAggregator(value: unknown): string | undefined {
+    if (typeof value !== 'string' || value.length === 0) {
+      return undefined;
+    }
+    // Keep pivot-specific options as-is.
+    if (value.includes(' as Fraction of ') || value.includes(' as Share of Parent ')) {
+      return value;
+    }
+    // Map common SQL aggregate names to pivot aggregators.
+    switch (value.toUpperCase()) {
+      case 'SUM':
+        return 'Sum';
+      case 'AVG':
+        return 'Average';
+      case 'MIN':
+        return 'Minimum';
+      case 'MAX':
+        return 'Maximum';
+      case 'COUNT':
+        return 'Count';
+      case 'COUNT_DISTINCT':
+        return 'Count Unique Values';
+      default:
+        break;
+    }
+    // Already in pivot naming?
+    return value;
+  }
 
   for (let i = 0; i < 10; i += 1) {
     const selectorKey = `field_formatting_field${i}_selector`;
@@ -144,6 +257,43 @@ function buildEffectiveFieldGroupingSettings(
     const backgroundColorCss = toCssColor(backgroundColor);
     if (typeof backgroundColorCss === 'string') {
       nextFieldSettings.backgroundColor = backgroundColorCss;
+    }
+
+    // Формат значений (числа/даты) для выбранного поля.
+    // В UI это используется для:
+    // - row/col headers (когда значение числовое или temporal)
+    // - metric values (когда значение агрегируется)
+    const valueFormat = fd[`field_formatting_field${i}_valueFormat`];
+    if (typeof valueFormat === 'string' && valueFormat.length > 0) {
+      // Если формат совпадает с глобальным, не сохраняем как per-field override.
+      // Это снижает шум и делает per-field настройку "осознанной".
+      const globalValueFormat = fd.valueFormat;
+      const sameAsGlobal =
+        typeof globalValueFormat === 'string' && globalValueFormat === valueFormat;
+      if (!sameAsGlobal) {
+        nextFieldSettings.valueFormat = valueFormat;
+      }
+    }
+
+    const dateFormat = fd[`field_formatting_field${i}_dateFormat`];
+    if (typeof dateFormat === 'string' && dateFormat.length > 0) {
+      // Аналогично: если формат совпадает с глобальным, не сохраняем override.
+      const globalDateFormat = fd.dateFormat;
+      const sameAsGlobal =
+        typeof globalDateFormat === 'string' && globalDateFormat === dateFormat;
+      if (!sameAsGlobal) {
+        nextFieldSettings.dateFormat = dateFormat;
+      }
+    }
+
+    // Индивидуальная функция агрегации для метрики (если выбранное поле является метрикой).
+    const metricAggregationFunction =
+      fd[`field_formatting_field${i}_metricAggregationFunction`];
+    if (
+      typeof metricAggregationFunction === 'string' &&
+      metricAggregationFunction.length > 0
+    ) {
+      nextFieldSettings.metricAggregationFunction = metricAggregationFunction;
     }
 
     // Metric-specific formatting: header styles
@@ -185,6 +335,31 @@ function buildEffectiveFieldGroupingSettings(
     }
 
     merged[selectedField] = nextFieldSettings;
+  }
+
+  // Per-metric aggregation uses Data -> Metrics -> Simple -> aggregate (metric.aggregate)
+  const metricsRaw = fd.metrics;
+  if (Array.isArray(metricsRaw)) {
+    for (let i = 0; i < metricsRaw.length; i += 1) {
+      const metric = metricsRaw[i];
+      const metricName = getMetricLabel(metric);
+      if (!metricName) {
+        continue;
+      }
+
+      const metricAggregate =
+        metric && typeof metric === 'object' && 'aggregate' in (metric as Record<string, unknown>)
+          ? (metric as Record<string, unknown>).aggregate
+          : undefined;
+      const pivotAgg = normalizeMetricAggregateToPivotAggregator(metricAggregate);
+      if (pivotAgg) {
+        const prev = merged[metricName] || {};
+        merged[metricName] = {
+          ...prev,
+          metricAggregationFunction: pivotAgg,
+        };
+      }
+    }
   }
 
   return merged;
@@ -265,6 +440,15 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
   const { selectedFilters } = filterState;
   const granularity = extractTimegrain(rawFormData);
 
+  // Итоговые настройки форматирования, которые реально будут применяться в рендерере.
+  //
+  // ВАЖНО: в Superset `chartProps.formData` часто является "нормализованной" формой
+  // и может НЕ включать UI-only контролы (например, динамические field_formatting_field{N}_*).
+  // При этом `rawFormData` содержит полную форму из Explore, включая эти контролы.
+  // Поэтому собираем настройки именно из `rawFormData`.
+  const effectiveFieldGroupingSettings =
+    buildEffectiveFieldGroupingSettings(rawFormData as unknown as Record<string, unknown>);
+
   const dateFormatters = colnames
     .filter(
       (colname: string, index: number) =>
@@ -276,7 +460,15 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
         temporalColname: string,
       ) => {
         let formatter: DateFormatter | undefined;
-        if (dateFormat === SMART_DATE_ID) {
+        // Per-field override: если пользователь указал dateFormat для конкретного поля,
+        // то используем его вместо глобального dateFormat.
+        const perFieldDateFormat =
+          effectiveFieldGroupingSettings?.[temporalColname]?.dateFormat;
+        const effectiveDateFormat =
+          typeof perFieldDateFormat === 'string' && perFieldDateFormat.length > 0
+            ? perFieldDateFormat
+            : dateFormat;
+        if (effectiveDateFormat === SMART_DATE_ID) {
           if (granularity) {
             // time column use formats based on granularity
             formatter = getTimeFormatterForGranularity(granularity);
@@ -286,8 +478,8 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
             // if no column-specific format, print cell as is
             formatter = String;
           }
-        } else if (dateFormat) {
-          formatter = getTimeFormatter(dateFormat);
+        } else if (effectiveDateFormat) {
+          formatter = getTimeFormatter(effectiveDateFormat);
         }
         if (formatter) {
           acc[temporalColname] = formatter;
@@ -301,15 +493,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     data,
     theme,
   );
-
-  // Итоговые настройки форматирования, которые реально будут применяться в рендерере.
-  //
-  // ВАЖНО: в Superset `chartProps.formData` часто является "нормализованной" формой
-  // и может НЕ включать UI-only контролы (например, динамические field_formatting_field{N}_*).
-  // При этом `rawFormData` содержит полную форму из Explore, включая эти контролы.
-  // Поэтому собираем настройки именно из `rawFormData`.
-  const effectiveFieldGroupingSettings =
-    buildEffectiveFieldGroupingSettings(rawFormData as unknown as Record<string, unknown>);
+  const normalizedGlobalTableSettings = normalizeGlobalTableSettings(globalTableSettings);
 
   return {
     width,
@@ -347,7 +531,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     allowRenderHtml,
     // Используем "эффективные" настройки (из fieldGroupingSettings + динамических контролов)
     fieldGroupingSettings: effectiveFieldGroupingSettings,
-    globalTableSettings,
+    globalTableSettings: normalizedGlobalTableSettings,
     legacy_order_by: legacy_order_by || null,
     order_desc: order_desc ?? true,
   };

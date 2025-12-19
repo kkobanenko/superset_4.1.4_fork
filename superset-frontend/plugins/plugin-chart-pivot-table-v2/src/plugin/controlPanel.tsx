@@ -36,6 +36,36 @@ import {
 } from '@superset-ui/core';
 import { MetricsLayoutEnum } from '../types';
 
+// Pivot Table V2 расширяет список агрегаторов в "Data -> Metrics -> Simple -> aggregate".
+// Часть значений является pivot-специфичной (client-side) и будет нормализована
+// для SQL-запроса внутри buildQuery плагина.
+// ВАЖНО: здесь каждое логическое значение представлено один раз (без дублей вроде SUM/Sum).
+const PIVOT_V2_METRIC_AGGREGATE_OPTIONS: string[] = [
+  // Базовые агрегаторы (читаемые подписи, мапятся на SQL внутри buildQuery).
+  'Average', // AVG
+  'Count', // COUNT
+  'Count Unique Values', // COUNT_DISTINCT
+  'Minimum', // MIN
+  'Maximum', // MAX
+  'Sum', // SUM
+  // Расширенные pivot-агрегаторы (client-side, фракции и “share of parent”).
+  'First',
+  'Last',
+  'Median',
+  'Sample Standard Deviation',
+  'Sample Variance',
+  'Sum as Fraction of Columns',
+  'Sum as Fraction of Rows',
+  'Sum as Fraction of Total',
+  'Sum as Share of Parent Column Group',
+  'Sum as Share of Parent Row Group',
+  'Count as Fraction of Columns',
+  'Count as Fraction of Rows',
+  'Count as Fraction of Total',
+  'Count as Share of Parent Column Group',
+  'Count as Share of Parent Row Group',
+];
+
 // Функция для создания секции настроек конкретного поля группировки
 // TODO: будет использована для динамического создания секций
 // @ts-ignore - функция будет использована в будущем
@@ -310,6 +340,7 @@ const config: ControlPanelConfig = {
               ...sharedControls.metrics,
               validators: [validateNonEmpty],
               rerender: ['conditional_formatting'],
+              aggregateOptions: PIVOT_V2_METRIC_AGGREGATE_OPTIONS,
             },
           },
         ],
@@ -376,44 +407,6 @@ const config: ControlPanelConfig = {
       controlSetRows: [
         [
           {
-            name: 'aggregateFunction',
-            config: {
-              type: 'SelectControl',
-              label: t('Aggregation function'),
-              clearable: false,
-              choices: [
-                ['Count', t('Count')],
-                ['Count Unique Values', t('Count Unique Values')],
-                ['List Unique Values', t('List Unique Values')],
-                ['Sum', t('Sum')],
-                ['Average', t('Average')],
-                ['Median', t('Median')],
-                ['Sample Variance', t('Sample Variance')],
-                ['Sample Standard Deviation', t('Sample Standard Deviation')],
-                ['Minimum', t('Minimum')],
-                ['Maximum', t('Maximum')],
-                ['First', t('First')],
-                ['Last', t('Last')],
-                ['Sum as Fraction of Total', t('Sum as Fraction of Total')],
-                ['Sum as Fraction of Rows', t('Sum as Fraction of Rows')],
-                ['Sum as Fraction of Columns', t('Sum as Fraction of Columns')],
-                ['Count as Fraction of Total', t('Count as Fraction of Total')],
-                ['Count as Fraction of Rows', t('Count as Fraction of Rows')],
-                [
-                  'Count as Fraction of Columns',
-                  t('Count as Fraction of Columns'),
-                ],
-              ],
-              default: 'Sum',
-              description: t(
-                'Aggregate function to apply when pivoting and computing the total rows and columns',
-              ),
-              renderTrigger: true,
-            },
-          },
-        ],
-        [
-          {
             name: 'rowTotals',
             config: {
               type: 'CheckboxControl',
@@ -421,6 +414,84 @@ const config: ControlPanelConfig = {
               default: false,
               renderTrigger: true,
               description: t('Display row level total'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.rowTotalsLabel',
+            config: {
+              type: 'TextControl',
+              label: t('Rows total label'),
+              renderTrigger: true,
+              default: t('Total'),
+              description: t('Header label for the rows total column'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.rowTotalsValueFormat.valueFormat',
+            config: {
+              ...sharedControls.y_axis_format,
+              label: t('Rows total number format'),
+              renderTrigger: true,
+              description: t('D3 number format for the rows total column'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.rowTotalsValueFormat.dateFormat',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Rows total date format'),
+              default: SMART_DATE_ID,
+              renderTrigger: true,
+              choices: D3_TIME_FORMAT_OPTIONS,
+              description: t('D3 time format for the rows total column'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.rowTotalsValueFormat.fontSize',
+            config: {
+              type: 'NumberControl',
+              label: t('Rows total font size (px)'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.rowTotalsValueFormat.fontColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Rows total font color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.rowTotalsValueFormat.backgroundColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Rows total background color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowTotals?.value === true,
             },
           },
         ],
@@ -438,6 +509,84 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'globalTableSettings.rowSubTotalsLabel',
+            config: {
+              type: 'TextControl',
+              label: t('Rows subtotal label'),
+              renderTrigger: true,
+              default: t('Subtotal'),
+              description: t('Header label for row subtotal rows'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowSubTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.rowSubTotalsValueFormat.valueFormat',
+            config: {
+              ...sharedControls.y_axis_format,
+              label: t('Rows subtotal number format'),
+              renderTrigger: true,
+              description: t('D3 number format for row subtotal cells'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowSubTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.rowSubTotalsValueFormat.dateFormat',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Rows subtotal date format'),
+              default: SMART_DATE_ID,
+              renderTrigger: true,
+              choices: D3_TIME_FORMAT_OPTIONS,
+              description: t('D3 time format for row subtotal cells'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowSubTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.rowSubTotalsValueFormat.fontSize',
+            config: {
+              type: 'NumberControl',
+              label: t('Rows subtotal font size (px)'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowSubTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.rowSubTotalsValueFormat.fontColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Rows subtotal font color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowSubTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.rowSubTotalsValueFormat.backgroundColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Rows subtotal background color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.rowSubTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
             name: 'colTotals',
             config: {
               type: 'CheckboxControl',
@@ -450,6 +599,84 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'globalTableSettings.columnTotalsLabel',
+            config: {
+              type: 'TextControl',
+              label: t('Columns total label'),
+              renderTrigger: true,
+              default: t('Total'),
+              description: t('Header label for the columns total row'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.columnTotalsValueFormat.valueFormat',
+            config: {
+              ...sharedControls.y_axis_format,
+              label: t('Columns total number format'),
+              renderTrigger: true,
+              description: t('D3 number format for the columns total row'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.columnTotalsValueFormat.dateFormat',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Columns total date format'),
+              default: SMART_DATE_ID,
+              renderTrigger: true,
+              choices: D3_TIME_FORMAT_OPTIONS,
+              description: t('D3 time format for the columns total row'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.columnTotalsValueFormat.fontSize',
+            config: {
+              type: 'NumberControl',
+              label: t('Columns total font size (px)'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.columnTotalsValueFormat.fontColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Columns total font color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.columnTotalsValueFormat.backgroundColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Columns total background color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
             name: 'colSubTotals',
             config: {
               type: 'CheckboxControl',
@@ -457,6 +684,84 @@ const config: ControlPanelConfig = {
               default: false,
               renderTrigger: true,
               description: t('Display column level subtotal'),
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.colSubTotalsLabel',
+            config: {
+              type: 'TextControl',
+              label: t('Columns subtotal label'),
+              renderTrigger: true,
+              default: t('Subtotal'),
+              description: t('Header label for column subtotal columns'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colSubTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.colSubTotalsValueFormat.valueFormat',
+            config: {
+              ...sharedControls.y_axis_format,
+              label: t('Columns subtotal number format'),
+              renderTrigger: true,
+              description: t('D3 number format for column subtotal cells'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colSubTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.colSubTotalsValueFormat.dateFormat',
+            config: {
+              type: 'SelectControl',
+              freeForm: true,
+              label: t('Columns subtotal date format'),
+              default: SMART_DATE_ID,
+              renderTrigger: true,
+              choices: D3_TIME_FORMAT_OPTIONS,
+              description: t('D3 time format for column subtotal cells'),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colSubTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.colSubTotalsValueFormat.fontSize',
+            config: {
+              type: 'NumberControl',
+              label: t('Columns subtotal font size (px)'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colSubTotals?.value === true,
+            },
+          },
+          {
+            name: 'globalTableSettings.colSubTotalsValueFormat.fontColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Columns subtotal font color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colSubTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
+            name: 'globalTableSettings.colSubTotalsValueFormat.backgroundColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Columns subtotal background color'),
+              renderTrigger: true,
+              default: undefined,
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colSubTotals?.value === true,
             },
           },
         ],
@@ -910,6 +1215,150 @@ const config: ControlPanelConfig = {
                         : {};
                       return {
                         value: (fieldSettings && 'truncate' in fieldSettings) ? (fieldSettings.truncate ?? false) : false,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_valueFormat`,
+                  config: {
+                    ...sharedControls.y_axis_format,
+                    label: t('Number format'),
+                    clearable: true,
+                    default: undefined,
+                    renderTrigger: true,
+                    description: t('D3 number format (per field)'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      return !!selectedField;
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'valueFormat' in fieldSettings &&
+                          fieldSettings.valueFormat !== undefined
+                            ? fieldSettings.valueFormat
+                            : undefined,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_dateFormat`,
+                  config: {
+                    type: 'SelectControl',
+                    freeForm: true,
+                    label: t('Date format'),
+                    clearable: true,
+                    default: undefined,
+                    renderTrigger: true,
+                    choices: D3_TIME_FORMAT_OPTIONS,
+                    description: t('D3 time format (per field)'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      return !!selectedField;
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'dateFormat' in fieldSettings &&
+                          fieldSettings.dateFormat !== undefined
+                            ? fieldSettings.dateFormat
+                            : undefined,
                       };
                     },
                   },
@@ -1789,6 +2238,12 @@ const config: ControlPanelConfig = {
       // Синхронизируем значения из временных контролов
       const maxWidthKey = `field_formatting_field${i}_maxWidth` as keyof typeof formData;
       const truncateKey = `field_formatting_field${i}_truncate` as keyof typeof formData;
+      const valueFormatKey =
+        `field_formatting_field${i}_valueFormat` as keyof typeof formData;
+      const dateFormatKey =
+        `field_formatting_field${i}_dateFormat` as keyof typeof formData;
+      const metricAggregationFunctionKey =
+        `field_formatting_field${i}_metricAggregationFunction` as keyof typeof formData;
       const fontSizeKey = `field_formatting_field${i}_fontSize` as keyof typeof formData;
       const fontColorKey = `field_formatting_field${i}_fontColor` as keyof typeof formData;
       const backgroundColorKey = `field_formatting_field${i}_backgroundColor` as keyof typeof formData;
@@ -1810,6 +2265,16 @@ const config: ControlPanelConfig = {
       }
       if (formData[truncateKey] !== undefined) {
         fieldSettings.truncate = formData[truncateKey] as boolean;
+      }
+      if (formData[valueFormatKey] !== undefined) {
+        fieldSettings.valueFormat = formData[valueFormatKey] as string;
+      }
+      if (formData[dateFormatKey] !== undefined) {
+        fieldSettings.dateFormat = formData[dateFormatKey] as string;
+      }
+      if (formData[metricAggregationFunctionKey] !== undefined) {
+        fieldSettings.metricAggregationFunction =
+          formData[metricAggregationFunctionKey] as string;
       }
       if (formData[fontSizeKey] !== undefined) {
         fieldSettings.fontSize = formData[fontSizeKey] as number;
@@ -1865,6 +2330,10 @@ const config: ControlPanelConfig = {
         // Если поле не выбрано, очищаем значения контролов
         resultFormData[`field_formatting_field${i}_maxWidth`] = undefined;
         resultFormData[`field_formatting_field${i}_truncate`] = false;
+        resultFormData[`field_formatting_field${i}_valueFormat`] = undefined;
+        resultFormData[`field_formatting_field${i}_dateFormat`] = undefined;
+        resultFormData[`field_formatting_field${i}_metricAggregationFunction`] =
+          undefined;
         resultFormData[`field_formatting_field${i}_fontSize`] = undefined;
         resultFormData[`field_formatting_field${i}_fontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_backgroundColor`] = undefined;
@@ -1881,6 +2350,11 @@ const config: ControlPanelConfig = {
       
       resultFormData[`field_formatting_field${i}_maxWidth`] = fieldSettings.maxWidth;
       resultFormData[`field_formatting_field${i}_truncate`] = fieldSettings.truncate ?? false;
+      resultFormData[`field_formatting_field${i}_valueFormat`] =
+        fieldSettings.valueFormat;
+      resultFormData[`field_formatting_field${i}_dateFormat`] = fieldSettings.dateFormat;
+      resultFormData[`field_formatting_field${i}_metricAggregationFunction`] =
+        fieldSettings.metricAggregationFunction;
       resultFormData[`field_formatting_field${i}_fontSize`] = fieldSettings.fontSize;
       resultFormData[`field_formatting_field${i}_fontColor`] = fieldSettings.fontColor;
       resultFormData[`field_formatting_field${i}_backgroundColor`] = fieldSettings.backgroundColor;

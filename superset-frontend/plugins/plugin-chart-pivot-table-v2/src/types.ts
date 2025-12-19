@@ -57,7 +57,9 @@ interface PivotTableCustomizeProps {
   tableRenderer: string;
   colOrder: string;
   rowOrder: string;
-  aggregateFunction: string;
+  // Глобальная функция агрегации (legacy). В UI мы используем per-metric aggregation,
+  // поэтому поле делаем необязательным для обратной совместимости со старыми slices.
+  aggregateFunction?: string;
   transposePivot: boolean;
   combineMetric: boolean;
   rowSubtotalPosition: boolean;
@@ -66,7 +68,8 @@ interface PivotTableCustomizeProps {
   colSubTotals: boolean;
   rowTotals: boolean;
   rowSubTotals: boolean;
-  valueFormat: string;
+  valueFormat?: string;
+  dateFormat?: string;
   currencyFormat: Currency;
   setDataMask: SetDataMaskHook;
   emitCrossFilters?: boolean;
@@ -110,9 +113,14 @@ export interface FieldGroupingSettings {
   cellValueType?: 'absolute' | 'percentage' | 'absolute_and_percentage'; // тип отображаемого значения
   percentageType?: 'total' | 'parent_row' | 'parent_column'; // тип доли (если cellValueType включает percentage)
   valueFormat?: string; // D3 формат для значений (использует существующие форматеры Superset)
+  dateFormat?: string; // D3 time format для дат/времени (можно задавать per-field)
   fontSize?: number; // размер шрифта в пикселях
   fontColor?: string; // цвет шрифта в hex формате (будет преобразован из RGBColor)
   backgroundColor?: string; // цвет фона в hex формате (будет преобразован из RGBColor)
+
+  // Индивидуальная функция агрегации для метрики (имя агрегатора как в списке UI).
+  // Применяется только для metric value полей (ключи = имена метрик).
+  metricAggregationFunction?: string;
 
   // Metric-specific formatting:
   // - `metricHeader*` applies to the metric header cell (e.g. "Факт" in the header)
@@ -125,6 +133,16 @@ export interface FieldGroupingSettings {
   metricValueBackgroundColor?: string;
 }
 
+// Настройки форматирования для value-ячейки (используется для total/subtotal строк/столбцов).
+// Специально делаем отдельным интерфейсом (без наследования), чтобы тип был максимально простым.
+export interface ValueCellFormatSettings {
+  valueFormat?: string; // D3 number format
+  dateFormat?: string; // D3 time format
+  fontSize?: number; // px
+  fontColor?: string; // css color
+  backgroundColor?: string; // css color
+}
+
 // Глобальные настройки таблицы
 export interface GlobalTableSettings {
   columnTotalsEnabled?: boolean; // нужен/не нужен общий итог по столбцам
@@ -133,6 +151,16 @@ export interface GlobalTableSettings {
   rowTotalsEnabled?: boolean; // нужен/не нужен общий итог по строкам
   rowTotalsPosition?: 'left' | 'right'; // позиция итога по строкам
   rowTotalsLabel?: string; // наименование итога по строкам
+
+  // Настройки подписей/форматов для subtotal (когда включены Show rows/columns subtotal).
+  rowSubTotalsLabel?: string;
+  colSubTotalsLabel?: string;
+
+  // Форматирование value-ячеек для итогов/подытогов (перекрывает обычный формат метрики).
+  rowTotalsValueFormat?: ValueCellFormatSettings;
+  columnTotalsValueFormat?: ValueCellFormatSettings;
+  rowSubTotalsValueFormat?: ValueCellFormatSettings;
+  colSubTotalsValueFormat?: ValueCellFormatSettings;
 }
 
 // Расширенная форма данных для Pivot Table V2

@@ -451,6 +451,54 @@ const baseAggregatorTemplates = {
         };
       };
   },
+
+  // Доля (share) относительно "родительской" группы:
+  // - row_parent: denominator = агрегат для rowKey без последнего элемента (тот же colKey)
+  // - col_parent: denominator = агрегат для colKey без последнего элемента (тот же rowKey)
+  //
+  // Важно:
+  // - Мы используем `.inner.value()` у denominator агрегатора, чтобы избежать рекурсии,
+  //   аналогично стандартной реализации fractionOf(...) выше.
+  fractionOfParent(wrapped, type = 'row_parent', formatter = usFmtPct) {
+    return (...x) =>
+      function (data, rowKey, colKey) {
+        const safeRowKey = Array.isArray(rowKey) ? rowKey : [];
+        const safeColKey = Array.isArray(colKey) ? colKey : [];
+        const parentRowKey =
+          safeRowKey.length > 0 ? safeRowKey.slice(0, safeRowKey.length - 1) : [];
+        const parentColKey =
+          safeColKey.length > 0 ? safeColKey.slice(0, safeColKey.length - 1) : [];
+
+        const selector =
+          type === 'col_parent'
+            ? [safeRowKey, parentColKey]
+            : [parentRowKey, safeColKey];
+
+        return {
+          selector,
+          inner: wrapped(...Array.from(x || []))(data, safeRowKey, safeColKey),
+          push(record) {
+            this.inner.push(record);
+          },
+          format: fmtNonString(formatter),
+          value() {
+            const acc = data
+              .getAggregator(...Array.from(this.selector || []))
+              .inner.value();
+
+            if (typeof acc === 'string') {
+              return acc;
+            }
+            if (!acc) {
+              return 0;
+            }
+
+            return this.inner.value() / acc;
+          },
+          numInputs: wrapped(...Array.from(x || []))().numInputs,
+        };
+      };
+  },
 };
 
 const extendedAggregatorTemplates = {

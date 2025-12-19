@@ -101,7 +101,17 @@ const StyledMinusSquareOutlined = styled(MinusSquareOutlined)`
   stroke-width: 16px;
 `;
 
-const aggregatorsFactory = (formatter: NumberFormatter) => ({
+// Типы для агрегаторов из react-pivottable. Держим максимально простыми и безопасными.
+type AggregatorFn = (
+  data: unknown,
+  rowKey: unknown[],
+  colKey: unknown[],
+) => { value: () => unknown; format: (x: unknown) => string };
+type AggregatorTemplate = (valsList: string[]) => AggregatorFn;
+
+const baseAggregatorsFactory = (
+  formatter: NumberFormatter,
+): Record<string, AggregatorTemplate> => ({
   Count: aggregatorTemplates.count(formatter),
   'Count Unique Values': aggregatorTemplates.countUnique(formatter),
   'List Unique Values': aggregatorTemplates.listUnique(', ', formatter),
@@ -129,6 +139,17 @@ const aggregatorsFactory = (formatter: NumberFormatter) => ({
     'col',
     formatter,
   ),
+  // Share of parent group (hierarchical): row parent / column parent
+  'Sum as Share of Parent Row Group': aggregatorTemplates.fractionOfParent(
+    aggregatorTemplates.sum(),
+    'row_parent',
+    formatter,
+  ),
+  'Sum as Share of Parent Column Group': aggregatorTemplates.fractionOfParent(
+    aggregatorTemplates.sum(),
+    'col_parent',
+    formatter,
+  ),
   'Count as Fraction of Total': aggregatorTemplates.fractionOf(
     aggregatorTemplates.count(),
     'total',
@@ -142,6 +163,16 @@ const aggregatorsFactory = (formatter: NumberFormatter) => ({
   'Count as Fraction of Columns': aggregatorTemplates.fractionOf(
     aggregatorTemplates.count(),
     'col',
+    formatter,
+  ),
+  'Count as Share of Parent Row Group': aggregatorTemplates.fractionOfParent(
+    aggregatorTemplates.count(),
+    'row_parent',
+    formatter,
+  ),
+  'Count as Share of Parent Column Group': aggregatorTemplates.fractionOfParent(
+    aggregatorTemplates.count(),
+    'col_parent',
     formatter,
   ),
 });
@@ -188,15 +219,19 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
   } = props;
 
   const theme = useTheme();
+  const defaultAggregatorName = aggregateFunction || 'Sum';
+  // valueFormat в Superset обычно всегда заполнен контролом y_axis_format,
+  // но на всякий случай держим безопасный fallback.
+  const effectiveValueFormat = valueFormat || '';
   const defaultFormatter = useMemo(
     () =>
       currencyFormat?.symbol
         ? new CurrencyFormatter({
             currency: currencyFormat,
-            d3Format: valueFormat,
+            d3Format: effectiveValueFormat,
           })
-        : getNumberFormatter(valueFormat),
-    [valueFormat, currencyFormat],
+        : getNumberFormatter(effectiveValueFormat),
+    [effectiveValueFormat, currencyFormat],
   );
   const customFormatsArray = useMemo(
     () =>
@@ -207,10 +242,15 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
         ]),
       ).map(metricName => [
         metricName,
-        columnFormats[metricName] || valueFormat,
+        // UI override (fieldGroupingSettings) has priority over datasource formats.
+        (fieldGroupingSettings?.[metricName] &&
+        typeof fieldGroupingSettings[metricName] === 'object' &&
+        (fieldGroupingSettings[metricName] as { valueFormat?: unknown }).valueFormat
+          ? String((fieldGroupingSettings[metricName] as { valueFormat?: unknown }).valueFormat)
+          : columnFormats[metricName]) || valueFormat,
         currencyFormats[metricName] || currencyFormat,
       ]),
-    [columnFormats, currencyFormat, currencyFormats, valueFormat],
+    [columnFormats, currencyFormat, currencyFormats, fieldGroupingSettings, valueFormat],
   );
   const hasCustomMetricFormatters = customFormatsArray.length > 0;
   const metricFormatters = useMemo(
@@ -240,6 +280,91 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
       ),
     [metrics],
   );
+
+  // Map metricName -> aggregation function (per-metric override).
+  // Ключи в fieldGroupingSettings для метрик совпадают с их отображаемыми label (metricNames).
+  const metricAggregationByName = useMemo(() => {
+    const settings = fieldGroupingSettings || {};
+    return metricNames.reduce<Record<string, string>>((acc, metricName) => {
+      const metricSettings = settings?.[metricName];
+      const agg =
+        metricSettings && typeof metricSettings === 'object'
+          ? (metricSettings as { metricAggregationFunction?: unknown })
+              .metricAggregationFunction
+          : undefined;
+      if (typeof agg === 'string' && agg.length > 0) {
+        acc[metricName] = agg;
+      }
+      return acc;
+    }, {});
+  }, [fieldGroupingSettings, metricNames]);
+
+  // Aggregators factory with per-metric selection.
+  const aggregatorsFactory = useMemo(() => {
+    return (formatter: NumberFormatter) => {
+      const base = baseAggregatorsFactory(formatter);
+      return {
+        ...base,
+        // Специальный агрегатор: выбирает функцию агрегации в зависимости от выбранной метрики.
+        // Это позволяет иметь разный Aggregation function для каждого metric value.
+        'Per Metric': (valsList: string[]) =>
+          (data: unknown, rowKey: unknown[], colKey: unknown[]) => {
+            const dataObj =
+              typeof data === 'object' && data !== null
+                ? (data as {
+                    props?: {
+                      tableOptions?: { metricKey?: unknown };
+                      rows?: unknown;
+                      cols?: unknown;
+                    };
+                  })
+                : null;
+            const metricKeyFromOptions = dataObj?.props?.tableOptions?.metricKey;
+            const metricKey =
+              typeof metricKeyFromOptions === 'string'
+                ? metricKeyFromOptions
+                : METRIC_KEY;
+            const rows = Array.isArray(dataObj?.props?.rows)
+              ? (dataObj?.props?.rows as unknown[])
+              : [];
+            const cols = Array.isArray(dataObj?.props?.cols)
+              ? (dataObj?.props?.cols as unknown[])
+              : [];
+
+            let metricName: string | undefined;
+            const rowIdx = rows.indexOf(metricKey);
+            if (
+              rowIdx !== -1 &&
+              Array.isArray(rowKey) &&
+              rowIdx < rowKey.length
+            ) {
+              metricName = String((rowKey as unknown[])[rowIdx]);
+            } else {
+              const colIdx = cols.indexOf(metricKey);
+              if (
+                colIdx !== -1 &&
+                Array.isArray(colKey) &&
+                colIdx < colKey.length
+              ) {
+                metricName = String((colKey as unknown[])[colIdx]);
+              }
+            }
+
+            const perMetricAgg =
+              metricName && metricName in metricAggregationByName
+                ? metricAggregationByName[metricName]
+                : defaultAggregatorName;
+            const template =
+              (perMetricAgg in base ? base[perMetricAgg] : undefined) ||
+              (defaultAggregatorName in base
+                ? base[defaultAggregatorName]
+                : undefined) ||
+              base.Sum;
+            return template(valsList)(data, rowKey, colKey);
+          },
+      };
+    };
+  }, [defaultAggregatorName, metricAggregationByName]);
 
   const unpivotedData = useMemo(
     () =>
@@ -592,7 +717,9 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
           aggregatorsFactory={aggregatorsFactory}
           defaultFormatter={defaultFormatter}
           customFormatters={metricFormatters}
-          aggregatorName={aggregateFunction}
+          // Всегда используем "Per Metric": внутри него применяется либо per-metric override,
+          // либо defaultAggregatorName (бывший глобальный aggregateFunction).
+          aggregatorName="Per Metric"
           vals={vals}
           colOrder={colOrder}
           rowOrder={rowOrder}
