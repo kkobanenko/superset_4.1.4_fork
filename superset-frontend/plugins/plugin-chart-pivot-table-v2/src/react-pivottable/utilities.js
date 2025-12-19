@@ -747,6 +747,34 @@ class PivotData {
       const metricKeyInCols = this.props.cols.indexOf(metricKey) !== -1;
       const metricKeyInRows = this.props.rows.indexOf(metricKey) !== -1;
       
+      // Получаем порядок метрик из tableOptions (если метрики в колонках)
+      const metricsOrder =
+        metricKeyInCols &&
+        this.props.tableOptions &&
+        Array.isArray(this.props.tableOptions.metricsOrder)
+          ? this.props.tableOptions.metricsOrder
+          : null;
+      const metricIndexInCols = metricKeyInCols ? this.props.cols.indexOf(metricKey) : -1;
+      
+      // Функция для получения индекса метрики в порядке из dropdown (для сортировки колонок)
+      const getMetricOrderIndex = (colKey) => {
+        if (!metricsOrder || metricIndexInCols === -1 || !Array.isArray(colKey)) {
+          return -1;
+        }
+        const metricName = colKey[metricIndexInCols];
+        if (metricName === undefined || metricName === null) {
+          return -1;
+        }
+        const metricNameStr = String(metricName).trim();
+        // Ищем точное совпадение
+        let index = metricsOrder.indexOf(metricNameStr);
+        if (index === -1) {
+          // Если не найдено, пробуем сравнение без учета регистра
+          index = metricsOrder.findIndex(m => String(m).trim().toLowerCase() === metricNameStr.toLowerCase());
+        }
+        return index === -1 ? metricsOrder.length : index; // Если метрика не найдена, ставим в конец
+      };
+      
       // Функции для проверки, является ли ключ subtotal или total
       const isRowSubtotalOrTotal = (rowKey) => {
         // Если длина ключа меньше максимальной длины строк, это subtotal или total для группы
@@ -885,6 +913,14 @@ class PivotData {
           if (cmp !== 0) {
             return cmp;
           }
+          // Если метрики в колонках и задан порядок метрик, используем его как tie-breaker
+          if (metricKeyInCols && metricsOrder && metricIndexInCols !== -1) {
+            const metricOrderA = getMetricOrderIndex(a.key);
+            const metricOrderB = getMetricOrderIndex(b.key);
+            if (metricOrderA !== metricOrderB) {
+              return metricOrderA - metricOrderB;
+            }
+          }
           // Стабильность: если значения равны, сохраняем исходный порядок
           return a.index - b.index;
         });
@@ -963,6 +999,14 @@ class PivotData {
             if (cmp !== 0) {
               return cmp;
             }
+            // Если метрики в колонках и задан порядок метрик, используем его как tie-breaker
+            if (metricKeyInCols && metricsOrder && metricIndexInCols !== -1) {
+              const metricOrderA = getMetricOrderIndex(a.key);
+              const metricOrderB = getMetricOrderIndex(b.key);
+              if (metricOrderA !== metricOrderB) {
+                return metricOrderA - metricOrderB;
+              }
+            }
             return a.index - b.index;
           });
 
@@ -1038,9 +1082,30 @@ class PivotData {
       }
       switch (this.props.colOrder) {
         case 'key_z_to_a':
-          this.colKeys.sort(
-            this.arrSort(this.props.cols, this.subtotals.colPartialOnTop, true),
-          );
+          // При сортировке по ключам (key_z_to_a) учитываем порядок метрик, если метрики в колонках
+          if (metricKeyInCols && metricsOrder && metricIndexInCols !== -1) {
+            // Создаём кастомный компаратор, который учитывает порядок метрик
+            const baseComparator = this.arrSort(this.props.cols, this.subtotals.colPartialOnTop, true);
+            this.colKeys.sort((a, b) => {
+              // Сначала применяем базовую сортировку (в обратном порядке)
+              const baseCmp = baseComparator(a, b);
+              if (baseCmp !== 0) {
+                return baseCmp;
+              }
+              // Если базовое сравнение равно 0, используем порядок метрик как tie-breaker
+              // Но в обратном порядке (z_to_a), поэтому инвертируем сравнение
+              const metricOrderA = getMetricOrderIndex(a);
+              const metricOrderB = getMetricOrderIndex(b);
+              if (metricOrderA !== -1 && metricOrderB !== -1 && metricOrderA !== metricOrderB) {
+                return metricOrderB - metricOrderA; // Обратный порядок для z_to_a
+              }
+              return 0;
+            });
+          } else {
+            this.colKeys.sort(
+              this.arrSort(this.props.cols, this.subtotals.colPartialOnTop, true),
+            );
+          }
           break;
         case 'value_a_to_z':
           this.colKeys = sortKeepingSubtotals(
@@ -1087,9 +1152,57 @@ class PivotData {
           );
           break;
         default:
-          this.colKeys.sort(
-            this.arrSort(this.props.cols, this.subtotals.colPartialOnTop),
-          );
+          // При сортировке по ключам (key_a_to_z) учитываем порядок метрик, если метрики в колонках
+          if (metricKeyInCols && metricsOrder && metricIndexInCols !== -1) {
+            // Создаём кастомный компаратор, который учитывает порядок метрик
+            const sortersArr = this.props.cols.map(a => getSort(this.props.sorters, a));
+            const partialOnTop = this.subtotals.colPartialOnTop;
+            this.colKeys.sort((a, b) => {
+              const limit = Math.min(a.length, b.length);
+              // Сравниваем все атрибуты до метрики
+              for (let i = 0; i < limit && i < metricIndexInCols; i += 1) {
+                const sorter = sortersArr[i];
+                const comparison = sorter(a[i], b[i]);
+                if (comparison !== 0) {
+                  return comparison;
+                }
+              }
+              // Если дошли до позиции метрики, используем порядок метрик вместо алфавитной сортировки
+              if (metricIndexInCols < limit) {
+                const metricOrderA = getMetricOrderIndex(a);
+                const metricOrderB = getMetricOrderIndex(b);
+                if (metricOrderA !== -1 && metricOrderB !== -1) {
+                  if (metricOrderA !== metricOrderB) {
+                    return metricOrderA - metricOrderB;
+                  }
+                  // Если порядок метрик одинаковый, продолжаем сравнение (не используем алфавитную сортировку)
+                } else {
+                  // Если метрика не найдена в порядке, используем алфавитную сортировку как fallback
+                  if (metricIndexInCols < a.length && metricIndexInCols < b.length) {
+                    const sorter = sortersArr[metricIndexInCols];
+                    const comparison = sorter(a[metricIndexInCols], b[metricIndexInCols]);
+                    if (comparison !== 0) {
+                      return comparison;
+                    }
+                  }
+                }
+              }
+              // Сравниваем остальные атрибуты после метрики
+              for (let i = metricIndexInCols + 1; i < limit; i += 1) {
+                const sorter = sortersArr[i];
+                const comparison = sorter(a[i], b[i]);
+                if (comparison !== 0) {
+                  return comparison;
+                }
+              }
+              // Если все атрибуты равны, учитываем partialOnTop
+              return partialOnTop ? a.length - b.length : b.length - a.length;
+            });
+          } else {
+            this.colKeys.sort(
+              this.arrSort(this.props.cols, this.subtotals.colPartialOnTop),
+            );
+          }
       }
     }
   }

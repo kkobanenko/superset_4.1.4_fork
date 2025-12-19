@@ -610,6 +610,8 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
       omittedHighlightHeaderGroups: [METRIC_KEY],
       // Used by TableRenderers to reliably detect metric dimension cells/headers
       metricKey: METRIC_KEY,
+      // Порядок метрик из выпадающего списка Metrics (для сохранения порядка колонок метрик)
+      metricsOrder: metricNames,
       cellColorFormatters: { [METRIC_KEY]: metricColorFormatters },
       dateFormatters,
       // Передаем настройки форматирования полей группировки
