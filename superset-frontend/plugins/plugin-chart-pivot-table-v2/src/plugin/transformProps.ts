@@ -25,6 +25,44 @@ import {
   SMART_DATE_ID,
   TimeFormats,
 } from '@superset-ui/core';
+
+// Russian month names
+const RUSSIAN_MONTHS = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+];
+
+// Custom formatter for MONTH_YEAR_RU format
+function createMonthYearRuFormatter(): (date: Date | number | string) => string {
+  return (date: Date | number | string) => {
+    let dateObj: Date;
+    if (typeof date === 'number') {
+      dateObj = new Date(date);
+    } else if (typeof date === 'string') {
+      dateObj = new Date(date);
+    } else {
+      dateObj = date;
+    }
+    
+    if (isNaN(dateObj.getTime())) {
+      return String(date);
+    }
+    
+    const month = dateObj.getMonth(); // 0-11
+    const year = dateObj.getFullYear();
+    return `${RUSSIAN_MONTHS[month]} ${year}`;
+  };
+}
 import { GenericDataType } from '@apache-superset/core/api/core';
 import { getColorFormatters } from '@superset-ui/chart-controls';
 import {
@@ -480,6 +518,8 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
             // if no column-specific format, print cell as is
             formatter = String;
           }
+        } else if (effectiveDateFormat === 'MONTH_YEAR_RU') {
+          formatter = createMonthYearRuFormatter();
         } else if (effectiveDateFormat) {
           formatter = getTimeFormatter(effectiveDateFormat);
         }

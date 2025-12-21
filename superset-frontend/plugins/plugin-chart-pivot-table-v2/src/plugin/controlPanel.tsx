@@ -23,6 +23,12 @@ import {
   getStandardizedControls,
   sharedControls,
 } from '@superset-ui/chart-controls';
+
+// Расширенные опции формата даты с добавлением "month year" на русском
+const EXTENDED_D3_TIME_FORMAT_OPTIONS: [string, string][] = [
+  ...D3_TIME_FORMAT_OPTIONS,
+  ['MONTH_YEAR_RU', t('Month Year (Russian) | Декабрь 2025')],
+];
 import {
   ensureIsArray,
   getColumnLabel,
@@ -1389,7 +1395,7 @@ const config: ControlPanelConfig = {
                     clearable: true,
                     default: undefined,
                     renderTrigger: true,
-                    choices: D3_TIME_FORMAT_OPTIONS,
+                    choices: EXTENDED_D3_TIME_FORMAT_OPTIONS,
                     description: t('D3 time format (per field)'),
                     visibility: (props: any) => {
                       const controls = props?.controls || {};

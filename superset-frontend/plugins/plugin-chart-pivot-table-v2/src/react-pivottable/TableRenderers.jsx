@@ -23,6 +23,42 @@ import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
 
+// Russian month names
+const RUSSIAN_MONTHS = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+];
+
+// Custom formatter for MONTH_YEAR_RU format
+function formatMonthYearRu(date) {
+  let dateObj;
+  if (typeof date === 'number') {
+    dateObj = new Date(date);
+  } else if (typeof date === 'string') {
+    dateObj = new Date(date);
+  } else {
+    dateObj = date;
+  }
+  
+  if (isNaN(dateObj.getTime())) {
+    return String(date);
+  }
+  
+  const month = dateObj.getMonth(); // 0-11
+  const year = dateObj.getFullYear();
+  return `${RUSSIAN_MONTHS[month]} ${year}`;
+}
+
 const parseLabel = value => {
   if (typeof value === 'string') {
     if (value === 'metric') return t('metric');
@@ -281,6 +317,9 @@ export class TableRenderer extends Component {
       settings.dateFormat !== SMART_DATE_ID
     ) {
       try {
+        if (settings.dateFormat === 'MONTH_YEAR_RU') {
+          return formatMonthYearRu(rawValue);
+        }
         return getTimeFormatter(settings.dateFormat)(rawValue);
       } catch (e) {
         return rawValue;
@@ -304,6 +343,9 @@ export class TableRenderer extends Component {
       formatSettings.dateFormat !== SMART_DATE_ID
     ) {
       try {
+        if (formatSettings.dateFormat === 'MONTH_YEAR_RU') {
+          return formatMonthYearRu(aggValue);
+        }
         return getTimeFormatter(formatSettings.dateFormat)(aggValue);
       } catch (e) {
         return formattedByAgg;
