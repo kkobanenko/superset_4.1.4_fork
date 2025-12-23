@@ -2416,10 +2416,95 @@ const config: ControlPanelConfig = {
       fieldGroupingSettings,
     };
     
-    // Инициализируем значения временных контролов для каждого набора настроек
+    // Сначала восстанавливаем настройки для полей, которые уже выбраны в селекторах
+    const usedSelectors = new Set<string>();
     for (let i = 0; i < 10; i++) {
       const selectorKey = `field_formatting_field${i}_selector` as keyof typeof formData;
       const selectedField = formData[selectorKey] as string | undefined;
+      
+      if (selectedField) {
+        usedSelectors.add(selectedField);
+        const fieldSettings = fieldGroupingSettings[selectedField] || {};
+        
+        resultFormData[`field_formatting_field${i}_maxWidth`] = fieldSettings.maxWidth;
+        resultFormData[`field_formatting_field${i}_truncate`] = fieldSettings.truncate ?? false;
+        resultFormData[`field_formatting_field${i}_valueFormat`] =
+          fieldSettings.valueFormat;
+        resultFormData[`field_formatting_field${i}_dateFormat`] = fieldSettings.dateFormat;
+        resultFormData[`field_formatting_field${i}_metricAggregationFunction`] =
+          fieldSettings.metricAggregationFunction;
+        resultFormData[`field_formatting_field${i}_fontSize`] = fieldSettings.fontSize;
+        resultFormData[`field_formatting_field${i}_fontColor`] = fieldSettings.fontColor;
+        resultFormData[`field_formatting_field${i}_backgroundColor`] = fieldSettings.backgroundColor;
+        resultFormData[`field_formatting_field${i}_metricHeaderFontSize`] =
+          fieldSettings.metricHeaderFontSize;
+        resultFormData[`field_formatting_field${i}_metricHeaderFontColor`] =
+          fieldSettings.metricHeaderFontColor;
+        resultFormData[`field_formatting_field${i}_metricHeaderBackgroundColor`] =
+          fieldSettings.metricHeaderBackgroundColor;
+        resultFormData[`field_formatting_field${i}_metricValueFontSize`] =
+          fieldSettings.metricValueFontSize;
+        resultFormData[`field_formatting_field${i}_metricValueFontColor`] =
+          fieldSettings.metricValueFontColor;
+        resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] =
+          fieldSettings.metricValueBackgroundColor;
+      }
+    }
+    
+    // Затем восстанавливаем настройки для полей из fieldGroupingSettings, которые не выбраны в селекторах
+    // Это нужно для правильной загрузки настроек при открытии чарта с дашборда
+    const fieldNames = Object.keys(fieldGroupingSettings);
+    let nextFreeIndex = 0;
+    for (const fieldName of fieldNames) {
+      // Пропускаем поля, которые уже восстановлены
+      if (usedSelectors.has(fieldName)) {
+        continue;
+      }
+      
+      // Находим первый свободный индекс для временного контрола
+      while (nextFreeIndex < 10 && resultFormData[`field_formatting_field${nextFreeIndex}_selector`]) {
+        nextFreeIndex += 1;
+      }
+      
+      if (nextFreeIndex >= 10) {
+        // Нет свободных слотов, пропускаем
+        break;
+      }
+      
+      const fieldSettings = fieldGroupingSettings[fieldName] || {};
+      
+      // Восстанавливаем селектор и все настройки
+      resultFormData[`field_formatting_field${nextFreeIndex}_selector`] = fieldName;
+      resultFormData[`field_formatting_field${nextFreeIndex}_maxWidth`] = fieldSettings.maxWidth;
+      resultFormData[`field_formatting_field${nextFreeIndex}_truncate`] = fieldSettings.truncate ?? false;
+      resultFormData[`field_formatting_field${nextFreeIndex}_valueFormat`] =
+        fieldSettings.valueFormat;
+      resultFormData[`field_formatting_field${nextFreeIndex}_dateFormat`] = fieldSettings.dateFormat;
+      resultFormData[`field_formatting_field${nextFreeIndex}_metricAggregationFunction`] =
+        fieldSettings.metricAggregationFunction;
+      resultFormData[`field_formatting_field${nextFreeIndex}_fontSize`] = fieldSettings.fontSize;
+      resultFormData[`field_formatting_field${nextFreeIndex}_fontColor`] = fieldSettings.fontColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_backgroundColor`] = fieldSettings.backgroundColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_metricHeaderFontSize`] =
+        fieldSettings.metricHeaderFontSize;
+      resultFormData[`field_formatting_field${nextFreeIndex}_metricHeaderFontColor`] =
+        fieldSettings.metricHeaderFontColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_metricHeaderBackgroundColor`] =
+        fieldSettings.metricHeaderBackgroundColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_metricValueFontSize`] =
+        fieldSettings.metricValueFontSize;
+      resultFormData[`field_formatting_field${nextFreeIndex}_metricValueFontColor`] =
+        fieldSettings.metricValueFontColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_metricValueBackgroundColor`] =
+        fieldSettings.metricValueBackgroundColor;
+      
+      nextFreeIndex += 1;
+    }
+    
+    // Очищаем неиспользуемые временные контролы
+    for (let i = 0; i < 10; i++) {
+      const selectorKey = `field_formatting_field${i}_selector` as keyof typeof formData;
+      const selectedField = resultFormData[selectorKey] as string | undefined;
       
       if (!selectedField) {
         // Если поле не выбрано, очищаем значения контролов
@@ -2438,33 +2523,7 @@ const config: ControlPanelConfig = {
         resultFormData[`field_formatting_field${i}_metricValueFontSize`] = undefined;
         resultFormData[`field_formatting_field${i}_metricValueFontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] = undefined;
-        continue;
       }
-      
-      const fieldSettings = fieldGroupingSettings[selectedField] || {};
-      
-      resultFormData[`field_formatting_field${i}_maxWidth`] = fieldSettings.maxWidth;
-      resultFormData[`field_formatting_field${i}_truncate`] = fieldSettings.truncate ?? false;
-      resultFormData[`field_formatting_field${i}_valueFormat`] =
-        fieldSettings.valueFormat;
-      resultFormData[`field_formatting_field${i}_dateFormat`] = fieldSettings.dateFormat;
-      resultFormData[`field_formatting_field${i}_metricAggregationFunction`] =
-        fieldSettings.metricAggregationFunction;
-      resultFormData[`field_formatting_field${i}_fontSize`] = fieldSettings.fontSize;
-      resultFormData[`field_formatting_field${i}_fontColor`] = fieldSettings.fontColor;
-      resultFormData[`field_formatting_field${i}_backgroundColor`] = fieldSettings.backgroundColor;
-      resultFormData[`field_formatting_field${i}_metricHeaderFontSize`] =
-        fieldSettings.metricHeaderFontSize;
-      resultFormData[`field_formatting_field${i}_metricHeaderFontColor`] =
-        fieldSettings.metricHeaderFontColor;
-      resultFormData[`field_formatting_field${i}_metricHeaderBackgroundColor`] =
-        fieldSettings.metricHeaderBackgroundColor;
-      resultFormData[`field_formatting_field${i}_metricValueFontSize`] =
-        fieldSettings.metricValueFontSize;
-      resultFormData[`field_formatting_field${i}_metricValueFontColor`] =
-        fieldSettings.metricValueFontColor;
-      resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] =
-        fieldSettings.metricValueBackgroundColor;
     }
     
     return resultFormData;

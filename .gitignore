@@ -141,3 +141,7 @@ oxc-custom-build/
 # Dev environment data directories
 postgres_data_dev/
 superset_data_dev/
+
+# Ignore Playwright artifacts
+playwright-report/
+test-results/
