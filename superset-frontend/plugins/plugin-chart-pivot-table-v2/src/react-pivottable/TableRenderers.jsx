@@ -1218,9 +1218,16 @@ export class TableRenderer extends Component {
     // чтобы настройки форматирования были едины для заголовка и значений.
     // Если columnTotalsValueFormat не задан, но есть rowTotalsValueFormat, используем его
     // для совместимости со старыми настройками
-    const colTotalsLabelStyleRef = globalTableSettings?.columnTotalsValueFormat
+    // Проверяем, что объект не пустой и содержит хотя бы одно свойство форматирования
+    const hasColumnTotalsFormat = globalTableSettings?.columnTotalsValueFormat &&
+      typeof globalTableSettings.columnTotalsValueFormat === 'object' &&
+      Object.keys(globalTableSettings.columnTotalsValueFormat).length > 0;
+    const hasRowTotalsFormat = globalTableSettings?.rowTotalsValueFormat &&
+      typeof globalTableSettings.rowTotalsValueFormat === 'object' &&
+      Object.keys(globalTableSettings.rowTotalsValueFormat).length > 0;
+    const colTotalsLabelStyleRef = hasColumnTotalsFormat
       ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
-      : globalTableSettings?.rowTotalsValueFormat
+      : hasRowTotalsFormat
         ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
         : null;
 
