@@ -138,8 +138,14 @@ function normalizeValueCellFormatSettings(
   if (typeof v.dateFormat === 'string' && v.dateFormat.length > 0) {
     out.dateFormat = v.dateFormat;
   }
-  if (typeof v.fontSize === 'number') {
+  // fontSize может приходить как число или строка (из NumberControl)
+  if (typeof v.fontSize === 'number' && v.fontSize > 0) {
     out.fontSize = v.fontSize;
+  } else if (typeof v.fontSize === 'string' && v.fontSize.length > 0) {
+    const fontSizeNum = parseFloat(v.fontSize);
+    if (!isNaN(fontSizeNum) && fontSizeNum > 0) {
+      out.fontSize = fontSizeNum;
+    }
   }
   const fontColorCss = toCssColor(v.fontColor);
   if (typeof fontColorCss === 'string') {
@@ -153,30 +159,156 @@ function normalizeValueCellFormatSettings(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-function normalizeGlobalTableSettings(
-  value: unknown,
+/**
+ * Собрать globalTableSettings из formData.
+ * Superset может не сохранять вложенные объекты правильно, поэтому собираем
+ * из плоской структуры formData (как для fieldGroupingSettings).
+ */
+function buildGlobalTableSettings(
+  formData: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
-  if (!value || typeof value !== 'object') {
-    return undefined;
+  const out: Record<string, unknown> = {};
+  
+  // Сначала пробуем взять из уже собранного объекта и нормализовать его
+  const existing = formData.globalTableSettings;
+  if (existing && typeof existing === 'object') {
+    const existingObj = existing as Record<string, unknown>;
+    // Копируем все поля из существующего объекта
+    Object.assign(out, existingObj);
+    
+    // Нормализуем ValueFormat объекты
+    if (existingObj.rowTotalsValueFormat) {
+      out.rowTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.rowTotalsValueFormat) || existingObj.rowTotalsValueFormat;
+    }
+    if (existingObj.columnTotalsValueFormat) {
+      out.columnTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.columnTotalsValueFormat) || existingObj.columnTotalsValueFormat;
+    }
+    if (existingObj.rowSubTotalsValueFormat) {
+      out.rowSubTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.rowSubTotalsValueFormat) || existingObj.rowSubTotalsValueFormat;
+    }
+    if (existingObj.colSubTotalsValueFormat) {
+      out.colSubTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.colSubTotalsValueFormat) || existingObj.colSubTotalsValueFormat;
+    }
   }
-  const v = value as Record<string, unknown>;
-  const out: Record<string, unknown> = { ...v };
 
-  out.rowTotalsValueFormat =
-    normalizeValueCellFormatSettings(v.rowTotalsValueFormat) ||
-    v.rowTotalsValueFormat;
-  out.columnTotalsValueFormat =
-    normalizeValueCellFormatSettings(v.columnTotalsValueFormat) ||
-    v.columnTotalsValueFormat;
-  out.rowSubTotalsValueFormat =
-    normalizeValueCellFormatSettings(v.rowSubTotalsValueFormat) ||
-    v.rowSubTotalsValueFormat;
-  out.colSubTotalsValueFormat =
-    normalizeValueCellFormatSettings(v.colSubTotalsValueFormat) ||
-    v.colSubTotalsValueFormat;
+  // Собираем rowTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  const rowTotalsValueFormat: Record<string, unknown> = {};
+  // Начинаем с существующего объекта, если он есть
+  if (out.rowTotalsValueFormat && typeof out.rowTotalsValueFormat === 'object') {
+    Object.assign(rowTotalsValueFormat, out.rowTotalsValueFormat as Record<string, unknown>);
+  }
+  // Перезаписываем значениями из плоских ключей
+  if (formData['globalTableSettings.rowTotalsValueFormat.valueFormat'] !== undefined) {
+    rowTotalsValueFormat.valueFormat = formData['globalTableSettings.rowTotalsValueFormat.valueFormat'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.dateFormat'] !== undefined) {
+    rowTotalsValueFormat.dateFormat = formData['globalTableSettings.rowTotalsValueFormat.dateFormat'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.fontSize'] !== undefined) {
+    rowTotalsValueFormat.fontSize = formData['globalTableSettings.rowTotalsValueFormat.fontSize'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.fontColor'] !== undefined) {
+    rowTotalsValueFormat.fontColor = formData['globalTableSettings.rowTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.backgroundColor'] !== undefined) {
+    rowTotalsValueFormat.backgroundColor = formData['globalTableSettings.rowTotalsValueFormat.backgroundColor'];
+  }
+  if (Object.keys(rowTotalsValueFormat).length > 0) {
+    out.rowTotalsValueFormat = normalizeValueCellFormatSettings(rowTotalsValueFormat) || rowTotalsValueFormat;
+  }
 
-  return out;
+  // Собираем rowSubTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  const rowSubTotalsValueFormat: Record<string, unknown> = {};
+  if (out.rowSubTotalsValueFormat && typeof out.rowSubTotalsValueFormat === 'object') {
+    Object.assign(rowSubTotalsValueFormat, out.rowSubTotalsValueFormat as Record<string, unknown>);
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'] !== undefined) {
+    rowSubTotalsValueFormat.valueFormat = formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'];
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'] !== undefined) {
+    rowSubTotalsValueFormat.dateFormat = formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'];
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'] !== undefined) {
+    rowSubTotalsValueFormat.fontSize = formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'];
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.fontColor'] !== undefined) {
+    rowSubTotalsValueFormat.fontColor = formData['globalTableSettings.rowSubTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.backgroundColor'] !== undefined) {
+    rowSubTotalsValueFormat.backgroundColor = formData['globalTableSettings.rowSubTotalsValueFormat.backgroundColor'];
+  }
+  if (Object.keys(rowSubTotalsValueFormat).length > 0) {
+    out.rowSubTotalsValueFormat = normalizeValueCellFormatSettings(rowSubTotalsValueFormat) || rowSubTotalsValueFormat;
+  }
+
+  // Собираем columnTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  const columnTotalsValueFormat: Record<string, unknown> = {};
+  if (out.columnTotalsValueFormat && typeof out.columnTotalsValueFormat === 'object') {
+    Object.assign(columnTotalsValueFormat, out.columnTotalsValueFormat as Record<string, unknown>);
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.valueFormat'] !== undefined) {
+    columnTotalsValueFormat.valueFormat = formData['globalTableSettings.columnTotalsValueFormat.valueFormat'];
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.dateFormat'] !== undefined) {
+    columnTotalsValueFormat.dateFormat = formData['globalTableSettings.columnTotalsValueFormat.dateFormat'];
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.fontSize'] !== undefined) {
+    columnTotalsValueFormat.fontSize = formData['globalTableSettings.columnTotalsValueFormat.fontSize'];
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.fontColor'] !== undefined) {
+    columnTotalsValueFormat.fontColor = formData['globalTableSettings.columnTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.backgroundColor'] !== undefined) {
+    columnTotalsValueFormat.backgroundColor = formData['globalTableSettings.columnTotalsValueFormat.backgroundColor'];
+  }
+  if (Object.keys(columnTotalsValueFormat).length > 0) {
+    out.columnTotalsValueFormat = normalizeValueCellFormatSettings(columnTotalsValueFormat) || columnTotalsValueFormat;
+  }
+
+  // Собираем colSubTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  const colSubTotalsValueFormat: Record<string, unknown> = {};
+  if (out.colSubTotalsValueFormat && typeof out.colSubTotalsValueFormat === 'object') {
+    Object.assign(colSubTotalsValueFormat, out.colSubTotalsValueFormat as Record<string, unknown>);
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.valueFormat'] !== undefined) {
+    colSubTotalsValueFormat.valueFormat = formData['globalTableSettings.colSubTotalsValueFormat.valueFormat'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.dateFormat'] !== undefined) {
+    colSubTotalsValueFormat.dateFormat = formData['globalTableSettings.colSubTotalsValueFormat.dateFormat'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.fontSize'] !== undefined) {
+    colSubTotalsValueFormat.fontSize = formData['globalTableSettings.colSubTotalsValueFormat.fontSize'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.fontColor'] !== undefined) {
+    colSubTotalsValueFormat.fontColor = formData['globalTableSettings.colSubTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.backgroundColor'] !== undefined) {
+    colSubTotalsValueFormat.backgroundColor = formData['globalTableSettings.colSubTotalsValueFormat.backgroundColor'];
+  }
+  if (Object.keys(colSubTotalsValueFormat).length > 0) {
+    out.colSubTotalsValueFormat = normalizeValueCellFormatSettings(colSubTotalsValueFormat) || colSubTotalsValueFormat;
+  }
+
+  // Добавляем другие поля из существующего объекта (если они еще не добавлены)
+  if (existing && typeof existing === 'object') {
+    const existingObj = existing as Record<string, unknown>;
+    if (existingObj.rowTotalsLabel !== undefined && out.rowTotalsLabel === undefined) {
+      out.rowTotalsLabel = existingObj.rowTotalsLabel;
+    }
+    if (existingObj.rowSubTotalsLabel !== undefined && out.rowSubTotalsLabel === undefined) {
+      out.rowSubTotalsLabel = existingObj.rowSubTotalsLabel;
+    }
+    if (existingObj.columnTotalsLabel !== undefined && out.columnTotalsLabel === undefined) {
+      out.columnTotalsLabel = existingObj.columnTotalsLabel;
+    }
+    if (existingObj.colSubTotalsLabel !== undefined && out.colSubTotalsLabel === undefined) {
+      out.colSubTotalsLabel = existingObj.colSubTotalsLabel;
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
 }
+
 
 /**
  * Собрать итоговые настройки форматирования полей (fieldGroupingSettings) из:
@@ -473,7 +605,6 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     timeGrainSqla,
     currencyFormat,
     allowRenderHtml,
-    globalTableSettings,
     legacy_order_by,
     order_desc,
   } = typedFormData;
@@ -535,7 +666,11 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     data,
     theme,
   );
-  const normalizedGlobalTableSettings = normalizeGlobalTableSettings(globalTableSettings);
+  // Собираем globalTableSettings из rawFormData (как для fieldGroupingSettings),
+  // потому что Superset может не сохранять вложенные объекты правильно
+  const normalizedGlobalTableSettings = buildGlobalTableSettings(
+    rawFormData as unknown as Record<string, unknown>,
+  );
 
   return {
     width,

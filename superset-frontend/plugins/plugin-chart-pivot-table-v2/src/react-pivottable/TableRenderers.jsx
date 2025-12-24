@@ -761,6 +761,11 @@ export class TableRenderer extends Component {
       t('Total (%(aggregatorName)s)', {
         aggregatorName: t(this.props.aggregatorName),
       });
+    // Применяем те же настройки форматирования, что и к значениям total по строкам,
+    // чтобы шрифт/цвет/фон были согласованы у заголовка и ячеек.
+    const rowTotalsLabelStyle = globalTableSettings?.rowTotalsValueFormat
+      ? this.buildValueCellStyle(globalTableSettings.rowTotalsValueFormat)
+      : {};
     const totalCell =
       attrIdx === 0 && rowTotals ? (
         <th
@@ -768,6 +773,7 @@ export class TableRenderer extends Component {
           className="pvtTotalLabel"
           rowSpan={colAttrs.length + Math.min(rowAttrs.length, 1)}
           role="columnheader button"
+          style={rowTotalsLabelStyle}
           onClick={this.clickHeaderHandler(
             pivotData,
             [],
@@ -973,6 +979,11 @@ export class TableRenderer extends Component {
       globalTableSettings?.rowSubTotalsLabel ||
       rowFieldSettings?.subtotalLabel ||
       t('Subtotal');
+    // Для заголовка строки подытога применяем глобальный стиль rowSubTotalsValueFormat,
+    // чтобы настройки шрифта и цветов были заметны не только в числовых ячейках.
+    const rowSubtotalLabelStyle = globalTableSettings?.rowSubTotalsValueFormat
+      ? this.buildValueCellStyle(globalTableSettings.rowSubTotalsValueFormat)
+      : {};
     const attrValuePaddingCell =
       rowKey.length < rowAttrs.length ? (
         <th
@@ -981,6 +992,7 @@ export class TableRenderer extends Component {
           colSpan={rowAttrs.length - rowKey.length + colIncrSpan}
           rowSpan={1}
           role="columnheader button"
+          style={rowSubtotalLabelStyle}
           onClick={this.clickHeaderHandler(
             pivotData,
             rowKey,
@@ -1140,6 +1152,11 @@ export class TableRenderer extends Component {
       t('Total (%(aggregatorName)s)', {
         aggregatorName: t(this.props.aggregatorName),
       });
+    // Для заголовка строки итогов по колонкам используем columnTotalsValueFormat,
+    // чтобы настройки форматирования были едины для заголовка и значений.
+    const colTotalsLabelStyle = globalTableSettings?.columnTotalsValueFormat
+      ? this.buildValueCellStyle(globalTableSettings.columnTotalsValueFormat)
+      : {};
 
     const totalLabelCell = (
       <th
@@ -1147,6 +1164,7 @@ export class TableRenderer extends Component {
         className="pvtTotalLabel pvtRowTotalLabel"
         colSpan={rowAttrs.length + Math.min(colAttrs.length, 1)}
         role="columnheader button"
+        style={colTotalsLabelStyle}
         onClick={this.clickHeaderHandler(
           pivotData,
           [],

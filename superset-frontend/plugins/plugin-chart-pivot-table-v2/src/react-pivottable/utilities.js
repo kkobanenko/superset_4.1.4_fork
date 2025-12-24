@@ -1168,9 +1168,9 @@ class PivotData {
               return partialOnTop ? a.length - b.length : b.length - a.length;
             });
           } else {
-            this.colKeys.sort(
-              this.arrSort(this.props.cols, this.subtotals.colPartialOnTop, true),
-            );
+          this.colKeys.sort(
+            this.arrSort(this.props.cols, this.subtotals.colPartialOnTop, true),
+          );
           }
           break;
         case 'value_a_to_z':
@@ -1274,9 +1274,9 @@ class PivotData {
               return partialOnTop ? a.length - b.length : b.length - a.length;
             });
           } else {
-            this.colKeys.sort(
-              this.arrSort(this.props.cols, this.subtotals.colPartialOnTop),
-            );
+          this.colKeys.sort(
+            this.arrSort(this.props.cols, this.subtotals.colPartialOnTop),
+          );
           }
       }
     }

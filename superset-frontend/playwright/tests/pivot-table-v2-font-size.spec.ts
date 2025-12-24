@@ -18,7 +18,9 @@
  */
 
 // Тест проверяет, что для Pivot Table V2 применяются сохранённые настройки
-// размера шрифта для поля строки "БР" после загрузки сохранённого чарта.
+// размера шрифта:
+// 1) для поля строки "БР" (per-field форматирование);
+// 2) для строк/столбцов с итогами (глобальные настройки totals/subtotals).
 //
 // Важные моменты:
 // - Логин через стандартную страницу логина (AuthPage).
@@ -34,7 +36,7 @@ import { AuthPage } from '../pages/AuthPage';
 const EXPLORE_URL_PATH =
   '/explore/?form_data_key=V6X-7_ShOJ0&dashboard_page_id=hHaHWiAEVlxaz0jb-liMG&slice_id=48';
 
-test('Pivot Table V2 применяет per-field fontSize для строки БР', async ({
+test('Pivot Table V2 применяет per-field fontSize и стили totals/subtotals', async ({
   page,
 }) => {
   // Логин под админом через существующую страницу авторизации.
@@ -69,8 +71,44 @@ test('Pivot Table V2 применяет per-field fontSize для строки �
     return window.getComputedStyle(el).fontSize;
   });
 
-  // Ожидаем, что размер шрифта соответствует сохранённой настройке (50px).
+  // Ожидаем, что размер шрифта соответствует сохранённой настройке для поля (50px).
   expect(fontSize).toBe('50px');
+
+  // Дополнительно проверяем, что глобальные настройки итогов/подытогов
+  // применяются к заголовкам totals/subtotals.
+  //
+  // Предполагается, что в Explore для:
+  // - Rows total font size (px)
+  // - Columns total font size (px)
+  // задано заметно отличное значение (например, 30px),
+  // чтобы легко отличить от обычных ячеек.
+
+  // Заголовок итогов по строкам (Total по строкам, правая колонка заголовков).
+  const rowTotalsHeader = page
+    .locator('th.pvtTotalLabel', { hasText: 'Total' })
+    .first();
+  const rowTotalsFontSize = await rowTotalsHeader.evaluate(element => {
+    const el = element as HTMLElement;
+    return window.getComputedStyle(el).fontSize;
+  });
+
+  // Заголовок итогов по колонкам (Total в нижней строке).
+  const colTotalsHeader = page
+    .locator('th.pvtTotalLabel.pvtRowTotalLabel', { hasText: 'Total' })
+    .first();
+  const colTotalsFontSize = await colTotalsHeader.evaluate(element => {
+    const el = element as HTMLElement;
+    return window.getComputedStyle(el).fontSize;
+  });
+
+  // Здесь мы не фиксируем конкретное значение, а лишь проверяем, что
+  // шрифты отличаются от стандартного размера (например, больше 16px),
+  // что говорит о применении настроек.
+  const rowTotalsSizeNum = parseFloat(rowTotalsFontSize);
+  const colTotalsSizeNum = parseFloat(colTotalsFontSize);
+
+  expect(rowTotalsSizeNum).toBeGreaterThan(16);
+  expect(colTotalsSizeNum).toBeGreaterThan(16);
 });
 
 
