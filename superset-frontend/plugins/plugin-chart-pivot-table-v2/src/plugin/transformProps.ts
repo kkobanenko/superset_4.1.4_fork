@@ -169,6 +169,13 @@ function buildGlobalTableSettings(
 ): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {};
   
+  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+  console.log('[buildGlobalTableSettings] formData.globalTableSettings:', formData.globalTableSettings);
+  console.log('[buildGlobalTableSettings] formData flat keys:', {
+    rowSubTotalsFontSize: formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'],
+    columnTotalsFontSize: formData['globalTableSettings.columnTotalsValueFormat.fontSize'],
+  });
+  
   // Сначала пробуем взять из уже собранного объекта и нормализовать его
   const existing = formData.globalTableSettings;
   if (existing && typeof existing === 'object') {
@@ -598,6 +605,12 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     theme,
   } = chartProps;
   const { data, colnames, coltypes } = queriesData[0];
+  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+  console.log('[transformProps] rawFormData.globalTableSettings:', rawFormData.globalTableSettings);
+  console.log('[transformProps] rawFormData flat keys:', {
+    rowSubTotalsFontSize: rawFormData['globalTableSettings.rowSubTotalsValueFormat.fontSize'],
+    columnTotalsFontSize: rawFormData['globalTableSettings.columnTotalsValueFormat.fontSize'],
+  });
   // Важно: chartProps.formData типизирован, но в рантайме/в generic типах Superset
   // это может быть PlainObject, поэтому работаем через "typedFormData".
   const typedFormData = chartProps.formData as unknown as PivotTableV2QueryFormData;
