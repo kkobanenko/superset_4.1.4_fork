@@ -866,26 +866,36 @@ export class TableRenderer extends Component {
             </th>
           );
         })}
-        <th
-          className="pvtTotalLabel"
-          key="padding"
-          role="columnheader button"
-          onClick={this.clickHeaderHandler(
-            pivotData,
-            [],
-            this.props.rows,
-            0,
-            this.props.tableOptions.clickRowHeaderCallback,
-            false,
-            true,
-          )}
-        >
-          {colAttrs.length === 0
-            ? t('Total (%(aggregatorName)s)', {
-                aggregatorName: t(this.props.aggregatorName),
-              })
-            : null}
-        </th>
+        {(() => {
+          // Применяем стили форматирования для row totals в заголовке строк
+          const globalTableSettings = this.getGlobalTableSettings();
+          const rowTotalsLabelStyleRef = globalTableSettings?.rowTotalsValueFormat
+            ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
+            : null;
+          return (
+            <th
+              className="pvtTotalLabel pvtColTotalLabel"
+              key="padding"
+              role="columnheader button"
+              ref={rowTotalsLabelStyleRef}
+              onClick={this.clickHeaderHandler(
+                pivotData,
+                [],
+                this.props.rows,
+                0,
+                this.props.tableOptions.clickRowHeaderCallback,
+                false,
+                true,
+              )}
+            >
+              {colAttrs.length === 0
+                ? t('Total (%(aggregatorName)s)', {
+                    aggregatorName: t(this.props.aggregatorName),
+                  })
+                : null}
+            </th>
+          );
+        })()}
       </tr>
     );
   }
