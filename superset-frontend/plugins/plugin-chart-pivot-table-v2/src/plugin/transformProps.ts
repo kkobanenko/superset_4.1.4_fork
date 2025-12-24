@@ -218,18 +218,24 @@ function buildGlobalTableSettings(
   }
 
   // Собираем rowSubTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  // ВАЖНО: всегда начинаем со старого объекта, если он есть, чтобы сохранить значения,
+  // которые не заданы через плоские ключи (например, при загрузке сохраненного чарта)
   const rowSubTotalsValueFormat: Record<string, unknown> = {};
   if (out.rowSubTotalsValueFormat && typeof out.rowSubTotalsValueFormat === 'object') {
     Object.assign(rowSubTotalsValueFormat, out.rowSubTotalsValueFormat as Record<string, unknown>);
   }
+  // Перезаписываем значениями из плоских ключей (если они заданы)
+  // Проверяем !== undefined чтобы не перезаписывать на null/0
   if (formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'] !== undefined) {
     rowSubTotalsValueFormat.valueFormat = formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'];
   }
   if (formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'] !== undefined) {
     rowSubTotalsValueFormat.dateFormat = formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'];
   }
-  if (formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'] !== undefined) {
-    rowSubTotalsValueFormat.fontSize = formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'];
+  // fontSize может быть числом или строкой из NumberControl
+  const fontSizeValue = formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'];
+  if (fontSizeValue !== undefined && fontSizeValue !== null) {
+    rowSubTotalsValueFormat.fontSize = fontSizeValue;
   }
   if (formData['globalTableSettings.rowSubTotalsValueFormat.fontColor'] !== undefined) {
     rowSubTotalsValueFormat.fontColor = formData['globalTableSettings.rowSubTotalsValueFormat.fontColor'];
@@ -237,8 +243,12 @@ function buildGlobalTableSettings(
   if (formData['globalTableSettings.rowSubTotalsValueFormat.backgroundColor'] !== undefined) {
     rowSubTotalsValueFormat.backgroundColor = formData['globalTableSettings.rowSubTotalsValueFormat.backgroundColor'];
   }
+  // Нормализуем и сохраняем только если есть хотя бы одно значение
   if (Object.keys(rowSubTotalsValueFormat).length > 0) {
-    out.rowSubTotalsValueFormat = normalizeValueCellFormatSettings(rowSubTotalsValueFormat) || rowSubTotalsValueFormat;
+    const normalized = normalizeValueCellFormatSettings(rowSubTotalsValueFormat);
+    // Если нормализация вернула результат (даже пустой объект), используем его
+    // Иначе используем исходный объект (может содержать невалидные значения, но лучше чем ничего)
+    out.rowSubTotalsValueFormat = normalized !== undefined ? normalized : rowSubTotalsValueFormat;
   }
 
   // Собираем columnTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
@@ -252,8 +262,10 @@ function buildGlobalTableSettings(
   if (formData['globalTableSettings.columnTotalsValueFormat.dateFormat'] !== undefined) {
     columnTotalsValueFormat.dateFormat = formData['globalTableSettings.columnTotalsValueFormat.dateFormat'];
   }
-  if (formData['globalTableSettings.columnTotalsValueFormat.fontSize'] !== undefined) {
-    columnTotalsValueFormat.fontSize = formData['globalTableSettings.columnTotalsValueFormat.fontSize'];
+  // fontSize может быть числом или строкой из NumberControl
+  const columnFontSizeValue = formData['globalTableSettings.columnTotalsValueFormat.fontSize'];
+  if (columnFontSizeValue !== undefined && columnFontSizeValue !== null) {
+    columnTotalsValueFormat.fontSize = columnFontSizeValue;
   }
   if (formData['globalTableSettings.columnTotalsValueFormat.fontColor'] !== undefined) {
     columnTotalsValueFormat.fontColor = formData['globalTableSettings.columnTotalsValueFormat.fontColor'];
@@ -261,8 +273,12 @@ function buildGlobalTableSettings(
   if (formData['globalTableSettings.columnTotalsValueFormat.backgroundColor'] !== undefined) {
     columnTotalsValueFormat.backgroundColor = formData['globalTableSettings.columnTotalsValueFormat.backgroundColor'];
   }
+  // Нормализуем и сохраняем только если есть хотя бы одно значение
   if (Object.keys(columnTotalsValueFormat).length > 0) {
-    out.columnTotalsValueFormat = normalizeValueCellFormatSettings(columnTotalsValueFormat) || columnTotalsValueFormat;
+    const normalized = normalizeValueCellFormatSettings(columnTotalsValueFormat);
+    // Если нормализация вернула результат (даже пустой объект), используем его
+    // Иначе используем исходный объект (может содержать невалидные значения, но лучше чем ничего)
+    out.columnTotalsValueFormat = normalized !== undefined ? normalized : columnTotalsValueFormat;
   }
 
   // Собираем colSubTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
