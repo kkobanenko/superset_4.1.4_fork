@@ -334,7 +334,14 @@ function buildGlobalTableSettings(
     }
   }
 
-  return Object.keys(out).length > 0 ? out : undefined;
+  const result = Object.keys(out).length > 0 ? out : undefined;
+  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+  console.log('[buildGlobalTableSettings] result:', result);
+  if (result) {
+    console.log('[buildGlobalTableSettings] result.rowSubTotalsValueFormat:', result.rowSubTotalsValueFormat);
+    console.log('[buildGlobalTableSettings] result.columnTotalsValueFormat:', result.columnTotalsValueFormat);
+  }
+  return result;
 }
 
 
@@ -705,6 +712,12 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
   const normalizedGlobalTableSettings = buildGlobalTableSettings(
     rawFormData as unknown as Record<string, unknown>,
   );
+  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+  console.log('[transformProps] normalizedGlobalTableSettings:', normalizedGlobalTableSettings);
+  if (normalizedGlobalTableSettings) {
+    console.log('[transformProps] rowSubTotalsValueFormat:', normalizedGlobalTableSettings.rowSubTotalsValueFormat);
+    console.log('[transformProps] columnTotalsValueFormat:', normalizedGlobalTableSettings.columnTotalsValueFormat);
+  }
 
   return {
     width,
