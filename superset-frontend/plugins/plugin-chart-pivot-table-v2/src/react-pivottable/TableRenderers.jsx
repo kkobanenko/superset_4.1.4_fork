@@ -799,7 +799,7 @@ export class TableRenderer extends Component {
       attrIdx === 0 && rowTotals ? (
         <th
           key="total"
-          className="pvtTotalLabel"
+          className="pvtTotalLabel pvtColTotalLabel"
           rowSpan={colAttrs.length + Math.min(rowAttrs.length, 1)}
           role="columnheader button"
           ref={rowTotalsLabelStyleRef}
