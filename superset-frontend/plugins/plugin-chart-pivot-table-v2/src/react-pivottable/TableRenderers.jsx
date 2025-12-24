@@ -1157,12 +1157,25 @@ export class TableRenderer extends Component {
         agg.format(aggValue),
         globalTableSettings?.rowTotalsValueFormat,
       );
+      // Объединяем ref callback со стилями padding
+      const totalCellRef = totalStyleRef
+        ? (element) => {
+            if (element) {
+              element.style.padding = '5px';
+              totalStyleRef(element);
+            }
+          }
+        : (element) => {
+            if (element) {
+              element.style.padding = '5px';
+            }
+          };
       totalCell = (
         <td
           role="gridcell"
           key="total"
           className="pvtTotal"
-          ref={totalStyleRef}
+          ref={totalCellRef}
           onClick={rowTotalCallbacks[flatRowKey]}
           onContextMenu={e => this.props.onContextMenu(e, undefined, rowKey)}
         >
@@ -1241,15 +1254,28 @@ export class TableRenderer extends Component {
         globalTableSettings?.columnTotalsValueFormat,
       );
 
+      // Объединяем ref callback со стилями padding
+      const combinedRef = totalRowStyleRef
+        ? (element) => {
+            if (element) {
+              element.style.padding = '5px';
+              totalRowStyleRef(element);
+            }
+          }
+        : (element) => {
+            if (element) {
+              element.style.padding = '5px';
+            }
+          };
+
       return (
         <td
           role="gridcell"
           className="pvtTotal pvtRowTotal"
           key={`total-${flatColKey}`}
-          ref={totalRowStyleRef}
+          ref={combinedRef}
           onClick={colTotalCallbacks[flatColKey]}
           onContextMenu={e => this.props.onContextMenu(e, colKey, undefined)}
-          style={{ padding: '5px' }}
         >
           {displayCell(totalRowFormattedValue, this.props.allowRenderHtml)}
         </td>
@@ -1268,12 +1294,25 @@ export class TableRenderer extends Component {
         agg.format(aggValue),
         globalTableSettings?.columnTotalsValueFormat,
       );
+      // Объединяем ref callback со стилями padding
+      const grandTotalRef = grandTotalStyleRef
+        ? (element) => {
+            if (element) {
+              element.style.padding = '5px';
+              grandTotalStyleRef(element);
+            }
+          }
+        : (element) => {
+            if (element) {
+              element.style.padding = '5px';
+            }
+          };
       grandTotalCell = (
         <td
           role="gridcell"
           key="total"
           className="pvtGrandTotal pvtRowTotal"
-          ref={grandTotalStyleRef}
+          ref={grandTotalRef}
           onClick={grandTotalCallback}
           onContextMenu={e => this.props.onContextMenu(e, undefined, undefined)}
         >
