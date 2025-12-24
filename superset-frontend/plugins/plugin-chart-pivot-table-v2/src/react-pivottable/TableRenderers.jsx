@@ -268,12 +268,16 @@ export class TableRenderer extends Component {
   }
 
   // Стиль для value-ячеек totals/subtotals (без maxWidth/truncate).
+  // Возвращает объект стилей для использования в style={}
   buildValueCellStyle(formatSettings) {
     const style = {};
     if (!formatSettings || typeof formatSettings !== 'object') {
       return style;
     }
     if (formatSettings.fontSize) {
+      // Используем setProperty с !important для перезаписи CSS правил с !important
+      // В React нужно использовать строку стилей или установить через setProperty
+      // Для inline стилей используем объект, но для !important нужен другой подход
       style.fontSize = `${formatSettings.fontSize}px`;
     }
     if (formatSettings.fontColor) {
@@ -283,6 +287,26 @@ export class TableRenderer extends Component {
       style.backgroundColor = formatSettings.backgroundColor;
     }
     return style;
+  }
+
+  // Создает ref callback для установки стилей с !important
+  buildValueCellStyleRef(formatSettings) {
+    if (!formatSettings || typeof formatSettings !== 'object') {
+      return null;
+    }
+    return (element) => {
+      if (element) {
+        if (formatSettings.fontSize) {
+          element.style.setProperty('font-size', `${formatSettings.fontSize}px`, 'important');
+        }
+        if (formatSettings.fontColor) {
+          element.style.setProperty('color', formatSettings.fontColor, 'important');
+        }
+        if (formatSettings.backgroundColor) {
+          element.style.setProperty('background-color', formatSettings.backgroundColor, 'important');
+        }
+      }
+    };
   }
 
   // Форматировать значение заголовка (row/col) с учетом per-field настроек.
@@ -981,9 +1005,9 @@ export class TableRenderer extends Component {
       t('Subtotal');
     // Для заголовка строки подытога применяем глобальный стиль rowSubTotalsValueFormat,
     // чтобы настройки шрифта и цветов были заметны не только в числовых ячейках.
-    const rowSubtotalLabelStyle = globalTableSettings?.rowSubTotalsValueFormat
-      ? this.buildValueCellStyle(globalTableSettings.rowSubTotalsValueFormat)
-      : {};
+    const rowSubtotalLabelStyleRef = globalTableSettings?.rowSubTotalsValueFormat
+      ? this.buildValueCellStyleRef(globalTableSettings.rowSubTotalsValueFormat)
+      : null;
     const attrValuePaddingCell =
       rowKey.length < rowAttrs.length ? (
         <th
@@ -992,7 +1016,7 @@ export class TableRenderer extends Component {
           colSpan={rowAttrs.length - rowKey.length + colIncrSpan}
           rowSpan={1}
           role="columnheader button"
-          style={rowSubtotalLabelStyle}
+          ref={rowSubtotalLabelStyleRef}
           onClick={this.clickHeaderHandler(
             pivotData,
             rowKey,
@@ -1154,9 +1178,9 @@ export class TableRenderer extends Component {
       });
     // Для заголовка строки итогов по колонкам используем columnTotalsValueFormat,
     // чтобы настройки форматирования были едины для заголовка и значений.
-    const colTotalsLabelStyle = globalTableSettings?.columnTotalsValueFormat
-      ? this.buildValueCellStyle(globalTableSettings.columnTotalsValueFormat)
-      : {};
+    const colTotalsLabelStyleRef = globalTableSettings?.columnTotalsValueFormat
+      ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
+      : null;
 
     const totalLabelCell = (
       <th
@@ -1164,7 +1188,7 @@ export class TableRenderer extends Component {
         className="pvtTotalLabel pvtRowTotalLabel"
         colSpan={rowAttrs.length + Math.min(colAttrs.length, 1)}
         role="columnheader button"
-        style={colTotalsLabelStyle}
+        ref={colTotalsLabelStyleRef}
         onClick={this.clickHeaderHandler(
           pivotData,
           [],

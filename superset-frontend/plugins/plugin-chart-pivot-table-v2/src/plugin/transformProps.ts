@@ -168,14 +168,7 @@ function buildGlobalTableSettings(
   formData: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {};
-  
-  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-  console.log('[buildGlobalTableSettings] formData.globalTableSettings:', formData.globalTableSettings);
-  console.log('[buildGlobalTableSettings] formData flat keys:', {
-    rowSubTotalsFontSize: formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'],
-    columnTotalsFontSize: formData['globalTableSettings.columnTotalsValueFormat.fontSize'],
-  });
-  
+
   // Сначала пробуем взять из уже собранного объекта и нормализовать его
   const existing = formData.globalTableSettings;
   if (existing && typeof existing === 'object') {
@@ -334,14 +327,7 @@ function buildGlobalTableSettings(
     }
   }
 
-  const result = Object.keys(out).length > 0 ? out : undefined;
-  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-  console.log('[buildGlobalTableSettings] result:', result);
-  if (result) {
-    console.log('[buildGlobalTableSettings] result.rowSubTotalsValueFormat:', result.rowSubTotalsValueFormat);
-    console.log('[buildGlobalTableSettings] result.columnTotalsValueFormat:', result.columnTotalsValueFormat);
-  }
-  return result;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 
@@ -612,12 +598,6 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     theme,
   } = chartProps;
   const { data, colnames, coltypes } = queriesData[0];
-  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-  console.log('[transformProps] rawFormData.globalTableSettings:', rawFormData.globalTableSettings);
-  console.log('[transformProps] rawFormData flat keys:', {
-    rowSubTotalsFontSize: rawFormData['globalTableSettings.rowSubTotalsValueFormat.fontSize'],
-    columnTotalsFontSize: rawFormData['globalTableSettings.columnTotalsValueFormat.fontSize'],
-  });
   // Важно: chartProps.formData типизирован, но в рантайме/в generic типах Superset
   // это может быть PlainObject, поэтому работаем через "typedFormData".
   const typedFormData = chartProps.formData as unknown as PivotTableV2QueryFormData;
@@ -712,12 +692,6 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
   const normalizedGlobalTableSettings = buildGlobalTableSettings(
     rawFormData as unknown as Record<string, unknown>,
   );
-  // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-  console.log('[transformProps] normalizedGlobalTableSettings:', normalizedGlobalTableSettings);
-  if (normalizedGlobalTableSettings) {
-    console.log('[transformProps] rowSubTotalsValueFormat:', normalizedGlobalTableSettings.rowSubTotalsValueFormat);
-    console.log('[transformProps] columnTotalsValueFormat:', normalizedGlobalTableSettings.columnTotalsValueFormat);
-  }
 
   return {
     width,
