@@ -2526,6 +2526,113 @@ const config: ControlPanelConfig = {
       }
     }
     
+    // Синхронизируем globalTableSettings из вложенного объекта обратно в плоские ключи
+    // Это нужно для правильной загрузки настроек при открытии чарта с дашборда
+    const globalTableSettings = formData.globalTableSettings;
+    if (globalTableSettings && typeof globalTableSettings === 'object') {
+      const gts = globalTableSettings as Record<string, unknown>;
+      
+      // Синхронизируем rowTotalsValueFormat
+      if (gts.rowTotalsValueFormat && typeof gts.rowTotalsValueFormat === 'object') {
+        const rtvf = gts.rowTotalsValueFormat as Record<string, unknown>;
+        if (rtvf.valueFormat !== undefined) {
+          resultFormData['globalTableSettings.rowTotalsValueFormat.valueFormat'] = rtvf.valueFormat;
+        }
+        if (rtvf.dateFormat !== undefined) {
+          resultFormData['globalTableSettings.rowTotalsValueFormat.dateFormat'] = rtvf.dateFormat;
+        }
+        if (rtvf.fontSize !== undefined) {
+          resultFormData['globalTableSettings.rowTotalsValueFormat.fontSize'] = rtvf.fontSize;
+        }
+        if (rtvf.fontColor !== undefined) {
+          resultFormData['globalTableSettings.rowTotalsValueFormat.fontColor'] = rtvf.fontColor;
+        }
+        if (rtvf.backgroundColor !== undefined) {
+          resultFormData['globalTableSettings.rowTotalsValueFormat.backgroundColor'] = rtvf.backgroundColor;
+        }
+      }
+      
+      // Синхронизируем rowSubTotalsValueFormat
+      if (gts.rowSubTotalsValueFormat && typeof gts.rowSubTotalsValueFormat === 'object') {
+        const rstvf = gts.rowSubTotalsValueFormat as Record<string, unknown>;
+        if (rstvf.valueFormat !== undefined) {
+          resultFormData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'] = rstvf.valueFormat;
+        }
+        if (rstvf.dateFormat !== undefined) {
+          resultFormData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'] = rstvf.dateFormat;
+        }
+        if (rstvf.fontSize !== undefined) {
+          resultFormData['globalTableSettings.rowSubTotalsValueFormat.fontSize'] = rstvf.fontSize;
+        }
+        if (rstvf.fontColor !== undefined) {
+          resultFormData['globalTableSettings.rowSubTotalsValueFormat.fontColor'] = rstvf.fontColor;
+        }
+        if (rstvf.backgroundColor !== undefined) {
+          resultFormData['globalTableSettings.rowSubTotalsValueFormat.backgroundColor'] = rstvf.backgroundColor;
+        }
+      }
+      
+      // Синхронизируем columnTotalsValueFormat
+      if (gts.columnTotalsValueFormat && typeof gts.columnTotalsValueFormat === 'object') {
+        const ctvf = gts.columnTotalsValueFormat as Record<string, unknown>;
+        if (ctvf.valueFormat !== undefined) {
+          resultFormData['globalTableSettings.columnTotalsValueFormat.valueFormat'] = ctvf.valueFormat;
+        }
+        if (ctvf.dateFormat !== undefined) {
+          resultFormData['globalTableSettings.columnTotalsValueFormat.dateFormat'] = ctvf.dateFormat;
+        }
+        if (ctvf.fontSize !== undefined) {
+          resultFormData['globalTableSettings.columnTotalsValueFormat.fontSize'] = ctvf.fontSize;
+        }
+        if (ctvf.fontColor !== undefined) {
+          resultFormData['globalTableSettings.columnTotalsValueFormat.fontColor'] = ctvf.fontColor;
+        }
+        if (ctvf.backgroundColor !== undefined) {
+          resultFormData['globalTableSettings.columnTotalsValueFormat.backgroundColor'] = ctvf.backgroundColor;
+        }
+      }
+      
+      // Синхронизируем colSubTotalsValueFormat
+      if (gts.colSubTotalsValueFormat && typeof gts.colSubTotalsValueFormat === 'object') {
+        const cstvf = gts.colSubTotalsValueFormat as Record<string, unknown>;
+        if (cstvf.valueFormat !== undefined) {
+          resultFormData['globalTableSettings.colSubTotalsValueFormat.valueFormat'] = cstvf.valueFormat;
+        }
+        if (cstvf.dateFormat !== undefined) {
+          resultFormData['globalTableSettings.colSubTotalsValueFormat.dateFormat'] = cstvf.dateFormat;
+        }
+        if (cstvf.fontSize !== undefined) {
+          resultFormData['globalTableSettings.colSubTotalsValueFormat.fontSize'] = cstvf.fontSize;
+        }
+        if (cstvf.fontColor !== undefined) {
+          resultFormData['globalTableSettings.colSubTotalsValueFormat.fontColor'] = cstvf.fontColor;
+        }
+        if (cstvf.backgroundColor !== undefined) {
+          resultFormData['globalTableSettings.colSubTotalsValueFormat.backgroundColor'] = cstvf.backgroundColor;
+        }
+      }
+      
+      // Синхронизируем другие поля
+      if (gts.rowTotalsLabel !== undefined) {
+        resultFormData['globalTableSettings.rowTotalsLabel'] = gts.rowTotalsLabel;
+      }
+      if (gts.rowTotalsPosition !== undefined) {
+        resultFormData['globalTableSettings.rowTotalsPosition'] = gts.rowTotalsPosition;
+      }
+      if (gts.rowSubTotalsLabel !== undefined) {
+        resultFormData['globalTableSettings.rowSubTotalsLabel'] = gts.rowSubTotalsLabel;
+      }
+      if (gts.columnTotalsLabel !== undefined) {
+        resultFormData['globalTableSettings.columnTotalsLabel'] = gts.columnTotalsLabel;
+      }
+      if (gts.columnTotalsPosition !== undefined) {
+        resultFormData['globalTableSettings.columnTotalsPosition'] = gts.columnTotalsPosition;
+      }
+      if (gts.colSubTotalsLabel !== undefined) {
+        resultFormData['globalTableSettings.colSubTotalsLabel'] = gts.colSubTotalsLabel;
+      }
+    }
+    
     return resultFormData;
   },
 };
