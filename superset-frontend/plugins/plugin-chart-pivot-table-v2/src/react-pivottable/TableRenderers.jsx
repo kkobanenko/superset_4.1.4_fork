@@ -1216,9 +1216,13 @@ export class TableRenderer extends Component {
       });
     // Для заголовка строки итогов по колонкам используем columnTotalsValueFormat,
     // чтобы настройки форматирования были едины для заголовка и значений.
+    // Если columnTotalsValueFormat не задан, но есть rowTotalsValueFormat, используем его
+    // для совместимости со старыми настройками
     const colTotalsLabelStyleRef = globalTableSettings?.columnTotalsValueFormat
       ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
-      : null;
+      : globalTableSettings?.rowTotalsValueFormat
+        ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
+        : null;
 
     const totalLabelCell = (
       <th
