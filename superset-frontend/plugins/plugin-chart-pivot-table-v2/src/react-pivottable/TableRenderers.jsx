@@ -754,6 +754,10 @@ export class TableRenderer extends Component {
           globalTableSettings?.colSubTotalsLabel ||
           fieldSettings?.subtotalLabel ||
           t('Subtotal');
+        // Применяем стили форматирования для colSubTotals
+        const colSubtotalLabelStyleRef = globalTableSettings?.colSubTotalsValueFormat
+          ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
+          : null;
         attrValueCells.push(
           <th
             className={`${colLabelClass} pvtSubtotalLabel`}
@@ -761,6 +765,7 @@ export class TableRenderer extends Component {
             colSpan={colSpan}
             rowSpan={rowSpan}
             role="columnheader button"
+            ref={colSubtotalLabelStyleRef}
             onClick={this.clickHeaderHandler(
               pivotData,
               colKey,
@@ -787,9 +792,9 @@ export class TableRenderer extends Component {
       });
     // Применяем те же настройки форматирования, что и к значениям total по строкам,
     // чтобы шрифт/цвет/фон были согласованы у заголовка и ячеек.
-    const rowTotalsLabelStyle = globalTableSettings?.rowTotalsValueFormat
-      ? this.buildValueCellStyle(globalTableSettings.rowTotalsValueFormat)
-      : {};
+    const rowTotalsLabelStyleRef = globalTableSettings?.rowTotalsValueFormat
+      ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
+      : null;
     const totalCell =
       attrIdx === 0 && rowTotals ? (
         <th
@@ -797,7 +802,7 @@ export class TableRenderer extends Component {
           className="pvtTotalLabel"
           rowSpan={colAttrs.length + Math.min(rowAttrs.length, 1)}
           role="columnheader button"
-          style={rowTotalsLabelStyle}
+          ref={rowTotalsLabelStyleRef}
           onClick={this.clickHeaderHandler(
             pivotData,
             [],
@@ -1077,17 +1082,26 @@ export class TableRenderer extends Component {
         : {};
       
       // Объединяем стили: сначала стили форматирования, затем цвет фона из formatter
+      // Создаем ref callback для применения стилей с !important для totals/subtotals
+      const rowSubtotalStyleRef = isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat
+        ? this.buildValueCellStyleRef(globalTableSettings.rowSubTotalsValueFormat)
+        : null;
+      const colSubtotalStyleRef = isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
+        ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
+        : null;
+      // Объединяем ref callbacks, если оба присутствуют
+      const combinedStyleRef = rowSubtotalStyleRef && colSubtotalStyleRef
+        ? (element) => {
+            rowSubtotalStyleRef(element);
+            colSubtotalStyleRef(element);
+          }
+        : rowSubtotalStyleRef || colSubtotalStyleRef;
+
       const finalStyle = {
         ...cellStyle,
         ...metricValueStyle,
         ...(agg.isSubtotal ? { fontWeight: 'bold' } : {}),
         ...(backgroundColor ? { backgroundColor } : {}),
-        ...(isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat
-          ? this.buildValueCellStyle(globalTableSettings.rowSubTotalsValueFormat)
-          : {}),
-        ...(isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
-          ? this.buildValueCellStyle(globalTableSettings.colSubTotalsValueFormat)
-          : {}),
       };
 
       const formattedByAgg = agg.format(aggValue);
@@ -1111,6 +1125,7 @@ export class TableRenderer extends Component {
           role="gridcell"
           className="pvtVal"
           key={`pvtVal-${flatColKey}`}
+          ref={combinedStyleRef}
           onClick={rowClickHandlers[flatColKey]}
           onContextMenu={e => this.props.onContextMenu(e, colKey, rowKey)}
           style={finalStyle}
@@ -1124,9 +1139,9 @@ export class TableRenderer extends Component {
     if (rowTotals) {
       const agg = pivotData.getAggregator(rowKey, []);
       const aggValue = agg.value();
-      const totalStyle = globalTableSettings?.rowTotalsValueFormat
-        ? this.buildValueCellStyle(globalTableSettings.rowTotalsValueFormat)
-        : {};
+      const totalStyleRef = globalTableSettings?.rowTotalsValueFormat
+        ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
+        : null;
       const totalFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
@@ -1137,9 +1152,9 @@ export class TableRenderer extends Component {
           role="gridcell"
           key="total"
           className="pvtTotal"
+          ref={totalStyleRef}
           onClick={rowTotalCallbacks[flatRowKey]}
           onContextMenu={e => this.props.onContextMenu(e, undefined, rowKey)}
-          style={totalStyle}
         >
           {displayCell(totalFormattedValue, allowRenderHtml)}
         </td>
@@ -1207,9 +1222,9 @@ export class TableRenderer extends Component {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator([], colKey);
       const aggValue = agg.value();
-      const totalRowStyle = globalTableSettings?.columnTotalsValueFormat
-        ? this.buildValueCellStyle(globalTableSettings.columnTotalsValueFormat)
-        : {};
+      const totalRowStyleRef = globalTableSettings?.columnTotalsValueFormat
+        ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
+        : null;
       const totalRowFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
@@ -1221,9 +1236,10 @@ export class TableRenderer extends Component {
           role="gridcell"
           className="pvtTotal pvtRowTotal"
           key={`total-${flatColKey}`}
+          ref={totalRowStyleRef}
           onClick={colTotalCallbacks[flatColKey]}
           onContextMenu={e => this.props.onContextMenu(e, colKey, undefined)}
-          style={{ padding: '5px', ...totalRowStyle }}
+          style={{ padding: '5px' }}
         >
           {displayCell(totalRowFormattedValue, this.props.allowRenderHtml)}
         </td>
@@ -1234,9 +1250,9 @@ export class TableRenderer extends Component {
     if (rowTotals) {
       const agg = pivotData.getAggregator([], []);
       const aggValue = agg.value();
-      const grandTotalStyle = globalTableSettings?.columnTotalsValueFormat
-        ? this.buildValueCellStyle(globalTableSettings.columnTotalsValueFormat)
-        : {};
+      const grandTotalStyleRef = globalTableSettings?.columnTotalsValueFormat
+        ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
+        : null;
       const grandTotalFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
@@ -1247,9 +1263,9 @@ export class TableRenderer extends Component {
           role="gridcell"
           key="total"
           className="pvtGrandTotal pvtRowTotal"
+          ref={grandTotalStyleRef}
           onClick={grandTotalCallback}
           onContextMenu={e => this.props.onContextMenu(e, undefined, undefined)}
-          style={grandTotalStyle}
         >
           {displayCell(grandTotalFormattedValue, this.props.allowRenderHtml)}
         </td>
