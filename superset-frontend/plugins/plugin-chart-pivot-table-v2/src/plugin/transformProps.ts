@@ -177,17 +177,22 @@ function buildGlobalTableSettings(
     Object.assign(out, existingObj);
     
     // Нормализуем ValueFormat объекты
+    // ВАЖНО: всегда нормализуем, даже если результат undefined - это гарантирует правильную обработку fontSize
     if (existingObj.rowTotalsValueFormat) {
-      out.rowTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.rowTotalsValueFormat) || existingObj.rowTotalsValueFormat;
+      const normalized = normalizeValueCellFormatSettings(existingObj.rowTotalsValueFormat);
+      out.rowTotalsValueFormat = normalized !== undefined ? normalized : existingObj.rowTotalsValueFormat;
     }
     if (existingObj.columnTotalsValueFormat) {
-      out.columnTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.columnTotalsValueFormat) || existingObj.columnTotalsValueFormat;
+      const normalized = normalizeValueCellFormatSettings(existingObj.columnTotalsValueFormat);
+      out.columnTotalsValueFormat = normalized !== undefined ? normalized : existingObj.columnTotalsValueFormat;
     }
     if (existingObj.rowSubTotalsValueFormat) {
-      out.rowSubTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.rowSubTotalsValueFormat) || existingObj.rowSubTotalsValueFormat;
+      const normalized = normalizeValueCellFormatSettings(existingObj.rowSubTotalsValueFormat);
+      out.rowSubTotalsValueFormat = normalized !== undefined ? normalized : existingObj.rowSubTotalsValueFormat;
     }
     if (existingObj.colSubTotalsValueFormat) {
-      out.colSubTotalsValueFormat = normalizeValueCellFormatSettings(existingObj.colSubTotalsValueFormat) || existingObj.colSubTotalsValueFormat;
+      const normalized = normalizeValueCellFormatSettings(existingObj.colSubTotalsValueFormat);
+      out.colSubTotalsValueFormat = normalized !== undefined ? normalized : existingObj.colSubTotalsValueFormat;
     }
   }
 
