@@ -439,8 +439,8 @@ export class TableRenderer extends Component {
     const rowAttrs = this.props.rows || [];
     
     // Определяем тип поля (колонка или строка)
-    const isColumn = colAttrs.includes(attrName);
-    const isRow = rowAttrs.includes(attrName);
+    const isColumn = colAttrs.indexOf(attrName) !== -1;
+    const isRow = rowAttrs.indexOf(attrName) !== -1;
     
     // Используем правильные настройки в зависимости от типа поля
     const normalized = {
@@ -471,8 +471,8 @@ export class TableRenderer extends Component {
     const rowAttrs = this.props.rows || [];
     
     // Определяем тип поля (колонка или строка)
-    const isColumn = colAttrs.includes(attrName);
-    const isRow = rowAttrs.includes(attrName);
+    const isColumn = colAttrs.indexOf(attrName) !== -1;
+    const isRow = rowAttrs.indexOf(attrName) !== -1;
     
     // Используем правильные настройки в зависимости от типа поля
     const normalized = {
@@ -754,7 +754,7 @@ export class TableRenderer extends Component {
     const fieldSettings = this.getFieldSettings(attrName);
     // Используем правильные настройки для заголовков колонок
     const colAttrs = this.props.cols || [];
-    const isColumn = colAttrs.includes(attrName);
+    const isColumn = colAttrs.indexOf(attrName) !== -1;
     const headerFieldSettings = isColumn
       ? {
           fontSize: fieldSettings.columnHeaderFontSize ?? fieldSettings.fontSize,
@@ -838,7 +838,7 @@ export class TableRenderer extends Component {
         // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
         // Для колонок используем columnHeaderFontSize, columnHeaderFontColor, columnHeaderBackgroundColor
         const colAttrsLocal = this.props.cols || [];
-        const isColumnField = colAttrsLocal.includes(attrName);
+        const isColumnField = colAttrsLocal.indexOf(attrName) !== -1;
         const valueHeaderFieldSettings = metricKey &&
           attrName === metricKey &&
           (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
@@ -1007,7 +1007,7 @@ export class TableRenderer extends Component {
           const rowHeaderFieldSettings = this.getFieldSettings(r);
           // Используем правильные настройки для заголовков строк
           const rowAttrsLocal = this.props.rows || [];
-          const isRow = rowAttrsLocal.includes(r);
+          const isRow = rowAttrsLocal.indexOf(r) !== -1;
           const normalizedRowHeaderFieldSettings = isRow
             ? {
                 fontSize: rowHeaderFieldSettings.rowHeaderFontSize ?? rowHeaderFieldSettings.fontSize,
@@ -1151,7 +1151,7 @@ export class TableRenderer extends Component {
         // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
         // Для строк используем rowHeaderFontSize, rowHeaderFontColor, rowHeaderBackgroundColor
         const rowAttrsLocal = this.props.rows || [];
-        const isRowField = rowAttrsLocal.includes(rowAttrs[i]);
+        const isRowField = rowAttrsLocal.indexOf(rowAttrs[i]) !== -1;
         const rowValueHeaderFieldSettings = (typeof r === 'string' || typeof r === 'number')
           ? {
               fontSize: rowValueHeaderFieldSettingsRaw.metricHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
@@ -1310,8 +1310,8 @@ export class TableRenderer extends Component {
       const cellFieldSettings = cellAttrName ? this.getFieldSettings(cellAttrName) : {};
       const colAttrsLocal = this.props.cols || [];
       const rowAttrsLocal = this.props.rows || [];
-      const isColumnField = cellAttrName && colAttrsLocal.includes(cellAttrName);
-      const isRowField = cellAttrName && rowAttrsLocal.includes(cellAttrName);
+      const isColumnField = cellAttrName && colAttrsLocal.indexOf(cellAttrName) !== -1;
+      const isRowField = cellAttrName && rowAttrsLocal.indexOf(cellAttrName) !== -1;
       const normalizedCellFieldSettings = cellAttrName
         ? (isColumnField
             ? {
