@@ -1150,7 +1150,7 @@ export class TableRenderer extends Component {
           ? this.getFieldSettings(String(r))
           : this.getFieldSettings(rowAttrs[i]);
         // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
-        // Для строк используем rowHeaderFontSize, rowHeaderFontColor, rowHeaderBackgroundColor
+        // Для строк используем rowValueFontSize, rowValueFontColor, rowValueBackgroundColor (это значения строк, не заголовки)
         const rowAttrsLocal = this.props.rows || [];
         const isRowField = rowAttrsLocal.indexOf(rowAttrs[i]) !== -1;
         const rowValueHeaderFieldSettings = (typeof r === 'string' || typeof r === 'number')
@@ -1163,11 +1163,10 @@ export class TableRenderer extends Component {
             }
           : isRowField
           ? {
-              fontSize: rowValueHeaderFieldSettingsRaw.rowHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
-              fontColor: rowValueHeaderFieldSettingsRaw.rowHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
-              backgroundColor: rowValueHeaderFieldSettingsRaw.rowHeaderBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
-              maxWidth: rowValueHeaderFieldSettingsRaw.maxWidth,
-              truncate: rowValueHeaderFieldSettingsRaw.truncate,
+              ...rowValueHeaderFieldSettingsRaw,
+              fontSize: rowValueHeaderFieldSettingsRaw.rowValueFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
+              fontColor: rowValueHeaderFieldSettingsRaw.rowValueFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
+              backgroundColor: rowValueHeaderFieldSettingsRaw.rowValueBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
             }
           : rowValueHeaderFieldSettingsRaw;
         const rowValueHeaderStyleRef = this.buildFieldStyleRef(rowValueHeaderFieldSettings, true);
