@@ -389,13 +389,193 @@ function buildEffectiveFieldGroupingSettings(
       ? (baseSettingsRaw as Record<string, Record<string, unknown>>)
       : {}) || {};
 
-  // Копируем, чтобы не мутировать исходный объект из formData
-  const merged: Record<string, Record<string, unknown>> = { ...baseSettings };
+  // Нормализуем настройки из сохраненного объекта fieldGroupingSettings
+  // (аналогично тому, как это делается для globalTableSettings)
+  const normalizedBaseSettings: Record<string, Record<string, unknown>> = {};
+  for (const [fieldName, fieldSettings] of Object.entries(baseSettings)) {
+    if (!fieldSettings || typeof fieldSettings !== 'object') {
+      continue;
+    }
+    const normalized: Record<string, unknown> = { ...fieldSettings };
+    
+    // Нормализуем fontSize (может быть строкой из NumberControl)
+    if (normalized.fontSize !== undefined) {
+      const fontSizeValue = normalized.fontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.fontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.fontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем metricHeaderFontSize
+    if (normalized.metricHeaderFontSize !== undefined) {
+      const fontSizeValue = normalized.metricHeaderFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.metricHeaderFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.metricHeaderFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем metricValueFontSize
+    if (normalized.metricValueFontSize !== undefined) {
+      const fontSizeValue = normalized.metricValueFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.metricValueFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.metricValueFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем fontColor и backgroundColor (преобразуем в CSS цвет)
+    if (normalized.fontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.fontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.fontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.backgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.backgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.backgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.metricHeaderFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.metricHeaderFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.metricHeaderFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.metricHeaderBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.metricHeaderBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.metricHeaderBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.metricValueFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.metricValueFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.metricValueFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.metricValueBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.metricValueBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.metricValueBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    normalizedBaseSettings[fieldName] = normalized;
+  }
+
+  // Копируем нормализованные настройки
+  const merged: Record<string, Record<string, unknown>> = { ...normalizedBaseSettings };
+
+  // Собираем настройки из плоских ключей formData (перезаписывает значения из сохраненного объекта)
+  // Это нужно для того, чтобы настройки правильно применялись при загрузке чарта в дашборде
+  const fd = formData;
+  
+  // Получаем список всех полей из groupbyRows, groupbyColumns и metrics
+  const allFields: string[] = [];
+  const groupbyRows = Array.isArray(fd.groupbyRows) ? fd.groupbyRows : [];
+  const groupbyColumns = Array.isArray(fd.groupbyColumns) ? fd.groupbyColumns : [];
+  const metrics = Array.isArray(fd.metrics) ? fd.metrics : [];
+  
+  // Добавляем поля из rows и columns
+  for (const field of [...groupbyRows, ...groupbyColumns]) {
+    if (typeof field === 'string' && field.length > 0) {
+      allFields.push(field);
+    }
+  }
+  
+  // Добавляем метрики
+  for (const metric of metrics) {
+    const metricLabel = getMetricLabel(metric);
+    if (metricLabel) {
+      allFields.push(metricLabel);
+    }
+  }
+  
+  // Собираем настройки из плоских ключей для каждого поля
+  for (const fieldName of allFields) {
+    if (!merged[fieldName]) {
+      merged[fieldName] = {};
+    }
+    
+    // Собираем настройки из плоских ключей
+    const flatKeys = [
+      'maxWidth',
+      'truncate',
+      'headerSort',
+      'subtotalEnabled',
+      'subtotalLabel',
+      'subtotalAggregation',
+      'cellValueType',
+      'percentageType',
+      'valueFormat',
+      'dateFormat',
+      'fontSize',
+      'fontColor',
+      'backgroundColor',
+      'metricHeaderFontSize',
+      'metricHeaderFontColor',
+      'metricHeaderBackgroundColor',
+      'metricValueFontSize',
+      'metricValueFontColor',
+      'metricValueBackgroundColor',
+      'metricAggregationFunction',
+    ];
+    
+    for (const key of flatKeys) {
+      const flatKey = `fieldGroupingSettings.${fieldName}.${key}`;
+      const value = fd[flatKey];
+      if (value !== undefined && value !== null) {
+        // Нормализуем fontSize (может быть строкой из NumberControl)
+        if (key === 'fontSize' || key === 'metricHeaderFontSize' || key === 'metricValueFontSize') {
+          if (typeof value === 'string' && value.length > 0) {
+            const parsed = Number.parseFloat(value);
+            if (!Number.isNaN(parsed)) {
+              merged[fieldName][key] = parsed;
+            }
+          } else if (typeof value === 'number') {
+            merged[fieldName][key] = value;
+          }
+        }
+        // Нормализуем цвета (преобразуем в CSS цвет)
+        else if (key === 'fontColor' || key === 'backgroundColor' || 
+                 key === 'metricHeaderFontColor' || key === 'metricHeaderBackgroundColor' ||
+                 key === 'metricValueFontColor' || key === 'metricValueBackgroundColor') {
+          const colorCss = toCssColor(value);
+          if (typeof colorCss === 'string') {
+            merged[fieldName][key] = colorCss;
+          }
+        }
+        // Остальные настройки копируем как есть
+        else {
+          merged[fieldName][key] = value;
+        }
+      }
+    }
+  }
 
   // Достаём динамические значения из formData по строковым ключам.
   // Здесь intentionally используем Record<string, unknown>, чтобы не плодить any,
   // но при этом иметь доступ к динамическим полям.
-  const fd = formData;
 
   function normalizeMetricAggregateToPivotAggregator(value: unknown): string | undefined {
     if (typeof value !== 'string' || value.length === 0) {
