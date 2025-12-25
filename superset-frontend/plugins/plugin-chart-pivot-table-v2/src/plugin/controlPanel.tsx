@@ -1674,6 +1674,852 @@ const config: ControlPanelConfig = {
                   },
                 },
               ],
+              // Column/Row-specific header and value formatting
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_columnHeaderFontSize`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Column header font size (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font size for column header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                      const columnLabels = groupbyColumns
+                        .map((c: QueryFormColumn) => getColumnLabel(c))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'columnHeaderFontSize' in fieldSettings && fieldSettings.columnHeaderFontSize !== undefined)
+                          ? fieldSettings.columnHeaderFontSize
+                          : fieldSettings.fontSize,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_columnHeaderFontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Column header font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color for column header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                      const columnLabels = groupbyColumns
+                        .map((c: QueryFormColumn) => getColumnLabel(c))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'columnHeaderFontColor' in fieldSettings && fieldSettings.columnHeaderFontColor !== undefined)
+                          ? fieldSettings.columnHeaderFontColor
+                          : fieldSettings.fontColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_columnHeaderBackgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Column header background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for column header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                      const columnLabels = groupbyColumns
+                        .map((c: QueryFormColumn) => getColumnLabel(c))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'columnHeaderBackgroundColor' in fieldSettings && fieldSettings.columnHeaderBackgroundColor !== undefined)
+                          ? fieldSettings.columnHeaderBackgroundColor
+                          : fieldSettings.backgroundColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_columnValueFontSize`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Column values font size (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font size for column value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                      const columnLabels = groupbyColumns
+                        .map((c: QueryFormColumn) => getColumnLabel(c))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'columnValueFontSize' in fieldSettings && fieldSettings.columnValueFontSize !== undefined)
+                          ? fieldSettings.columnValueFontSize
+                          : fieldSettings.fontSize,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_columnValueFontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Column values font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color for column value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                      const columnLabels = groupbyColumns
+                        .map((c: QueryFormColumn) => getColumnLabel(c))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'columnValueFontColor' in fieldSettings && fieldSettings.columnValueFontColor !== undefined)
+                          ? fieldSettings.columnValueFontColor
+                          : fieldSettings.fontColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_columnValueBackgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Column values background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for column value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
+                      const columnLabels = groupbyColumns
+                        .map((c: QueryFormColumn) => getColumnLabel(c))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'columnValueBackgroundColor' in fieldSettings && fieldSettings.columnValueBackgroundColor !== undefined)
+                          ? fieldSettings.columnValueBackgroundColor
+                          : fieldSettings.backgroundColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              // Row-specific header and value formatting
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_rowHeaderFontSize`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Row header font size (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font size for row header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                      const rowLabels = groupbyRows
+                        .map((r: QueryFormColumn) => getColumnLabel(r))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'rowHeaderFontSize' in fieldSettings && fieldSettings.rowHeaderFontSize !== undefined)
+                          ? fieldSettings.rowHeaderFontSize
+                          : fieldSettings.fontSize,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_rowHeaderFontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Row header font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color for row header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                      const rowLabels = groupbyRows
+                        .map((r: QueryFormColumn) => getColumnLabel(r))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'rowHeaderFontColor' in fieldSettings && fieldSettings.rowHeaderFontColor !== undefined)
+                          ? fieldSettings.rowHeaderFontColor
+                          : fieldSettings.fontColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_rowHeaderBackgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Row header background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for row header cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                      const rowLabels = groupbyRows
+                        .map((r: QueryFormColumn) => getColumnLabel(r))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'rowHeaderBackgroundColor' in fieldSettings && fieldSettings.rowHeaderBackgroundColor !== undefined)
+                          ? fieldSettings.rowHeaderBackgroundColor
+                          : fieldSettings.backgroundColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_rowValueFontSize`,
+                  config: {
+                    type: 'NumberControl',
+                    label: t('Row values font size (px)'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font size for row value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                      const rowLabels = groupbyRows
+                        .map((r: QueryFormColumn) => getColumnLabel(r))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'rowValueFontSize' in fieldSettings && fieldSettings.rowValueFontSize !== undefined)
+                          ? fieldSettings.rowValueFontSize
+                          : fieldSettings.fontSize,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_rowValueFontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Row values font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color for row value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                      const rowLabels = groupbyRows
+                        .map((r: QueryFormColumn) => getColumnLabel(r))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'rowValueFontColor' in fieldSettings && fieldSettings.rowValueFontColor !== undefined)
+                          ? fieldSettings.rowValueFontColor
+                          : fieldSettings.fontColor,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_rowValueBackgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Row values background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for row value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
+                      const rowLabels = groupbyRows
+                        .map((r: QueryFormColumn) => getColumnLabel(r))
+                        .filter((x: string) => x.length > 0);
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls = (state.controls && typeof state.controls === 'object') 
+                        ? state.controls 
+                        : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl = (controls && selectorControlName in controls)
+                        ? controls[selectorControlName]
+                        : undefined;
+                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
+                        ? selectorControl.value
+                        : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl = (controls && 'fieldGroupingSettings' in controls)
+                        ? controls.fieldGroupingSettings
+                        : undefined;
+                      const fieldGroupingSettings = (fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl === 'object' && 'value' in fieldGroupingSettingsControl && typeof fieldGroupingSettingsControl.value === 'object')
+                        ? fieldGroupingSettingsControl.value
+                        : {};
+                      const fieldSettings = (fieldGroupingSettings && selectedField in fieldGroupingSettings && typeof fieldGroupingSettings[selectedField] === 'object')
+                        ? fieldGroupingSettings[selectedField]
+                        : {};
+                      return {
+                        value: (fieldSettings && 'rowValueBackgroundColor' in fieldSettings && fieldSettings.rowValueBackgroundColor !== undefined)
+                          ? fieldSettings.rowValueBackgroundColor
+                          : fieldSettings.backgroundColor,
+                      };
+                    },
+                  },
+                },
+              ],
               // Metric-specific header formatting
               [
                 {
@@ -2354,6 +3200,30 @@ const config: ControlPanelConfig = {
         `field_formatting_field${i}_metricValueFontColor` as keyof typeof formData;
       const metricValueBackgroundColorKey =
         `field_formatting_field${i}_metricValueBackgroundColor` as keyof typeof formData;
+      const columnHeaderFontSizeKey =
+        `field_formatting_field${i}_columnHeaderFontSize` as keyof typeof formData;
+      const columnHeaderFontColorKey =
+        `field_formatting_field${i}_columnHeaderFontColor` as keyof typeof formData;
+      const columnHeaderBackgroundColorKey =
+        `field_formatting_field${i}_columnHeaderBackgroundColor` as keyof typeof formData;
+      const columnValueFontSizeKey =
+        `field_formatting_field${i}_columnValueFontSize` as keyof typeof formData;
+      const columnValueFontColorKey =
+        `field_formatting_field${i}_columnValueFontColor` as keyof typeof formData;
+      const columnValueBackgroundColorKey =
+        `field_formatting_field${i}_columnValueBackgroundColor` as keyof typeof formData;
+      const rowHeaderFontSizeKey =
+        `field_formatting_field${i}_rowHeaderFontSize` as keyof typeof formData;
+      const rowHeaderFontColorKey =
+        `field_formatting_field${i}_rowHeaderFontColor` as keyof typeof formData;
+      const rowHeaderBackgroundColorKey =
+        `field_formatting_field${i}_rowHeaderBackgroundColor` as keyof typeof formData;
+      const rowValueFontSizeKey =
+        `field_formatting_field${i}_rowValueFontSize` as keyof typeof formData;
+      const rowValueFontColorKey =
+        `field_formatting_field${i}_rowValueFontColor` as keyof typeof formData;
+      const rowValueBackgroundColorKey =
+        `field_formatting_field${i}_rowValueBackgroundColor` as keyof typeof formData;
       
       if (formData[maxWidthKey] !== undefined) {
         fieldSettings.maxWidth = formData[maxWidthKey] as number;
@@ -2400,6 +3270,46 @@ const config: ControlPanelConfig = {
       if (formData[metricValueBackgroundColorKey] !== undefined) {
         fieldSettings.metricValueBackgroundColor =
           formData[metricValueBackgroundColorKey] as string;
+      }
+      if (formData[columnHeaderFontSizeKey] !== undefined) {
+        fieldSettings.columnHeaderFontSize = formData[columnHeaderFontSizeKey] as number;
+      }
+      if (formData[columnHeaderFontColorKey] !== undefined) {
+        fieldSettings.columnHeaderFontColor = formData[columnHeaderFontColorKey] as string;
+      }
+      if (formData[columnHeaderBackgroundColorKey] !== undefined) {
+        fieldSettings.columnHeaderBackgroundColor =
+          formData[columnHeaderBackgroundColorKey] as string;
+      }
+      if (formData[columnValueFontSizeKey] !== undefined) {
+        fieldSettings.columnValueFontSize = formData[columnValueFontSizeKey] as number;
+      }
+      if (formData[columnValueFontColorKey] !== undefined) {
+        fieldSettings.columnValueFontColor = formData[columnValueFontColorKey] as string;
+      }
+      if (formData[columnValueBackgroundColorKey] !== undefined) {
+        fieldSettings.columnValueBackgroundColor =
+          formData[columnValueBackgroundColorKey] as string;
+      }
+      if (formData[rowHeaderFontSizeKey] !== undefined) {
+        fieldSettings.rowHeaderFontSize = formData[rowHeaderFontSizeKey] as number;
+      }
+      if (formData[rowHeaderFontColorKey] !== undefined) {
+        fieldSettings.rowHeaderFontColor = formData[rowHeaderFontColorKey] as string;
+      }
+      if (formData[rowHeaderBackgroundColorKey] !== undefined) {
+        fieldSettings.rowHeaderBackgroundColor =
+          formData[rowHeaderBackgroundColorKey] as string;
+      }
+      if (formData[rowValueFontSizeKey] !== undefined) {
+        fieldSettings.rowValueFontSize = formData[rowValueFontSizeKey] as number;
+      }
+      if (formData[rowValueFontColorKey] !== undefined) {
+        fieldSettings.rowValueFontColor = formData[rowValueFontColorKey] as string;
+      }
+      if (formData[rowValueBackgroundColorKey] !== undefined) {
+        fieldSettings.rowValueBackgroundColor =
+          formData[rowValueBackgroundColorKey] as string;
       }
       
       // Сохраняем настройки только если есть хотя бы одно значение
@@ -2448,6 +3358,30 @@ const config: ControlPanelConfig = {
           fieldSettings.metricValueFontColor;
         resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] =
           fieldSettings.metricValueBackgroundColor;
+        resultFormData[`field_formatting_field${i}_columnHeaderFontSize`] =
+          fieldSettings.columnHeaderFontSize;
+        resultFormData[`field_formatting_field${i}_columnHeaderFontColor`] =
+          fieldSettings.columnHeaderFontColor;
+        resultFormData[`field_formatting_field${i}_columnHeaderBackgroundColor`] =
+          fieldSettings.columnHeaderBackgroundColor;
+        resultFormData[`field_formatting_field${i}_columnValueFontSize`] =
+          fieldSettings.columnValueFontSize;
+        resultFormData[`field_formatting_field${i}_columnValueFontColor`] =
+          fieldSettings.columnValueFontColor;
+        resultFormData[`field_formatting_field${i}_columnValueBackgroundColor`] =
+          fieldSettings.columnValueBackgroundColor;
+        resultFormData[`field_formatting_field${i}_rowHeaderFontSize`] =
+          fieldSettings.rowHeaderFontSize;
+        resultFormData[`field_formatting_field${i}_rowHeaderFontColor`] =
+          fieldSettings.rowHeaderFontColor;
+        resultFormData[`field_formatting_field${i}_rowHeaderBackgroundColor`] =
+          fieldSettings.rowHeaderBackgroundColor;
+        resultFormData[`field_formatting_field${i}_rowValueFontSize`] =
+          fieldSettings.rowValueFontSize;
+        resultFormData[`field_formatting_field${i}_rowValueFontColor`] =
+          fieldSettings.rowValueFontColor;
+        resultFormData[`field_formatting_field${i}_rowValueBackgroundColor`] =
+          fieldSettings.rowValueBackgroundColor;
       }
     }
     
@@ -2497,6 +3431,30 @@ const config: ControlPanelConfig = {
         fieldSettings.metricValueFontColor;
       resultFormData[`field_formatting_field${nextFreeIndex}_metricValueBackgroundColor`] =
         fieldSettings.metricValueBackgroundColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_columnHeaderFontSize`] =
+        fieldSettings.columnHeaderFontSize;
+      resultFormData[`field_formatting_field${nextFreeIndex}_columnHeaderFontColor`] =
+        fieldSettings.columnHeaderFontColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_columnHeaderBackgroundColor`] =
+        fieldSettings.columnHeaderBackgroundColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_columnValueFontSize`] =
+        fieldSettings.columnValueFontSize;
+      resultFormData[`field_formatting_field${nextFreeIndex}_columnValueFontColor`] =
+        fieldSettings.columnValueFontColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_columnValueBackgroundColor`] =
+        fieldSettings.columnValueBackgroundColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_rowHeaderFontSize`] =
+        fieldSettings.rowHeaderFontSize;
+      resultFormData[`field_formatting_field${nextFreeIndex}_rowHeaderFontColor`] =
+        fieldSettings.rowHeaderFontColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_rowHeaderBackgroundColor`] =
+        fieldSettings.rowHeaderBackgroundColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_rowValueFontSize`] =
+        fieldSettings.rowValueFontSize;
+      resultFormData[`field_formatting_field${nextFreeIndex}_rowValueFontColor`] =
+        fieldSettings.rowValueFontColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_rowValueBackgroundColor`] =
+        fieldSettings.rowValueBackgroundColor;
       
       nextFreeIndex += 1;
     }
@@ -2523,6 +3481,18 @@ const config: ControlPanelConfig = {
         resultFormData[`field_formatting_field${i}_metricValueFontSize`] = undefined;
         resultFormData[`field_formatting_field${i}_metricValueFontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_columnHeaderFontSize`] = undefined;
+        resultFormData[`field_formatting_field${i}_columnHeaderFontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_columnHeaderBackgroundColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_columnValueFontSize`] = undefined;
+        resultFormData[`field_formatting_field${i}_columnValueFontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_columnValueBackgroundColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_rowHeaderFontSize`] = undefined;
+        resultFormData[`field_formatting_field${i}_rowHeaderFontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_rowHeaderBackgroundColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_rowValueFontSize`] = undefined;
+        resultFormData[`field_formatting_field${i}_rowValueFontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_rowValueBackgroundColor`] = undefined;
       }
     }
     

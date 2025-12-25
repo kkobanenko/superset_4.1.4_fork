@@ -480,6 +480,115 @@ function buildEffectiveFieldGroupingSettings(
       }
     }
     
+    // Нормализуем columnHeaderFontSize
+    if (normalized.columnHeaderFontSize !== undefined) {
+      const fontSizeValue = normalized.columnHeaderFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.columnHeaderFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.columnHeaderFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем columnValueFontSize
+    if (normalized.columnValueFontSize !== undefined) {
+      const fontSizeValue = normalized.columnValueFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.columnValueFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.columnValueFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем rowHeaderFontSize
+    if (normalized.rowHeaderFontSize !== undefined) {
+      const fontSizeValue = normalized.rowHeaderFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.rowHeaderFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.rowHeaderFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем rowValueFontSize
+    if (normalized.rowValueFontSize !== undefined) {
+      const fontSizeValue = normalized.rowValueFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.rowValueFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.rowValueFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем цвета для колонок и строк
+    if (normalized.columnHeaderFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.columnHeaderFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.columnHeaderFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.columnHeaderBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.columnHeaderBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.columnHeaderBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.columnValueFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.columnValueFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.columnValueFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.columnValueBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.columnValueBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.columnValueBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.rowHeaderFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.rowHeaderFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.rowHeaderFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.rowHeaderBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.rowHeaderBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.rowHeaderBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.rowValueFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.rowValueFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.rowValueFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.rowValueBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.rowValueBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.rowValueBackgroundColor = backgroundColorCss;
+      }
+    }
+    
     normalizedBaseSettings[fieldName] = normalized;
   }
 
@@ -532,6 +641,18 @@ function buildEffectiveFieldGroupingSettings(
       'fontSize',
       'fontColor',
       'backgroundColor',
+      'columnHeaderFontSize',
+      'columnHeaderFontColor',
+      'columnHeaderBackgroundColor',
+      'columnValueFontSize',
+      'columnValueFontColor',
+      'columnValueBackgroundColor',
+      'rowHeaderFontSize',
+      'rowHeaderFontColor',
+      'rowHeaderBackgroundColor',
+      'rowValueFontSize',
+      'rowValueFontColor',
+      'rowValueBackgroundColor',
       'metricHeaderFontSize',
       'metricHeaderFontColor',
       'metricHeaderBackgroundColor',
@@ -546,7 +667,9 @@ function buildEffectiveFieldGroupingSettings(
       const value = fd[flatKey];
       if (value !== undefined && value !== null) {
         // Нормализуем fontSize (может быть строкой из NumberControl)
-        if (key === 'fontSize' || key === 'metricHeaderFontSize' || key === 'metricValueFontSize') {
+        if (key === 'fontSize' || key === 'metricHeaderFontSize' || key === 'metricValueFontSize' ||
+            key === 'columnHeaderFontSize' || key === 'columnValueFontSize' ||
+            key === 'rowHeaderFontSize' || key === 'rowValueFontSize') {
           if (typeof value === 'string' && value.length > 0) {
             const parsed = Number.parseFloat(value);
             if (!Number.isNaN(parsed)) {
@@ -559,7 +682,11 @@ function buildEffectiveFieldGroupingSettings(
         // Нормализуем цвета (преобразуем в CSS цвет)
         else if (key === 'fontColor' || key === 'backgroundColor' || 
                  key === 'metricHeaderFontColor' || key === 'metricHeaderBackgroundColor' ||
-                 key === 'metricValueFontColor' || key === 'metricValueBackgroundColor') {
+                 key === 'metricValueFontColor' || key === 'metricValueBackgroundColor' ||
+                 key === 'columnHeaderFontColor' || key === 'columnHeaderBackgroundColor' ||
+                 key === 'columnValueFontColor' || key === 'columnValueBackgroundColor' ||
+                 key === 'rowHeaderFontColor' || key === 'rowHeaderBackgroundColor' ||
+                 key === 'rowValueFontColor' || key === 'rowValueBackgroundColor') {
           const colorCss = toCssColor(value);
           if (typeof colorCss === 'string') {
             merged[fieldName][key] = colorCss;
@@ -717,6 +844,82 @@ function buildEffectiveFieldGroupingSettings(
     const metricValueBackgroundColorCss = toCssColor(metricValueBackgroundColor);
     if (typeof metricValueBackgroundColorCss === 'string') {
       nextFieldSettings.metricValueBackgroundColor = metricValueBackgroundColorCss;
+    }
+
+    // Column-specific formatting: header styles
+    const columnHeaderFontSize = fd[`field_formatting_field${i}_columnHeaderFontSize`];
+    if (typeof columnHeaderFontSize === 'number') {
+      nextFieldSettings.columnHeaderFontSize = columnHeaderFontSize;
+    }
+
+    const columnHeaderFontColor = fd[`field_formatting_field${i}_columnHeaderFontColor`];
+    const columnHeaderFontColorCss = toCssColor(columnHeaderFontColor);
+    if (typeof columnHeaderFontColorCss === 'string') {
+      nextFieldSettings.columnHeaderFontColor = columnHeaderFontColorCss;
+    }
+
+    const columnHeaderBackgroundColor =
+      fd[`field_formatting_field${i}_columnHeaderBackgroundColor`];
+    const columnHeaderBackgroundColorCss = toCssColor(columnHeaderBackgroundColor);
+    if (typeof columnHeaderBackgroundColorCss === 'string') {
+      nextFieldSettings.columnHeaderBackgroundColor = columnHeaderBackgroundColorCss;
+    }
+
+    // Column-specific formatting: value styles
+    const columnValueFontSize = fd[`field_formatting_field${i}_columnValueFontSize`];
+    if (typeof columnValueFontSize === 'number') {
+      nextFieldSettings.columnValueFontSize = columnValueFontSize;
+    }
+
+    const columnValueFontColor = fd[`field_formatting_field${i}_columnValueFontColor`];
+    const columnValueFontColorCss = toCssColor(columnValueFontColor);
+    if (typeof columnValueFontColorCss === 'string') {
+      nextFieldSettings.columnValueFontColor = columnValueFontColorCss;
+    }
+
+    const columnValueBackgroundColor =
+      fd[`field_formatting_field${i}_columnValueBackgroundColor`];
+    const columnValueBackgroundColorCss = toCssColor(columnValueBackgroundColor);
+    if (typeof columnValueBackgroundColorCss === 'string') {
+      nextFieldSettings.columnValueBackgroundColor = columnValueBackgroundColorCss;
+    }
+
+    // Row-specific formatting: header styles
+    const rowHeaderFontSize = fd[`field_formatting_field${i}_rowHeaderFontSize`];
+    if (typeof rowHeaderFontSize === 'number') {
+      nextFieldSettings.rowHeaderFontSize = rowHeaderFontSize;
+    }
+
+    const rowHeaderFontColor = fd[`field_formatting_field${i}_rowHeaderFontColor`];
+    const rowHeaderFontColorCss = toCssColor(rowHeaderFontColor);
+    if (typeof rowHeaderFontColorCss === 'string') {
+      nextFieldSettings.rowHeaderFontColor = rowHeaderFontColorCss;
+    }
+
+    const rowHeaderBackgroundColor =
+      fd[`field_formatting_field${i}_rowHeaderBackgroundColor`];
+    const rowHeaderBackgroundColorCss = toCssColor(rowHeaderBackgroundColor);
+    if (typeof rowHeaderBackgroundColorCss === 'string') {
+      nextFieldSettings.rowHeaderBackgroundColor = rowHeaderBackgroundColorCss;
+    }
+
+    // Row-specific formatting: value styles
+    const rowValueFontSize = fd[`field_formatting_field${i}_rowValueFontSize`];
+    if (typeof rowValueFontSize === 'number') {
+      nextFieldSettings.rowValueFontSize = rowValueFontSize;
+    }
+
+    const rowValueFontColor = fd[`field_formatting_field${i}_rowValueFontColor`];
+    const rowValueFontColorCss = toCssColor(rowValueFontColor);
+    if (typeof rowValueFontColorCss === 'string') {
+      nextFieldSettings.rowValueFontColor = rowValueFontColorCss;
+    }
+
+    const rowValueBackgroundColor =
+      fd[`field_formatting_field${i}_rowValueBackgroundColor`];
+    const rowValueBackgroundColorCss = toCssColor(rowValueBackgroundColor);
+    if (typeof rowValueBackgroundColorCss === 'string') {
+      nextFieldSettings.rowValueBackgroundColor = rowValueBackgroundColorCss;
     }
 
     merged[selectedField] = nextFieldSettings;

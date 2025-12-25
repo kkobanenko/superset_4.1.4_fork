@@ -435,13 +435,65 @@ export class TableRenderer extends Component {
   // Получить стиль для заголовка колонки/строки
   getHeaderStyle(attrName) {
     const settings = this.getFieldSettings(attrName);
-    return this.buildTextStyle(settings, true);
+    const colAttrs = this.props.cols || [];
+    const rowAttrs = this.props.rows || [];
+    
+    // Определяем тип поля (колонка или строка)
+    const isColumn = colAttrs.includes(attrName);
+    const isRow = rowAttrs.includes(attrName);
+    
+    // Используем правильные настройки в зависимости от типа поля
+    const normalized = {
+      ...settings,
+      fontSize: isColumn
+        ? (settings.columnHeaderFontSize ?? settings.fontSize)
+        : isRow
+        ? (settings.rowHeaderFontSize ?? settings.fontSize)
+        : settings.fontSize,
+      fontColor: isColumn
+        ? (settings.columnHeaderFontColor ?? settings.fontColor)
+        : isRow
+        ? (settings.rowHeaderFontColor ?? settings.fontColor)
+        : settings.fontColor,
+      backgroundColor: isColumn
+        ? (settings.columnHeaderBackgroundColor ?? settings.backgroundColor)
+        : isRow
+        ? (settings.rowHeaderBackgroundColor ?? settings.backgroundColor)
+        : settings.backgroundColor,
+    };
+    return this.buildTextStyle(normalized, true);
   }
 
   // Получить стиль для ячейки данных
   getCellStyle(attrName) {
     const settings = this.getFieldSettings(attrName);
-    return this.buildTextStyle(settings, false);
+    const colAttrs = this.props.cols || [];
+    const rowAttrs = this.props.rows || [];
+    
+    // Определяем тип поля (колонка или строка)
+    const isColumn = colAttrs.includes(attrName);
+    const isRow = rowAttrs.includes(attrName);
+    
+    // Используем правильные настройки в зависимости от типа поля
+    const normalized = {
+      ...settings,
+      fontSize: isColumn
+        ? (settings.columnValueFontSize ?? settings.fontSize)
+        : isRow
+        ? (settings.rowValueFontSize ?? settings.fontSize)
+        : settings.fontSize,
+      fontColor: isColumn
+        ? (settings.columnValueFontColor ?? settings.fontColor)
+        : isRow
+        ? (settings.rowValueFontColor ?? settings.fontColor)
+        : settings.fontColor,
+      backgroundColor: isColumn
+        ? (settings.columnValueBackgroundColor ?? settings.backgroundColor)
+        : isRow
+        ? (settings.rowValueBackgroundColor ?? settings.backgroundColor)
+        : settings.backgroundColor,
+    };
+    return this.buildTextStyle(normalized, false);
   }
 
   getMetricHeaderStyle(metricName) {
@@ -700,8 +752,18 @@ export class TableRenderer extends Component {
     // Применяем стили форматирования к заголовку колонки
     const headerStyle = this.getHeaderStyle(attrName);
     const fieldSettings = this.getFieldSettings(attrName);
+    // Используем правильные настройки для заголовков колонок
+    const colAttrs = this.props.cols || [];
+    const isColumn = colAttrs.includes(attrName);
+    const headerFieldSettings = isColumn
+      ? {
+          fontSize: fieldSettings.columnHeaderFontSize ?? fieldSettings.fontSize,
+          fontColor: fieldSettings.columnHeaderFontColor ?? fieldSettings.fontColor,
+          backgroundColor: fieldSettings.columnHeaderBackgroundColor ?? fieldSettings.backgroundColor,
+        }
+      : fieldSettings;
     // Создаем ref callback для применения стилей с !important
-    const headerStyleRef = this.buildFieldStyleRef(fieldSettings, true);
+    const headerStyleRef = this.buildFieldStyleRef(headerFieldSettings, true);
     // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
     const headerStyleWithoutFormatting = {
       ...headerStyle,
@@ -774,6 +836,9 @@ export class TableRenderer extends Component {
           ? this.getFieldSettings(String(rawHeaderValue))
           : this.getFieldSettings(attrName);
         // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
+        // Для колонок используем columnHeaderFontSize, columnHeaderFontColor, columnHeaderBackgroundColor
+        const colAttrsLocal = this.props.cols || [];
+        const isColumnField = colAttrsLocal.includes(attrName);
         const valueHeaderFieldSettings = metricKey &&
           attrName === metricKey &&
           (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
@@ -781,6 +846,14 @@ export class TableRenderer extends Component {
               fontSize: valueHeaderFieldSettingsRaw.metricHeaderFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
               fontColor: valueHeaderFieldSettingsRaw.metricHeaderFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
               backgroundColor: valueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
+              maxWidth: valueHeaderFieldSettingsRaw.maxWidth,
+              truncate: valueHeaderFieldSettingsRaw.truncate,
+            }
+          : isColumnField
+          ? {
+              fontSize: valueHeaderFieldSettingsRaw.columnHeaderFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
+              fontColor: valueHeaderFieldSettingsRaw.columnHeaderFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
+              backgroundColor: valueHeaderFieldSettingsRaw.columnHeaderBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
               maxWidth: valueHeaderFieldSettingsRaw.maxWidth,
               truncate: valueHeaderFieldSettingsRaw.truncate,
             }
@@ -932,8 +1005,18 @@ export class TableRenderer extends Component {
           // Применяем стили форматирования к заголовкам строк
           const rowHeaderStyle = this.getHeaderStyle(r);
           const rowHeaderFieldSettings = this.getFieldSettings(r);
+          // Используем правильные настройки для заголовков строк
+          const rowAttrsLocal = this.props.rows || [];
+          const isRow = rowAttrsLocal.includes(r);
+          const normalizedRowHeaderFieldSettings = isRow
+            ? {
+                fontSize: rowHeaderFieldSettings.rowHeaderFontSize ?? rowHeaderFieldSettings.fontSize,
+                fontColor: rowHeaderFieldSettings.rowHeaderFontColor ?? rowHeaderFieldSettings.fontColor,
+                backgroundColor: rowHeaderFieldSettings.rowHeaderBackgroundColor ?? rowHeaderFieldSettings.backgroundColor,
+              }
+            : rowHeaderFieldSettings;
           // Создаем ref callback для применения стилей с !important
-          const rowHeaderStyleRef = this.buildFieldStyleRef(rowHeaderFieldSettings, true);
+          const rowHeaderStyleRef = this.buildFieldStyleRef(normalizedRowHeaderFieldSettings, true);
           // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
           const rowHeaderStyleWithoutFormatting = {
             ...rowHeaderStyle,
@@ -1066,11 +1149,22 @@ export class TableRenderer extends Component {
           ? this.getFieldSettings(String(r))
           : this.getFieldSettings(rowAttrs[i]);
         // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
+        // Для строк используем rowHeaderFontSize, rowHeaderFontColor, rowHeaderBackgroundColor
+        const rowAttrsLocal = this.props.rows || [];
+        const isRowField = rowAttrsLocal.includes(rowAttrs[i]);
         const rowValueHeaderFieldSettings = (typeof r === 'string' || typeof r === 'number')
           ? {
               fontSize: rowValueHeaderFieldSettingsRaw.metricHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
               fontColor: rowValueHeaderFieldSettingsRaw.metricHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
               backgroundColor: rowValueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
+              maxWidth: rowValueHeaderFieldSettingsRaw.maxWidth,
+              truncate: rowValueHeaderFieldSettingsRaw.truncate,
+            }
+          : isRowField
+          ? {
+              fontSize: rowValueHeaderFieldSettingsRaw.rowHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
+              fontColor: rowValueHeaderFieldSettingsRaw.rowHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
+              backgroundColor: rowValueHeaderFieldSettingsRaw.rowHeaderBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
               maxWidth: rowValueHeaderFieldSettingsRaw.maxWidth,
               truncate: rowValueHeaderFieldSettingsRaw.truncate,
             }
@@ -1212,7 +1306,28 @@ export class TableRenderer extends Component {
         : null;
       
       // Создаем ref callbacks для cellStyle и metricValueStyle
-      const cellStyleRef = cellAttrName ? this.buildFieldStyleRef(this.getFieldSettings(cellAttrName), false) : null;
+      // Используем правильные настройки для значений колонок/строк
+      const cellFieldSettings = cellAttrName ? this.getFieldSettings(cellAttrName) : {};
+      const colAttrsLocal = this.props.cols || [];
+      const rowAttrsLocal = this.props.rows || [];
+      const isColumnField = cellAttrName && colAttrsLocal.includes(cellAttrName);
+      const isRowField = cellAttrName && rowAttrsLocal.includes(cellAttrName);
+      const normalizedCellFieldSettings = cellAttrName
+        ? (isColumnField
+            ? {
+                fontSize: cellFieldSettings.columnValueFontSize ?? cellFieldSettings.fontSize,
+                fontColor: cellFieldSettings.columnValueFontColor ?? cellFieldSettings.fontColor,
+                backgroundColor: cellFieldSettings.columnValueBackgroundColor ?? cellFieldSettings.backgroundColor,
+              }
+            : isRowField
+            ? {
+                fontSize: cellFieldSettings.rowValueFontSize ?? cellFieldSettings.fontSize,
+                fontColor: cellFieldSettings.rowValueFontColor ?? cellFieldSettings.fontColor,
+                backgroundColor: cellFieldSettings.rowValueBackgroundColor ?? cellFieldSettings.backgroundColor,
+              }
+            : cellFieldSettings)
+        : null;
+      const cellStyleRef = normalizedCellFieldSettings ? this.buildFieldStyleRef(normalizedCellFieldSettings, false) : null;
       const metricValueFieldSettings = metricName ? this.getFieldSettings(metricName) : {};
       const metricValueStyleRef = metricName ? this.buildFieldStyleRef({
         fontSize: metricValueFieldSettings.metricValueFontSize ?? metricValueFieldSettings.fontSize,
