@@ -753,7 +753,7 @@ export class TableRenderer extends Component {
     const headerStyle = this.getHeaderStyle(attrName);
     const fieldSettings = this.getFieldSettings(attrName);
     // Используем правильные настройки для заголовков колонок
-    const colAttrs = this.props.cols || [];
+    // colAttrs уже объявлена выше через деструктуризацию из pivotSettings
     const isColumn = colAttrs.indexOf(attrName) !== -1;
     const headerFieldSettings = isColumn
       ? {
