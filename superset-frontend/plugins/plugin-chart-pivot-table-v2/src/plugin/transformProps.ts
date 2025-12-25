@@ -850,6 +850,11 @@ function buildEffectiveFieldGroupingSettings(
     const columnHeaderFontSize = fd[`field_formatting_field${i}_columnHeaderFontSize`];
     if (typeof columnHeaderFontSize === 'number') {
       nextFieldSettings.columnHeaderFontSize = columnHeaderFontSize;
+    } else if (typeof columnHeaderFontSize === 'string' && columnHeaderFontSize.length > 0) {
+      const parsed = Number.parseFloat(columnHeaderFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.columnHeaderFontSize = parsed;
+      }
     }
 
     const columnHeaderFontColor = fd[`field_formatting_field${i}_columnHeaderFontColor`];
@@ -869,6 +874,11 @@ function buildEffectiveFieldGroupingSettings(
     const columnValueFontSize = fd[`field_formatting_field${i}_columnValueFontSize`];
     if (typeof columnValueFontSize === 'number') {
       nextFieldSettings.columnValueFontSize = columnValueFontSize;
+    } else if (typeof columnValueFontSize === 'string' && columnValueFontSize.length > 0) {
+      const parsed = Number.parseFloat(columnValueFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.columnValueFontSize = parsed;
+      }
     }
 
     const columnValueFontColor = fd[`field_formatting_field${i}_columnValueFontColor`];
@@ -888,6 +898,11 @@ function buildEffectiveFieldGroupingSettings(
     const rowHeaderFontSize = fd[`field_formatting_field${i}_rowHeaderFontSize`];
     if (typeof rowHeaderFontSize === 'number') {
       nextFieldSettings.rowHeaderFontSize = rowHeaderFontSize;
+    } else if (typeof rowHeaderFontSize === 'string' && rowHeaderFontSize.length > 0) {
+      const parsed = Number.parseFloat(rowHeaderFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.rowHeaderFontSize = parsed;
+      }
     }
 
     const rowHeaderFontColor = fd[`field_formatting_field${i}_rowHeaderFontColor`];
@@ -907,6 +922,11 @@ function buildEffectiveFieldGroupingSettings(
     const rowValueFontSize = fd[`field_formatting_field${i}_rowValueFontSize`];
     if (typeof rowValueFontSize === 'number') {
       nextFieldSettings.rowValueFontSize = rowValueFontSize;
+    } else if (typeof rowValueFontSize === 'string' && rowValueFontSize.length > 0) {
+      const parsed = Number.parseFloat(rowValueFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.rowValueFontSize = parsed;
+      }
     }
 
     const rowValueFontColor = fd[`field_formatting_field${i}_rowValueFontColor`];
