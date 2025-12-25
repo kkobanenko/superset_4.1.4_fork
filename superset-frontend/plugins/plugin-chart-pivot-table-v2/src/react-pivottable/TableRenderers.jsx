@@ -836,7 +836,7 @@ export class TableRenderer extends Component {
           ? this.getFieldSettings(String(rawHeaderValue))
           : this.getFieldSettings(attrName);
         // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
-        // Для колонок используем columnHeaderFontSize, columnHeaderFontColor, columnHeaderBackgroundColor
+        // Для колонок используем columnValueFontSize, columnValueFontColor, columnValueBackgroundColor (это значения колонок, не заголовки)
         const colAttrsLocal = this.props.cols || [];
         const isColumnField = colAttrsLocal.indexOf(attrName) !== -1;
         const valueHeaderFieldSettings = metricKey &&
@@ -851,11 +851,10 @@ export class TableRenderer extends Component {
             }
           : isColumnField
           ? {
-              fontSize: valueHeaderFieldSettingsRaw.columnHeaderFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
-              fontColor: valueHeaderFieldSettingsRaw.columnHeaderFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
-              backgroundColor: valueHeaderFieldSettingsRaw.columnHeaderBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
-              maxWidth: valueHeaderFieldSettingsRaw.maxWidth,
-              truncate: valueHeaderFieldSettingsRaw.truncate,
+              ...valueHeaderFieldSettingsRaw,
+              fontSize: valueHeaderFieldSettingsRaw.columnValueFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
+              fontColor: valueHeaderFieldSettingsRaw.columnValueFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
+              backgroundColor: valueHeaderFieldSettingsRaw.columnValueBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
             }
           : valueHeaderFieldSettingsRaw;
         const valueHeaderStyleRef = this.buildFieldStyleRef(valueHeaderFieldSettings, true);
