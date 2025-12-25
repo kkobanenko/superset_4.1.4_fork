@@ -309,6 +309,47 @@ export class TableRenderer extends Component {
     };
   }
 
+  // Создает ref callback для установки стилей полей с !important
+  // (для обычных ячеек и заголовков из fieldGroupingSettings)
+  buildFieldStyleRef(settings, includeWidth = false) {
+    if (!settings || typeof settings !== 'object') {
+      return null;
+    }
+    // Проверяем, есть ли хотя бы одно свойство форматирования
+    const hasFormatting = settings.fontSize !== undefined ||
+      settings.fontColor !== undefined ||
+      settings.backgroundColor !== undefined ||
+      (includeWidth && settings.maxWidth !== undefined);
+    if (!hasFormatting) {
+      return null;
+    }
+    return (element) => {
+      if (element) {
+        if (settings.fontSize) {
+          element.style.setProperty('font-size', `${settings.fontSize}px`, 'important');
+        }
+        if (settings.fontColor) {
+          element.style.setProperty('color', settings.fontColor, 'important');
+        }
+        if (settings.backgroundColor) {
+          element.style.setProperty('background-color', settings.backgroundColor, 'important');
+        }
+        if (includeWidth && settings.maxWidth) {
+          element.style.setProperty('max-width', `${settings.maxWidth}px`, 'important');
+          if (settings.truncate) {
+            element.style.setProperty('overflow', 'hidden', 'important');
+            element.style.setProperty('text-overflow', 'ellipsis', 'important');
+            element.style.setProperty('white-space', 'nowrap', 'important');
+          } else {
+            element.style.setProperty('overflow', 'visible', 'important');
+            element.style.setProperty('text-overflow', 'clip', 'important');
+            element.style.setProperty('white-space', 'normal', 'important');
+          }
+        }
+      }
+    };
+  }
+
   // Форматировать значение заголовка (row/col) с учетом per-field настроек.
   formatHeaderValue(attrName, rawValue, dateFormatters) {
     const settings = this.getFieldSettings(attrName);
@@ -658,8 +699,18 @@ export class TableRenderer extends Component {
     }
     // Применяем стили форматирования к заголовку колонки
     const headerStyle = this.getHeaderStyle(attrName);
+    const fieldSettings = this.getFieldSettings(attrName);
+    // Создаем ref callback для применения стилей с !important
+    const headerStyleRef = this.buildFieldStyleRef(fieldSettings, true);
+    // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
+    const headerStyleWithoutFormatting = {
+      ...headerStyle,
+      fontSize: undefined,
+      color: undefined,
+      backgroundColor: undefined,
+    };
     const attrNameCell = (
-      <th key="label" className="pvtAxisLabel" style={headerStyle}>
+      <th key="label" className="pvtAxisLabel" style={headerStyleWithoutFormatting} ref={headerStyleRef}>
         {displayHeaderCell(
           needToggle,
           subArrow,
@@ -716,6 +767,32 @@ export class TableRenderer extends Component {
           (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
             ? this.getMetricHeaderStyle(String(rawHeaderValue))
             : this.getHeaderStyle(attrName);
+        // Создаем ref callback для применения стилей с !important
+        const valueHeaderFieldSettingsRaw = metricKey &&
+          attrName === metricKey &&
+          (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
+          ? this.getFieldSettings(String(rawHeaderValue))
+          : this.getFieldSettings(attrName);
+        // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
+        const valueHeaderFieldSettings = metricKey &&
+          attrName === metricKey &&
+          (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
+          ? {
+              fontSize: valueHeaderFieldSettingsRaw.metricHeaderFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
+              fontColor: valueHeaderFieldSettingsRaw.metricHeaderFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
+              backgroundColor: valueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
+              maxWidth: valueHeaderFieldSettingsRaw.maxWidth,
+              truncate: valueHeaderFieldSettingsRaw.truncate,
+            }
+          : valueHeaderFieldSettingsRaw;
+        const valueHeaderStyleRef = this.buildFieldStyleRef(valueHeaderFieldSettings, true);
+        // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
+        const valueHeaderStyleWithoutFormatting = {
+          ...valueHeaderStyle,
+          fontSize: undefined,
+          color: undefined,
+          backgroundColor: undefined,
+        };
         attrValueCells.push(
           <th
             className={colLabelClass}
@@ -723,7 +800,8 @@ export class TableRenderer extends Component {
             colSpan={colSpan}
             rowSpan={rowSpan}
             role="columnheader button"
-            style={valueHeaderStyle}
+            style={valueHeaderStyleWithoutFormatting}
+            ref={valueHeaderStyleRef}
             onClick={this.clickHeaderHandler(
               pivotData,
               colKey,
@@ -853,8 +931,18 @@ export class TableRenderer extends Component {
           }
           // Применяем стили форматирования к заголовкам строк
           const rowHeaderStyle = this.getHeaderStyle(r);
+          const rowHeaderFieldSettings = this.getFieldSettings(r);
+          // Создаем ref callback для применения стилей с !important
+          const rowHeaderStyleRef = this.buildFieldStyleRef(rowHeaderFieldSettings, true);
+          // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
+          const rowHeaderStyleWithoutFormatting = {
+            ...rowHeaderStyle,
+            fontSize: undefined,
+            color: undefined,
+            backgroundColor: undefined,
+          };
           return (
-            <th className="pvtAxisLabel" key={`rowAttr-${i}`} style={rowHeaderStyle}>
+            <th className="pvtAxisLabel" key={`rowAttr-${i}`} style={rowHeaderStyleWithoutFormatting} ref={rowHeaderStyleRef}>
               {displayHeaderCell(
                 needLabelToggle,
                 subArrow,
@@ -973,6 +1061,28 @@ export class TableRenderer extends Component {
           (typeof r === 'string' || typeof r === 'number')
             ? this.getMetricHeaderStyle(String(r))
             : this.getHeaderStyle(rowAttrs[i]);
+        // Создаем ref callback для применения стилей с !important
+        const rowValueHeaderFieldSettingsRaw = (typeof r === 'string' || typeof r === 'number')
+          ? this.getFieldSettings(String(r))
+          : this.getFieldSettings(rowAttrs[i]);
+        // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
+        const rowValueHeaderFieldSettings = (typeof r === 'string' || typeof r === 'number')
+          ? {
+              fontSize: rowValueHeaderFieldSettingsRaw.metricHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
+              fontColor: rowValueHeaderFieldSettingsRaw.metricHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
+              backgroundColor: rowValueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
+              maxWidth: rowValueHeaderFieldSettingsRaw.maxWidth,
+              truncate: rowValueHeaderFieldSettingsRaw.truncate,
+            }
+          : rowValueHeaderFieldSettingsRaw;
+        const rowValueHeaderStyleRef = this.buildFieldStyleRef(rowValueHeaderFieldSettings, true);
+        // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
+        const rowValueHeaderStyleWithoutFormatting = {
+          ...rowValueHeaderStyle,
+          fontSize: undefined,
+          color: undefined,
+          backgroundColor: undefined,
+        };
         return (
           <th
             key={`rowKeyLabel-${i}`}
@@ -980,7 +1090,8 @@ export class TableRenderer extends Component {
             rowSpan={rowSpan}
             colSpan={colSpan}
             role="columnheader button"
-            style={rowValueHeaderStyle}
+            style={rowValueHeaderStyleWithoutFormatting}
+            ref={rowValueHeaderStyleRef}
             onClick={this.clickHeaderHandler(
               pivotData,
               rowKey,
@@ -1099,17 +1210,26 @@ export class TableRenderer extends Component {
       const colSubtotalStyleRef = isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
         : null;
-      // Объединяем ref callbacks, если оба присутствуют
-      const combinedStyleRef = rowSubtotalStyleRef && colSubtotalStyleRef
+      
+      // Создаем ref callbacks для cellStyle и metricValueStyle
+      const cellStyleRef = cellAttrName ? this.buildFieldStyleRef(this.getFieldSettings(cellAttrName), false) : null;
+      const metricValueFieldSettings = metricName ? this.getFieldSettings(metricName) : {};
+      const metricValueStyleRef = metricName ? this.buildFieldStyleRef({
+        fontSize: metricValueFieldSettings.metricValueFontSize ?? metricValueFieldSettings.fontSize,
+        fontColor: metricValueFieldSettings.metricValueFontColor ?? metricValueFieldSettings.fontColor,
+        backgroundColor: metricValueFieldSettings.metricValueBackgroundColor ?? metricValueFieldSettings.backgroundColor,
+      }, false) : null;
+      
+      // Объединяем все ref callbacks
+      const allRefCallbacks = [rowSubtotalStyleRef, colSubtotalStyleRef, cellStyleRef, metricValueStyleRef].filter(Boolean);
+      const combinedStyleRef = allRefCallbacks.length > 0
         ? (element) => {
-            rowSubtotalStyleRef(element);
-            colSubtotalStyleRef(element);
+            allRefCallbacks.forEach(refCallback => refCallback(element));
           }
-        : rowSubtotalStyleRef || colSubtotalStyleRef;
+        : null;
 
+      // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
       const finalStyle = {
-        ...cellStyle,
-        ...metricValueStyle,
         ...(agg.isSubtotal ? { fontWeight: 'bold' } : {}),
         ...(backgroundColor ? { backgroundColor } : {}),
       };
