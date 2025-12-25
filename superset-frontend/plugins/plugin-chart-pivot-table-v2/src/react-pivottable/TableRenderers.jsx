@@ -1010,6 +1010,7 @@ export class TableRenderer extends Component {
           const isRow = rowAttrsLocal.indexOf(r) !== -1;
           const normalizedRowHeaderFieldSettings = isRow
             ? {
+                ...rowHeaderFieldSettings,
                 fontSize: rowHeaderFieldSettings.rowHeaderFontSize ?? rowHeaderFieldSettings.fontSize,
                 fontColor: rowHeaderFieldSettings.rowHeaderFontColor ?? rowHeaderFieldSettings.fontColor,
                 backgroundColor: rowHeaderFieldSettings.rowHeaderBackgroundColor ?? rowHeaderFieldSettings.backgroundColor,
