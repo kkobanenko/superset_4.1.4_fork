@@ -310,6 +310,20 @@ function buildGlobalTableSettings(
     out.colSubTotalsValueFormat = normalizeValueCellFormatSettings(colSubTotalsValueFormat) || colSubTotalsValueFormat;
   }
 
+  // Собираем label настройки из плоских ключей formData (перезаписывает существующие значения)
+  if (formData['globalTableSettings.rowTotalsLabel'] !== undefined) {
+    out.rowTotalsLabel = formData['globalTableSettings.rowTotalsLabel'];
+  }
+  if (formData['globalTableSettings.rowSubTotalsLabel'] !== undefined) {
+    out.rowSubTotalsLabel = formData['globalTableSettings.rowSubTotalsLabel'];
+  }
+  if (formData['globalTableSettings.columnTotalsLabel'] !== undefined) {
+    out.columnTotalsLabel = formData['globalTableSettings.columnTotalsLabel'];
+  }
+  if (formData['globalTableSettings.colSubTotalsLabel'] !== undefined) {
+    out.colSubTotalsLabel = formData['globalTableSettings.colSubTotalsLabel'];
+  }
+
   // Добавляем другие поля из существующего объекта (если они еще не добавлены)
   if (existing && typeof existing === 'object') {
     const existingObj = existing as Record<string, unknown>;
