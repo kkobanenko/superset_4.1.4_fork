@@ -1469,34 +1469,9 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     description: t('Font size in pixels'),
                     visibility: (props: any) => {
-                      const controls = props?.controls || {};
-                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
-                      const selectedField = selectorControl?.value;
-                      if (!selectedField) {
-                        return false;
-                      }
-                      // Hide generic typography controls for metrics (they have separate header/value styling below)
-                      const metrics = ensureIsArray(controls?.metrics?.value || []);
-                      const metricLabels = metrics
-                        .map((m: QueryFormMetric) => {
-                          if (typeof m === 'string') {
-                            return m;
-                          }
-                          if (m && typeof m === 'object' && 'label' in m && m.label) {
-                            return String(m.label);
-                          }
-                          if (
-                            m &&
-                            typeof m === 'object' &&
-                            'sqlExpression' in m &&
-                            m.sqlExpression
-                          ) {
-                            return String(m.sqlExpression);
-                          }
-                          return '';
-                        })
-                        .filter((x: string) => x.length > 0);
-                      return !metricLabels.includes(String(selectedField));
+                      // Hide generic typography controls for all fields (Row, Columns, Metrics)
+                      // They have separate header/value styling controls below
+                      return false;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -3241,14 +3216,34 @@ const config: ControlPanelConfig = {
         fieldSettings.metricAggregationFunction =
           formData[metricAggregationFunctionKey] as string;
       }
-      if (formData[fontSizeKey] !== undefined) {
-        fieldSettings.fontSize = formData[fontSizeKey] as number;
-      }
-      if (formData[fontColorKey] !== undefined) {
-        fieldSettings.fontColor = formData[fontColorKey] as string;
-      }
-      if (formData[backgroundColorKey] !== undefined) {
-        fieldSettings.backgroundColor = formData[backgroundColorKey] as string;
+      // Не сохраняем безымянные настройки fontSize, fontColor, backgroundColor для Row и Columns
+      // Они имеют отдельные настройки для header и values
+      const groupbyRows = ensureIsArray(formData.groupbyRows || []);
+      const groupbyColumns = ensureIsArray(formData.groupbyColumns || []);
+      const metrics = ensureIsArray(formData.metrics || []);
+      const rowLabels = groupbyRows.map((r: QueryFormColumn) => getColumnLabel(r)).filter((x: string) => x.length > 0);
+      const columnLabels = groupbyColumns.map((c: QueryFormColumn) => getColumnLabel(c)).filter((x: string) => x.length > 0);
+      const metricLabels = metrics.map((m: QueryFormMetric) => {
+        if (typeof m === 'string') return m;
+        if (m && typeof m === 'object' && 'label' in m && m.label) return String(m.label);
+        if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) return String(m.sqlExpression);
+        return '';
+      }).filter((x: string) => x.length > 0);
+      const isRowField = rowLabels.indexOf(String(selectedField)) !== -1;
+      const isColumnField = columnLabels.indexOf(String(selectedField)) !== -1;
+      const isMetricField = metricLabels.indexOf(String(selectedField)) !== -1;
+      // Сохраняем безымянные настройки только для метрик (для обратной совместимости)
+      // Для Row и Columns используем только отдельные настройки header/value
+      if (!isRowField && !isColumnField) {
+        if (formData[fontSizeKey] !== undefined) {
+          fieldSettings.fontSize = formData[fontSizeKey] as number;
+        }
+        if (formData[fontColorKey] !== undefined) {
+          fieldSettings.fontColor = formData[fontColorKey] as string;
+        }
+        if (formData[backgroundColorKey] !== undefined) {
+          fieldSettings.backgroundColor = formData[backgroundColorKey] as string;
+        }
       }
 
       if (formData[metricHeaderFontSizeKey] !== undefined) {
@@ -3343,9 +3338,28 @@ const config: ControlPanelConfig = {
         resultFormData[`field_formatting_field${i}_dateFormat`] = fieldSettings.dateFormat;
         resultFormData[`field_formatting_field${i}_metricAggregationFunction`] =
           fieldSettings.metricAggregationFunction;
-        resultFormData[`field_formatting_field${i}_fontSize`] = fieldSettings.fontSize;
-        resultFormData[`field_formatting_field${i}_fontColor`] = fieldSettings.fontColor;
-        resultFormData[`field_formatting_field${i}_backgroundColor`] = fieldSettings.backgroundColor;
+        // Не восстанавливаем безымянные настройки fontSize, fontColor, backgroundColor для Row и Columns
+        // Они имеют отдельные настройки для header и values
+        const groupbyRows = ensureIsArray(formData.groupbyRows || []);
+        const groupbyColumns = ensureIsArray(formData.groupbyColumns || []);
+        const metrics = ensureIsArray(formData.metrics || []);
+        const rowLabels = groupbyRows.map((r: QueryFormColumn) => getColumnLabel(r)).filter((x: string) => x.length > 0);
+        const columnLabels = groupbyColumns.map((c: QueryFormColumn) => getColumnLabel(c)).filter((x: string) => x.length > 0);
+        const metricLabels = metrics.map((m: QueryFormMetric) => {
+          if (typeof m === 'string') return m;
+          if (m && typeof m === 'object' && 'label' in m && m.label) return String(m.label);
+          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) return String(m.sqlExpression);
+          return '';
+        }).filter((x: string) => x.length > 0);
+        const isRowField = rowLabels.indexOf(String(selectedField)) !== -1;
+        const isColumnField = columnLabels.indexOf(String(selectedField)) !== -1;
+        // Восстанавливаем безымянные настройки только для метрик (для обратной совместимости)
+        // Для Row и Columns используем только отдельные настройки header/value
+        if (!isRowField && !isColumnField) {
+          resultFormData[`field_formatting_field${i}_fontSize`] = fieldSettings.fontSize;
+          resultFormData[`field_formatting_field${i}_fontColor`] = fieldSettings.fontColor;
+          resultFormData[`field_formatting_field${i}_backgroundColor`] = fieldSettings.backgroundColor;
+        }
         resultFormData[`field_formatting_field${i}_metricHeaderFontSize`] =
           fieldSettings.metricHeaderFontSize;
         resultFormData[`field_formatting_field${i}_metricHeaderFontColor`] =
@@ -3416,9 +3430,28 @@ const config: ControlPanelConfig = {
       resultFormData[`field_formatting_field${nextFreeIndex}_dateFormat`] = fieldSettings.dateFormat;
       resultFormData[`field_formatting_field${nextFreeIndex}_metricAggregationFunction`] =
         fieldSettings.metricAggregationFunction;
-      resultFormData[`field_formatting_field${nextFreeIndex}_fontSize`] = fieldSettings.fontSize;
-      resultFormData[`field_formatting_field${nextFreeIndex}_fontColor`] = fieldSettings.fontColor;
-      resultFormData[`field_formatting_field${nextFreeIndex}_backgroundColor`] = fieldSettings.backgroundColor;
+      // Не восстанавливаем безымянные настройки fontSize, fontColor, backgroundColor для Row и Columns
+      // Они имеют отдельные настройки для header и values
+      const groupbyRows = ensureIsArray(formData.groupbyRows || []);
+      const groupbyColumns = ensureIsArray(formData.groupbyColumns || []);
+      const metrics = ensureIsArray(formData.metrics || []);
+      const rowLabels = groupbyRows.map((r: QueryFormColumn) => getColumnLabel(r)).filter((x: string) => x.length > 0);
+      const columnLabels = groupbyColumns.map((c: QueryFormColumn) => getColumnLabel(c)).filter((x: string) => x.length > 0);
+      const metricLabels = metrics.map((m: QueryFormMetric) => {
+        if (typeof m === 'string') return m;
+        if (m && typeof m === 'object' && 'label' in m && m.label) return String(m.label);
+        if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) return String(m.sqlExpression);
+        return '';
+      }).filter((x: string) => x.length > 0);
+      const isRowField = rowLabels.indexOf(String(fieldName)) !== -1;
+      const isColumnField = columnLabels.indexOf(String(fieldName)) !== -1;
+      // Восстанавливаем безымянные настройки только для метрик (для обратной совместимости)
+      // Для Row и Columns используем только отдельные настройки header/value
+      if (!isRowField && !isColumnField) {
+        resultFormData[`field_formatting_field${nextFreeIndex}_fontSize`] = fieldSettings.fontSize;
+        resultFormData[`field_formatting_field${nextFreeIndex}_fontColor`] = fieldSettings.fontColor;
+        resultFormData[`field_formatting_field${nextFreeIndex}_backgroundColor`] = fieldSettings.backgroundColor;
+      }
       resultFormData[`field_formatting_field${nextFreeIndex}_metricHeaderFontSize`] =
         fieldSettings.metricHeaderFontSize;
       resultFormData[`field_formatting_field${nextFreeIndex}_metricHeaderFontColor`] =
