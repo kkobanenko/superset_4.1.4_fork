@@ -1145,14 +1145,19 @@ export class TableRenderer extends Component {
             ? this.getMetricHeaderStyle(String(r))
             : this.getHeaderStyle(rowAttrs[i]);
         // Создаем ref callback для применения стилей с !important
-        const rowValueHeaderFieldSettingsRaw = (typeof r === 'string' || typeof r === 'number')
+        // Для Row values всегда используем поле строки (rowAttrs[i]), а не значение строки (r)
+        // Настройки хранятся по имени поля (например, "БР"), а не по значению строки (например, "Москва и Центр")
+        const rowAttrsLocal = this.props.rows || [];
+        const isRowField = rowAttrsLocal.indexOf(rowAttrs[i]) !== -1;
+        const metricKey = this.getMetricKey();
+        const isMetricValue = metricKey && rowAttrs[i] === metricKey && (typeof r === 'string' || typeof r === 'number');
+        // Для метрик используем значение строки, для Row fields - всегда поле строки
+        const rowValueHeaderFieldSettingsRaw = isMetricValue
           ? this.getFieldSettings(String(r))
           : this.getFieldSettings(rowAttrs[i]);
         // Для метрик используем metricHeaderFontSize, metricHeaderFontColor, metricHeaderBackgroundColor
         // Для строк используем rowValueFontSize, rowValueFontColor, rowValueBackgroundColor (это значения строк, не заголовки)
-        const rowAttrsLocal = this.props.rows || [];
-        const isRowField = rowAttrsLocal.indexOf(rowAttrs[i]) !== -1;
-        const rowValueHeaderFieldSettings = (typeof r === 'string' || typeof r === 'number')
+        const rowValueHeaderFieldSettings = isMetricValue
           ? {
               fontSize: rowValueHeaderFieldSettingsRaw.metricHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
               fontColor: rowValueHeaderFieldSettingsRaw.metricHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
