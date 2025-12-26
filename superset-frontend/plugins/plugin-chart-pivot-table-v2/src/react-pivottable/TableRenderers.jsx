@@ -1149,7 +1149,6 @@ export class TableRenderer extends Component {
         // Настройки хранятся по имени поля (например, "БР"), а не по значению строки (например, "Москва и Центр")
         const rowAttrsLocal = this.props.rows || [];
         const isRowField = rowAttrsLocal.indexOf(rowAttrs[i]) !== -1;
-        const metricKey = this.getMetricKey();
         const isMetricValue = metricKey && rowAttrs[i] === metricKey && (typeof r === 'string' || typeof r === 'number');
         // Для метрик используем значение строки, для Row fields - всегда поле строки
         const rowValueHeaderFieldSettingsRaw = isMetricValue
