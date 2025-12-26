@@ -534,12 +534,16 @@ export class TableRenderer extends Component {
     return this.buildTextStyle(normalized, false);
   }
 
-  getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs) {
+  getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex = null) {
+    const { tableOptions } = this.props;
+    const { transposePivot, metricsOrder } = tableOptions || {};
+    
     const metricKey = this.getMetricKey();
     if (!metricKey) {
       return null;
     }
 
+    // Сначала пытаемся найти метрику через metricKey в colAttrs или rowAttrs
     const colIdx = colAttrs.indexOf(metricKey);
     if (colIdx !== -1 && colIdx < colKey.length) {
       return String(colKey[colIdx]);
@@ -548,6 +552,59 @@ export class TableRenderer extends Component {
     const rowIdx = rowAttrs.indexOf(metricKey);
     if (rowIdx !== -1 && rowIdx < rowKey.length) {
       return String(rowKey[rowIdx]);
+    }
+
+    // Если не нашли через metricKey, используем colIndex и metricsOrder для определения метрики
+    // Это нужно для подытогов и итогов, где colKey может быть неполным
+    if (colIndex !== null && metricsOrder && metricsOrder.length > 0) {
+      if (!transposePivot) {
+        // Если не transposed, метрики в колонках
+        // Вычисляем индекс метрики в группе (например, для каждой даты есть набор метрик)
+        const { visibleColKeys } = this.pivotSettings;
+        if (visibleColKeys && visibleColKeys.length > 0) {
+          // Находим индекс текущей колонки в visibleColKeys
+          const currentColIndex = visibleColKeys.findIndex(k => flatKey(k) === flatKey(colKey));
+          if (currentColIndex !== -1) {
+            // Предполагаем, что метрики повторяются в порядке для каждой группы дат
+            const metricsPerGroup = metricsOrder.length;
+            const metricIndexInGroup = currentColIndex % metricsPerGroup;
+            if (metricIndexInGroup < metricsOrder.length) {
+              return metricsOrder[metricIndexInGroup];
+            }
+          }
+        }
+      } else {
+        // Если transposed, метрики в строках
+        // Аналогичная логика для строк
+        const { visibleRowKeys } = this.pivotSettings;
+        if (visibleRowKeys && visibleRowKeys.length > 0) {
+          const currentRowIndex = visibleRowKeys.findIndex(k => flatKey(k) === flatKey(rowKey));
+          if (currentRowIndex !== -1) {
+            const metricsPerGroup = metricsOrder.length;
+            const metricIndexInGroup = currentRowIndex % metricsPerGroup;
+            if (metricIndexInGroup < metricsOrder.length) {
+              return metricsOrder[metricIndexInGroup];
+            }
+          }
+        }
+      }
+    }
+
+    // Если не нашли через metricKey, проверяем, является ли последний элемент colKey метрикой
+    // Это может быть нужно для подытогов, где colKey может быть неполным
+    if (colKey.length > 0) {
+      const lastColAttrIndex = colKey.length - 1;
+      if (lastColAttrIndex < colAttrs.length && colAttrs[lastColAttrIndex] === metricKey) {
+        return String(colKey[lastColAttrIndex]);
+      }
+    }
+
+    // Аналогично для rowKey
+    if (rowKey.length > 0) {
+      const lastRowAttrIndex = rowKey.length - 1;
+      if (lastRowAttrIndex < rowAttrs.length && rowAttrs[lastRowAttrIndex] === metricKey) {
+        return String(rowKey[lastRowAttrIndex]);
+      }
     }
 
     return null;
@@ -1057,27 +1114,27 @@ export class TableRenderer extends Component {
             ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
             : null;
           return (
-            <th
+        <th
               className="pvtTotalLabel pvtColTotalLabel"
-              key="padding"
-              role="columnheader button"
+          key="padding"
+          role="columnheader button"
               ref={rowTotalsLabelStyleRef}
-              onClick={this.clickHeaderHandler(
-                pivotData,
-                [],
-                this.props.rows,
-                0,
-                this.props.tableOptions.clickRowHeaderCallback,
-                false,
-                true,
-              )}
-            >
-              {colAttrs.length === 0
-                ? t('Total (%(aggregatorName)s)', {
-                    aggregatorName: t(this.props.aggregatorName),
-                  })
-                : null}
-            </th>
+          onClick={this.clickHeaderHandler(
+            pivotData,
+            [],
+            this.props.rows,
+            0,
+            this.props.tableOptions.clickRowHeaderCallback,
+            false,
+            true,
+          )}
+        >
+          {colAttrs.length === 0
+            ? t('Total (%(aggregatorName)s)', {
+                aggregatorName: t(this.props.aggregatorName),
+              })
+            : null}
+        </th>
           );
         })()}
       </tr>
@@ -1267,7 +1324,7 @@ export class TableRenderer extends Component {
       ) : null;
 
     const rowClickHandlers = cellCallbacks[flatRowKey] || {};
-    const valueCells = visibleColKeys.map(colKey => {
+    const valueCells = visibleColKeys.map((colKey, colIndex) => {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator(rowKey, colKey);
       const aggValue = agg.value();
@@ -1307,6 +1364,7 @@ export class TableRenderer extends Component {
         colKey,
         rowAttrs,
         colAttrs,
+        colIndex,
       );
       const metricValueStyle = metricName
         ? this.getMetricValueStyle(metricName)
@@ -1380,8 +1438,16 @@ export class TableRenderer extends Component {
       
       // Если используется адаптивное форматирование для подытогов строк
       if (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING) {
-        const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs);
+        const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
+        console.warn('Adaptive formatting (row subtotal):', {
+          adaptiveMetricName,
+          adaptiveMetricFormat,
+          colKey,
+          rowKey,
+          colIndex,
+          metricsOrder: this.props.tableOptions?.metricsOrder,
+        });
         if (adaptiveMetricFormat) {
           overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
         } else {
@@ -1392,8 +1458,16 @@ export class TableRenderer extends Component {
       
       // Если используется адаптивное форматирование для подытогов колонок
       if (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING) {
-        const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs);
+        const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
+        console.warn('Adaptive formatting (col subtotal):', {
+          adaptiveMetricName,
+          adaptiveMetricFormat,
+          colKey,
+          rowKey,
+          colIndex,
+          metricsOrder: this.props.tableOptions?.metricsOrder,
+        });
         if (adaptiveMetricFormat) {
           overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
         } else {
