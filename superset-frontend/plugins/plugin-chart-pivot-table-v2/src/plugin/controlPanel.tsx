@@ -41,7 +41,7 @@ import {
   t,
   validateNonEmpty,
 } from '@superset-ui/core';
-import { MetricsLayoutEnum } from '../types';
+import { ADAPTIVE_FORMATTING, MetricsLayoutEnum } from '../types';
 
 // Pivot Table V2 расширяет список агрегаторов в "Data -> Metrics -> Simple -> aggregate".
 // Часть значений является pivot-специфичной (client-side) и будет нормализована
@@ -444,8 +444,13 @@ const config: ControlPanelConfig = {
               label: t('Rows total number format'),
               renderTrigger: true,
               description: t('D3 number format for the rows total column'),
+              choices: [
+                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                ...(sharedControls.y_axis_format.choices || []),
+              ],
               visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowTotals?.value === true,
+                controls?.rowTotals?.value === true &&
+                controls?.transposePivot?.value === true,
             },
           },
         ],
@@ -534,8 +539,13 @@ const config: ControlPanelConfig = {
               label: t('Rows subtotal number format'),
               renderTrigger: true,
               description: t('D3 number format for row subtotal cells'),
+              choices: [
+                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                ...(sharedControls.y_axis_format.choices || []),
+              ],
               visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowSubTotals?.value === true,
+                controls?.rowSubTotals?.value === true &&
+                controls?.transposePivot?.value === false,
             },
           },
         ],
@@ -624,8 +634,13 @@ const config: ControlPanelConfig = {
               label: t('Columns total number format'),
               renderTrigger: true,
               description: t('D3 number format for the columns total row'),
+              choices: [
+                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                ...(sharedControls.y_axis_format.choices || []),
+              ],
               visibility: ({ controls }: { controls?: any }) =>
-                controls?.colTotals?.value === true,
+                controls?.colTotals?.value === true &&
+                controls?.transposePivot?.value === false,
             },
           },
         ],
@@ -714,8 +729,13 @@ const config: ControlPanelConfig = {
               label: t('Columns subtotal number format'),
               renderTrigger: true,
               description: t('D3 number format for column subtotal cells'),
+              choices: [
+                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                ...(sharedControls.y_axis_format.choices || []),
+              ],
               visibility: ({ controls }: { controls?: any }) =>
-                controls?.colSubTotals?.value === true,
+                controls?.colSubTotals?.value === true &&
+                controls?.transposePivot?.value === true,
             },
           },
         ],

@@ -50,6 +50,9 @@ export enum MetricsLayoutEnum {
   COLUMNS = 'COLUMNS',
 }
 
+// Константа для идентификации адаптивного форматирования
+export const ADAPTIVE_FORMATTING = 'ADAPTIVE_FORMATTING';
+
 interface PivotTableCustomizeProps {
   groupbyRows: QueryFormColumn[];
   groupbyColumns: QueryFormColumn[];

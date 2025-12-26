@@ -22,6 +22,7 @@ import { getNumberFormatter, getTimeFormatter, SMART_DATE_ID, t, safeHtmlSpan } 
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
+import { ADAPTIVE_FORMATTING } from '../types';
 
 // Russian month names
 const RUSSIAN_MONTHS = [
@@ -245,6 +246,18 @@ export class TableRenderer extends Component {
 
   getGlobalTableSettings() {
     return this.props.tableOptions?.globalTableSettings || {};
+  }
+
+  // Получить формат метрики для адаптивного форматирования
+  getMetricFormat(metricName) {
+    if (!metricName) {
+      return undefined;
+    }
+    const settings = this.getFieldSettings(metricName);
+    if (settings && typeof settings.valueFormat === 'string' && settings.valueFormat.length > 0) {
+      return settings.valueFormat;
+    }
+    return undefined;
   }
 
   buildTextStyle(settings, includeWidth = false) {
@@ -1357,11 +1370,38 @@ export class TableRenderer extends Component {
       // если у конкретной метрики задан valueFormat/dateFormat, применяем их к value-cell.
       // Важно: totals/subtotals форматы (globalTableSettings.*ValueFormat) имеют приоритет.
       const metricFormatSettings = metricName ? this.getFieldSettings(metricName) : undefined;
-      const overrideFormatSettings =
+      
+      // Обработка адаптивного форматирования для подытогов/итогов
+      let overrideFormatSettings =
         (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat) ||
         (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat) ||
         metricFormatSettings ||
         undefined;
+      
+      // Если используется адаптивное форматирование для подытогов строк
+      if (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING) {
+        const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs);
+        const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
+        if (adaptiveMetricFormat) {
+          overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
+        } else {
+          // Если формат метрики не найден, используем формат агрегатора
+          overrideFormatSettings = undefined;
+        }
+      }
+      
+      // Если используется адаптивное форматирование для подытогов колонок
+      if (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING) {
+        const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs);
+        const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
+        if (adaptiveMetricFormat) {
+          overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
+        } else {
+          // Если формат метрики не найден, используем формат агрегатора
+          overrideFormatSettings = undefined;
+        }
+      }
+      
       const formattedValue = this.formatAggValue(
         aggValue,
         formattedByAgg,
@@ -1390,10 +1430,25 @@ export class TableRenderer extends Component {
       const totalStyleRef = globalTableSettings?.rowTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
         : null;
+      
+      // Обработка адаптивного форматирования для итогов строк
+      let totalFormatSettings = globalTableSettings?.rowTotalsValueFormat;
+      if (totalFormatSettings?.valueFormat === ADAPTIVE_FORMATTING) {
+        // Для итогов строк метрика определяется по rowKey (когда transposePivot = true)
+        const adaptiveMetricName = this.getMetricNameForCell(rowKey, [], rowAttrs, colAttrs);
+        const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
+        if (adaptiveMetricFormat) {
+          totalFormatSettings = { ...totalFormatSettings, valueFormat: adaptiveMetricFormat };
+        } else {
+          // Если формат метрики не найден, используем формат агрегатора
+          totalFormatSettings = undefined;
+        }
+      }
+      
       const totalFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
-        globalTableSettings?.rowTotalsValueFormat,
+        totalFormatSettings,
       );
       // Объединяем ref callback со стилями padding
       const totalCellRef = totalStyleRef
@@ -1497,10 +1552,25 @@ export class TableRenderer extends Component {
       const totalRowStyleRef = globalTableSettings?.columnTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
         : null;
+      
+      // Обработка адаптивного форматирования для итогов колонок
+      let totalRowFormatSettings = globalTableSettings?.columnTotalsValueFormat;
+      if (totalRowFormatSettings?.valueFormat === ADAPTIVE_FORMATTING) {
+        // Для итогов колонок метрика определяется по colKey (когда transposePivot = false)
+        const adaptiveMetricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
+        const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
+        if (adaptiveMetricFormat) {
+          totalRowFormatSettings = { ...totalRowFormatSettings, valueFormat: adaptiveMetricFormat };
+        } else {
+          // Если формат метрики не найден, используем формат агрегатора
+          totalRowFormatSettings = undefined;
+        }
+      }
+      
       const totalRowFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
-        globalTableSettings?.columnTotalsValueFormat,
+        totalRowFormatSettings,
       );
 
       // Объединяем ref callback со стилями padding
