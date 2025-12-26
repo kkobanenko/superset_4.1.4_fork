@@ -1436,6 +1436,17 @@ export class TableRenderer extends Component {
         metricFormatSettings ||
         undefined;
       
+      // Debug: проверяем значения для диагностики
+      if (isRowSubtotalRow) {
+        console.warn('Debug row subtotal:', {
+          isRowSubtotalRow,
+          valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
+          ADAPTIVE_FORMATTING,
+          match: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING,
+          rowSubTotalsValueFormat: globalTableSettings?.rowSubTotalsValueFormat,
+        });
+      }
+      
       // Если используется адаптивное форматирование для подытогов строк
       if (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
