@@ -3220,18 +3220,10 @@ const config: ControlPanelConfig = {
       // Они имеют отдельные настройки для header и values
       const groupbyRows = ensureIsArray(formData.groupbyRows || []);
       const groupbyColumns = ensureIsArray(formData.groupbyColumns || []);
-      const metrics = ensureIsArray(formData.metrics || []);
       const rowLabels = groupbyRows.map((r: QueryFormColumn) => getColumnLabel(r)).filter((x: string) => x.length > 0);
       const columnLabels = groupbyColumns.map((c: QueryFormColumn) => getColumnLabel(c)).filter((x: string) => x.length > 0);
-      const metricLabels = metrics.map((m: QueryFormMetric) => {
-        if (typeof m === 'string') return m;
-        if (m && typeof m === 'object' && 'label' in m && m.label) return String(m.label);
-        if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) return String(m.sqlExpression);
-        return '';
-      }).filter((x: string) => x.length > 0);
       const isRowField = rowLabels.indexOf(String(selectedField)) !== -1;
       const isColumnField = columnLabels.indexOf(String(selectedField)) !== -1;
-      const isMetricField = metricLabels.indexOf(String(selectedField)) !== -1;
       // Сохраняем безымянные настройки только для метрик (для обратной совместимости)
       // Для Row и Columns используем только отдельные настройки header/value
       if (!isRowField && !isColumnField) {
@@ -3342,15 +3334,8 @@ const config: ControlPanelConfig = {
         // Они имеют отдельные настройки для header и values
         const groupbyRows = ensureIsArray(formData.groupbyRows || []);
         const groupbyColumns = ensureIsArray(formData.groupbyColumns || []);
-        const metrics = ensureIsArray(formData.metrics || []);
         const rowLabels = groupbyRows.map((r: QueryFormColumn) => getColumnLabel(r)).filter((x: string) => x.length > 0);
         const columnLabels = groupbyColumns.map((c: QueryFormColumn) => getColumnLabel(c)).filter((x: string) => x.length > 0);
-        const metricLabels = metrics.map((m: QueryFormMetric) => {
-          if (typeof m === 'string') return m;
-          if (m && typeof m === 'object' && 'label' in m && m.label) return String(m.label);
-          if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) return String(m.sqlExpression);
-          return '';
-        }).filter((x: string) => x.length > 0);
         const isRowField = rowLabels.indexOf(String(selectedField)) !== -1;
         const isColumnField = columnLabels.indexOf(String(selectedField)) !== -1;
         // Восстанавливаем безымянные настройки только для метрик (для обратной совместимости)
@@ -3434,15 +3419,8 @@ const config: ControlPanelConfig = {
       // Они имеют отдельные настройки для header и values
       const groupbyRows = ensureIsArray(formData.groupbyRows || []);
       const groupbyColumns = ensureIsArray(formData.groupbyColumns || []);
-      const metrics = ensureIsArray(formData.metrics || []);
       const rowLabels = groupbyRows.map((r: QueryFormColumn) => getColumnLabel(r)).filter((x: string) => x.length > 0);
       const columnLabels = groupbyColumns.map((c: QueryFormColumn) => getColumnLabel(c)).filter((x: string) => x.length > 0);
-      const metricLabels = metrics.map((m: QueryFormMetric) => {
-        if (typeof m === 'string') return m;
-        if (m && typeof m === 'object' && 'label' in m && m.label) return String(m.label);
-        if (m && typeof m === 'object' && 'sqlExpression' in m && m.sqlExpression) return String(m.sqlExpression);
-        return '';
-      }).filter((x: string) => x.length > 0);
       const isRowField = rowLabels.indexOf(String(fieldName)) !== -1;
       const isColumnField = columnLabels.indexOf(String(fieldName)) !== -1;
       // Восстанавливаем безымянные настройки только для метрик (для обратной совместимости)
