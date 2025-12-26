@@ -1515,33 +1515,9 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     description: t('Font color'),
                     visibility: (props: any) => {
-                      const controls = props?.controls || {};
-                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
-                      const selectedField = selectorControl?.value;
-                      if (!selectedField) {
-                        return false;
-                      }
-                      const metrics = ensureIsArray(controls?.metrics?.value || []);
-                      const metricLabels = metrics
-                        .map((m: QueryFormMetric) => {
-                          if (typeof m === 'string') {
-                            return m;
-                          }
-                          if (m && typeof m === 'object' && 'label' in m && m.label) {
-                            return String(m.label);
-                          }
-                          if (
-                            m &&
-                            typeof m === 'object' &&
-                            'sqlExpression' in m &&
-                            m.sqlExpression
-                          ) {
-                            return String(m.sqlExpression);
-                          }
-                          return '';
-                        })
-                        .filter((x: string) => x.length > 0);
-                      return !metricLabels.includes(String(selectedField));
+                      // Hide generic typography controls for all fields (Row, Columns, Metrics)
+                      // They have separate header/value styling controls below
+                      return false;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -1587,33 +1563,9 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     description: t('Background color for column/row'),
                     visibility: (props: any) => {
-                      const controls = props?.controls || {};
-                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
-                      const selectedField = selectorControl?.value;
-                      if (!selectedField) {
-                        return false;
-                      }
-                      const metrics = ensureIsArray(controls?.metrics?.value || []);
-                      const metricLabels = metrics
-                        .map((m: QueryFormMetric) => {
-                          if (typeof m === 'string') {
-                            return m;
-                          }
-                          if (m && typeof m === 'object' && 'label' in m && m.label) {
-                            return String(m.label);
-                          }
-                          if (
-                            m &&
-                            typeof m === 'object' &&
-                            'sqlExpression' in m &&
-                            m.sqlExpression
-                          ) {
-                            return String(m.sqlExpression);
-                          }
-                          return '';
-                        })
-                        .filter((x: string) => x.length > 0);
-                      return !metricLabels.includes(String(selectedField));
+                      // Hide generic typography controls for all fields (Row, Columns, Metrics)
+                      // They have separate header/value styling controls below
+                      return false;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
