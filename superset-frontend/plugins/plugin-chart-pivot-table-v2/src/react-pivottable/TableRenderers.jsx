@@ -284,6 +284,10 @@ export class TableRenderer extends Component {
     
     while ((match = aggregateFunctionPattern.exec(sqlExpression)) !== null) {
       const metricName = match[1].trim();
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[parseSqlFormula] Found metric in SQL:', metricName, 'Available metrics:', metricNames);
+      }
       // Проверяем, что извлеченная метрика действительно существует в списке метрик
       if (metricNames && metricNames.includes(metricName)) {
         baseMetrics.push(metricName);
@@ -292,6 +296,8 @@ export class TableRenderer extends Component {
           startIndex: match.index,
           endIndex: match.index + match[0].length,
         });
+      } else if (typeof console !== 'undefined' && console.log) {
+        console.log('[parseSqlFormula] Metric not found in metricsOrder:', metricName);
       }
     }
 
@@ -443,6 +449,11 @@ export class TableRenderer extends Component {
     if (!sqlExpression) {
       // Если метрика не является формулой, возвращаем null (будет использовано стандартное поведение)
       return null;
+    }
+
+    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[computeFormulaValue] formulaMetricName:', formulaMetricName, 'sqlExpression:', sqlExpression, 'metricsOrder:', metricsOrder);
     }
 
     // Парсим формулу
@@ -1577,6 +1588,10 @@ export class TableRenderer extends Component {
       let aggValue = agg.value();
       if (isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
         const metricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[renderRow] isRowSubtotalRow:', isRowSubtotalRow, 'metricName:', metricName, 'hasSqlExpression:', metricName && metricsSqlExpressions[metricName]);
+        }
         if (metricName && metricsSqlExpressions[metricName]) {
           // Метрика является формулой, вычисляем значение по формуле
           const formulaValue = this.computeFormulaValue(
