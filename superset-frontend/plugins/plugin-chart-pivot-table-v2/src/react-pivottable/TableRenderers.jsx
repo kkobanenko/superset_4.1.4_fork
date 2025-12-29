@@ -370,7 +370,7 @@ export class TableRenderer extends Component {
     }
 
     const { tableOptions } = this.props;
-    const { transposePivot } = tableOptions || {};
+    const { transposePivot, metricsOrder } = tableOptions || {};
 
     try {
       let targetRowKey = [...rowKey];
@@ -378,58 +378,65 @@ export class TableRenderer extends Component {
 
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Start:', { baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, transposePivot, rowAttrs, colAttrs, metricKey });
+        console.log('[getBaseMetricValue] Start:', { baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, transposePivot, rowAttrs, colAttrs, metricKey, metricsOrder });
+      }
+
+      // Находим индекс базовой метрики в metricsOrder
+      const baseMetricIndex = metricsOrder && Array.isArray(metricsOrder) ? metricsOrder.indexOf(baseMetricName) : -1;
+      if (baseMetricIndex === -1) {
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[getBaseMetricValue] Base metric not found in metricsOrder:', { baseMetricName, metricsOrder });
+        }
+        return null;
+      }
+
+      // Находим позицию metricKey в colAttrs
+      const metricKeyIndex = colAttrs.indexOf(metricKey);
+      if (metricKeyIndex === -1) {
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[getBaseMetricValue] metricKey not found in colAttrs:', { metricKey, colAttrs });
+        }
+        return null;
       }
 
       if (isRowSubtotal && !transposePivot) {
         // Для подытога строки при transposePivot = false: метрики в колонках
-        // Нужно создать colKey с базовой метрикой
-        // Находим позицию metricKey в colAttrs
-        const metricKeyIndex = colAttrs.indexOf(metricKey);
-        if (metricKeyIndex !== -1) {
-          // Создаем colKey с базовой метрикой
-          // colKey должен быть достаточно длинным, чтобы включить позицию метрики
-          while (targetColKey.length <= metricKeyIndex) {
-            targetColKey.push(null);
-          }
-          targetColKey[metricKeyIndex] = baseMetricName;
-        } else {
-          return null;
+        // Заменяем значение метрики в colKey на индекс базовой метрики
+        // colKey должен быть достаточно длинным, чтобы включить позицию метрики
+        while (targetColKey.length <= metricKeyIndex) {
+          targetColKey.push(null);
         }
+        // Используем индекс базовой метрики вместо имени
+        targetColKey[metricKeyIndex] = baseMetricIndex;
       } else if (isColSubtotal && !transposePivot) {
         // Для подытога колонки при transposePivot = false: метрики в колонках
         // Аналогично подытогу строки
-        const metricKeyIndex = colAttrs.indexOf(metricKey);
-        if (metricKeyIndex !== -1) {
+        while (targetColKey.length <= metricKeyIndex) {
+          targetColKey.push(null);
+        }
+        targetColKey[metricKeyIndex] = baseMetricIndex;
+      } else if (!transposePivot && rowKey.length === 0 && colKey.length > 0) {
+        // Для итога колонки при transposePivot = false: rowKey пустой, colKey содержит все измерения колонок
+        // Заменяем метрику в colKey на индекс базовой метрики
+        if (targetColKey.length > metricKeyIndex) {
+          targetColKey[metricKeyIndex] = baseMetricIndex;
+        } else {
+          // Если colKey короче, расширяем его
           while (targetColKey.length <= metricKeyIndex) {
             targetColKey.push(null);
           }
-          targetColKey[metricKeyIndex] = baseMetricName;
-        } else {
-          return null;
-        }
-      } else if (!transposePivot && rowKey.length === 0 && colKey.length > 0) {
-        // Для итога колонки при transposePivot = false: rowKey пустой, colKey содержит все измерения колонок
-        // Нужно заменить метрику в colKey на базовую метрику
-        const metricKeyIndex = colAttrs.indexOf(metricKey);
-        if (metricKeyIndex !== -1) {
-          // colKey уже должен содержать все измерения, включая метрику
-          // Заменяем метрику на базовую
-          if (targetColKey.length > metricKeyIndex) {
-            targetColKey[metricKeyIndex] = baseMetricName;
-          } else {
-            // Если colKey короче, расширяем его
-            while (targetColKey.length <= metricKeyIndex) {
-              targetColKey.push(null);
-            }
-            targetColKey[metricKeyIndex] = baseMetricName;
-          }
-        } else {
-          return null;
+          targetColKey[metricKeyIndex] = baseMetricIndex;
         }
       } else {
         // Для transposePivot = true или других случаев - пока не поддерживаем
         return null;
+      }
+
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[getBaseMetricValue] Before getAggregator:', { baseMetricName, baseMetricIndex, targetRowKey, targetColKey, metricKeyIndex });
       }
 
       // Получаем агрегатор для базовой метрики
@@ -437,7 +444,7 @@ export class TableRenderer extends Component {
       if (!agg) {
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Aggregator not found:', { baseMetricName, targetRowKey, targetColKey });
+          console.log('[getBaseMetricValue] Aggregator not found:', { baseMetricName, baseMetricIndex, targetRowKey, targetColKey });
         }
         return null;
       }
@@ -445,13 +452,13 @@ export class TableRenderer extends Component {
       const value = agg.value();
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Aggregator value:', { baseMetricName, value, targetRowKey, targetColKey });
+        console.log('[getBaseMetricValue] Aggregator value:', { baseMetricName, baseMetricIndex, value, targetRowKey, targetColKey });
       }
       // Проверяем, что значение валидно (не null, не undefined, не NaN)
       if (value === null || value === undefined || (typeof value === 'number' && Number.isNaN(value))) {
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Invalid value:', { baseMetricName, value });
+          console.log('[getBaseMetricValue] Invalid value:', { baseMetricName, baseMetricIndex, value });
         }
         return null;
       }
@@ -459,7 +466,7 @@ export class TableRenderer extends Component {
       const result = typeof value === 'number' ? value : Number.parseFloat(value);
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Final result:', { baseMetricName, result });
+        console.log('[getBaseMetricValue] Final result:', { baseMetricName, baseMetricIndex, result });
       }
       return result;
     } catch (error) {
