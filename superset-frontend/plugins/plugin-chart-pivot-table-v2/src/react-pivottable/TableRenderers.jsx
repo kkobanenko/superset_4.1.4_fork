@@ -25,7 +25,7 @@ import { Styles } from './Styles';
 import { ADAPTIVE_FORMATTING } from '../types';
 
 // Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
-const isAdaptiveFormatting = (valueFormat: string | undefined) => {
+const isAdaptiveFormatting = (valueFormat) => {
   return valueFormat === ADAPTIVE_FORMATTING || valueFormat === NumberFormats.SMART_NUMBER;
 };
 
