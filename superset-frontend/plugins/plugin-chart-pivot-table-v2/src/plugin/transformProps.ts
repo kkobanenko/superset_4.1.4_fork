@@ -231,8 +231,17 @@ function buildGlobalTableSettings(
   }
   // Перезаписываем значениями из плоских ключей (если они заданы)
   // Проверяем !== undefined чтобы не перезаписывать на null/0
-  if (formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'] !== undefined) {
-    rowSubTotalsValueFormat.valueFormat = formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'];
+  const formDataValueFormat = formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'];
+  // Debug: проверяем значение из formData
+  if (formDataValueFormat !== undefined) {
+    console.warn('Debug transformProps rowSubTotalsValueFormat.valueFormat:', {
+      formDataValueFormat,
+      formDataValueFormatType: typeof formDataValueFormat,
+      existingValueFormat: rowSubTotalsValueFormat.valueFormat,
+      ADAPTIVE_FORMATTING: 'ADAPTIVE_FORMATTING',
+      match: formDataValueFormat === 'ADAPTIVE_FORMATTING',
+    });
+    rowSubTotalsValueFormat.valueFormat = formDataValueFormat;
   }
   if (formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'] !== undefined) {
     rowSubTotalsValueFormat.dateFormat = formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'];
