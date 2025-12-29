@@ -179,4 +179,8 @@ export interface PivotTableV2Props extends PivotTableProps {
   globalTableSettings?: GlobalTableSettings;
   // SQL-выражения метрик для определения формул (ключ - имя метрики, значение - sqlExpression или null)
   metricsSqlExpressions?: Record<string, string | null>;
+  // Маппинг между именами метрик из SQL-выражений и отображаемыми именами метрик
+  // Ключ: имя метрики из SQL-выражения (например, "Продажи: Сумма без НДС")
+  // Значение: отображаемое имя метрики (например, "Факт")
+  metricNameMapping?: Record<string, string>;
 }

@@ -267,7 +267,7 @@ export class TableRenderer extends Component {
 
   // Парсинг SQL-формулы для извлечения базовых метрик и операций
   // Возвращает структуру: { baseMetrics: string[], operations: string[], isValid: boolean }
-  parseSqlFormula(sqlExpression, metricNames) {
+  parseSqlFormula(sqlExpression, metricNames, metricNameMapping) {
     if (!sqlExpression || typeof sqlExpression !== 'string') {
       return { baseMetrics: [], operations: [], isValid: false };
     }
@@ -283,22 +283,28 @@ export class TableRenderer extends Component {
     let match;
     
     while ((match = aggregateFunctionPattern.exec(sqlExpression)) !== null) {
-      const metricName = match[1].trim();
+      const sqlMetricName = match[1].trim();
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[parseSqlFormula] Found metric in SQL:', metricName, 'Available metrics:', metricNames);
+        console.log('[parseSqlFormula] Found metric in SQL:', sqlMetricName, 'Available metrics:', metricNames, 'metricNameMapping:', metricNameMapping);
       }
-      // Проверяем, что извлеченная метрика действительно существует в списке метрик
-      if (metricNames && metricNames.includes(metricName)) {
-        baseMetrics.push(metricName);
-        metricMatches.push({
-          metricName,
-          startIndex: match.index,
-          endIndex: match.index + match[0].length,
-        });
-      } else if (typeof console !== 'undefined' && console.log) {
-        console.log('[parseSqlFormula] Metric not found in metricsOrder:', metricName);
+      // Пытаемся найти отображаемое имя метрики через маппинг
+      // Если маппинг не найден, используем имя из SQL напрямую
+      const displayMetricName = metricNameMapping && metricNameMapping[sqlMetricName] 
+        ? metricNameMapping[sqlMetricName] 
+        : sqlMetricName;
+      
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[parseSqlFormula] Mapped metric name:', sqlMetricName, '->', displayMetricName);
       }
+      
+      baseMetrics.push(displayMetricName);
+      metricMatches.push({
+        metricName: displayMetricName,
+        startIndex: match.index,
+        endIndex: match.index + match[0].length,
+      });
     }
 
     // Если не нашли метрики, формула невалидна
@@ -440,7 +446,7 @@ export class TableRenderer extends Component {
   }
 
   // Вычисление значения формулы для подытогов/итогов
-  computeFormulaValue(formulaMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey, metricsSqlExpressions, metricsOrder) {
+  computeFormulaValue(formulaMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey, metricsSqlExpressions, metricsOrder, metricNameMapping) {
     if (!formulaMetricName || !metricsSqlExpressions) {
       return null;
     }
@@ -453,11 +459,11 @@ export class TableRenderer extends Component {
 
     // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
     if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] formulaMetricName:', formulaMetricName, 'sqlExpression:', sqlExpression, 'metricsOrder:', metricsOrder);
+      console.log('[computeFormulaValue] formulaMetricName:', formulaMetricName, 'sqlExpression:', sqlExpression, 'metricsOrder:', metricsOrder, 'metricNameMapping:', metricNameMapping);
     }
 
     // Парсим формулу
-    const parsed = this.parseSqlFormula(sqlExpression, metricsOrder || []);
+    const parsed = this.parseSqlFormula(sqlExpression, metricsOrder || [], metricNameMapping || {});
     if (!parsed.isValid || parsed.baseMetrics.length === 0) {
       // Если формула не может быть распарсена, возвращаем null (будет использовано стандартное поведение)
       return null;
@@ -1577,7 +1583,7 @@ export class TableRenderer extends Component {
 
     const rowClickHandlers = cellCallbacks[flatRowKey] || {};
     const { tableOptions } = this.props;
-    const { transposePivot, metricsSqlExpressions, metricsOrder } = tableOptions || {};
+    const { transposePivot, metricsSqlExpressions, metricsOrder, metricNameMapping } = tableOptions || {};
     const metricKey = this.getMetricKey();
     
     const valueCells = visibleColKeys.map((colKey, colIndex) => {
@@ -1605,7 +1611,8 @@ export class TableRenderer extends Component {
             colAttrs,
             metricKey,
             metricsSqlExpressions,
-            metricsOrder
+            metricsOrder,
+            metricNameMapping
           );
           if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
             aggValue = formulaValue;
@@ -1890,7 +1897,7 @@ export class TableRenderer extends Component {
     );
 
     const { tableOptions } = this.props;
-    const { transposePivot, metricsSqlExpressions, metricsOrder } = tableOptions || {};
+    const { transposePivot, metricsSqlExpressions, metricsOrder, metricNameMapping } = tableOptions || {};
     const metricKey = this.getMetricKey();
     
     const totalValueCells = visibleColKeys.map(colKey => {
@@ -1914,7 +1921,8 @@ export class TableRenderer extends Component {
             colAttrs,
             metricKey,
             metricsSqlExpressions,
-            metricsOrder
+            metricsOrder,
+            metricNameMapping
           );
           if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
             aggValue = formulaValue;

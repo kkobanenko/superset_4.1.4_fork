@@ -1168,6 +1168,11 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
 
   // Создаем объект с SQL-выражениями метрик для определения формул
   const metricsSqlExpressions: Record<string, string | null> = {};
+  // Создаем маппинг между именами метрик из SQL-выражений и отображаемыми именами метрик
+  // Ключ: имя метрики из SQL-выражения (например, "Продажи: Сумма без НДС")
+  // Значение: отображаемое имя метрики (например, "Факт")
+  const metricNameMapping: Record<string, string> = {};
+  
   if (Array.isArray(metrics)) {
     for (const metric of metrics) {
       const metricName = getMetricLabel(metric);
@@ -1177,6 +1182,18 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
       const sqlExpression = getMetricSqlExpression(metric);
       // Сохраняем sqlExpression только если это формула (содержит операции)
       metricsSqlExpressions[metricName] = isFormulaMetric(sqlExpression) ? sqlExpression : null;
+      
+      // Если это не формула, но есть SQL-выражение, создаем маппинг
+      // для случаев, когда метрика используется в формуле другой метрики
+      if (sqlExpression && !isFormulaMetric(sqlExpression)) {
+        // Извлекаем имя метрики из SQL-выражения (например, из sum(`Продажи: Сумма без НДС`))
+        const metricNameRegex = /(?:sum|count|avg|min|max|count_distinct)\s*\(\s*`([^`]+)`\s*\)/gi;
+        let match;
+        while ((match = metricNameRegex.exec(sqlExpression)) !== null) {
+          const sqlMetricName = match[1].trim();
+          metricNameMapping[sqlMetricName] = metricName;
+        }
+      }
     }
   }
 
@@ -1223,5 +1240,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     order_desc: order_desc ?? true,
     // SQL-выражения метрик для определения формул
     metricsSqlExpressions,
+    // Маппинг между именами метрик из SQL-выражений и отображаемыми именами метрик
+    metricNameMapping,
   };
 }
