@@ -362,6 +362,10 @@ export class TableRenderer extends Component {
   // Для итога колонки: создаем rowKey или colKey с базовой метрикой (в зависимости от transposePivot)
   getBaseMetricValue(baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey) {
     if (!baseMetricName || !pivotData || !metricKey) {
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[getBaseMetricValue] Invalid parameters:', { baseMetricName, pivotData: !!pivotData, metricKey });
+      }
       return null;
     }
 
@@ -371,6 +375,11 @@ export class TableRenderer extends Component {
     try {
       let targetRowKey = [...rowKey];
       let targetColKey = [...colKey];
+
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[getBaseMetricValue] Start:', { baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, transposePivot, rowAttrs, colAttrs, metricKey });
+      }
 
       if (isRowSubtotal && !transposePivot) {
         // Для подытога строки при transposePivot = false: метрики в колонках
@@ -426,16 +435,33 @@ export class TableRenderer extends Component {
       // Получаем агрегатор для базовой метрики
       const agg = pivotData.getAggregator(targetRowKey, targetColKey);
       if (!agg) {
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[getBaseMetricValue] Aggregator not found:', { baseMetricName, targetRowKey, targetColKey });
+        }
         return null;
       }
 
       const value = agg.value();
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[getBaseMetricValue] Aggregator value:', { baseMetricName, value, targetRowKey, targetColKey });
+      }
       // Проверяем, что значение валидно (не null, не undefined, не NaN)
       if (value === null || value === undefined || (typeof value === 'number' && Number.isNaN(value))) {
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[getBaseMetricValue] Invalid value:', { baseMetricName, value });
+        }
         return null;
       }
 
-      return typeof value === 'number' ? value : Number.parseFloat(value);
+      const result = typeof value === 'number' ? value : Number.parseFloat(value);
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[getBaseMetricValue] Final result:', { baseMetricName, result });
+      }
+      return result;
     } catch (error) {
       // В случае ошибки возвращаем null
       if (process.env.NODE_ENV === 'development') {
