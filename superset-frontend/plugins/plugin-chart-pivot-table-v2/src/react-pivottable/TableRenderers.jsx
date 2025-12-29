@@ -18,11 +18,16 @@
  */
 
 import { Component } from 'react';
-import { getNumberFormatter, getTimeFormatter, SMART_DATE_ID, t, safeHtmlSpan } from '@superset-ui/core';
+import { getNumberFormatter, getTimeFormatter, SMART_DATE_ID, t, safeHtmlSpan, NumberFormats } from '@superset-ui/core';
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
 import { ADAPTIVE_FORMATTING } from '../types';
+
+// Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
+const isAdaptiveFormatting = (valueFormat: string | undefined) => {
+  return valueFormat === ADAPTIVE_FORMATTING || valueFormat === NumberFormats.SMART_NUMBER;
+};
 
 // Russian month names
 const RUSSIAN_MONTHS = [
@@ -1167,7 +1172,7 @@ export class TableRenderer extends Component {
         globalTableSettings: globalTableSettings?.rowSubTotalsValueFormat,
         valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
         ADAPTIVE_FORMATTING,
-        match: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING,
+        match: isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat),
       });
     }
     
@@ -1180,7 +1185,7 @@ export class TableRenderer extends Component {
         isRowSubtotalRow,
         valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
         ADAPTIVE_FORMATTING,
-        match: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING,
+        match: isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat),
       });
     }
 
@@ -1457,14 +1462,14 @@ export class TableRenderer extends Component {
           valueFormatType: typeof globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
           ADAPTIVE_FORMATTING,
           ADAPTIVE_FORMATTINGType: typeof ADAPTIVE_FORMATTING,
-          match: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING,
+          match: isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat),
           rowSubTotalsValueFormat: globalTableSettings?.rowSubTotalsValueFormat,
           globalTableSettings: globalTableSettings,
         });
       }
       
       // Если используется адаптивное форматирование для подытогов строк
-      if (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING) {
+      if (isRowSubtotalRow && isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
         console.warn('Adaptive formatting (row subtotal):', {
@@ -1484,7 +1489,7 @@ export class TableRenderer extends Component {
       }
       
       // Если используется адаптивное форматирование для подытогов колонок
-      if (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING) {
+      if (isColSubtotalCol && isAdaptiveFormatting(globalTableSettings?.colSubTotalsValueFormat?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
         console.warn('Adaptive formatting (col subtotal):', {
@@ -1534,7 +1539,7 @@ export class TableRenderer extends Component {
       
       // Обработка адаптивного форматирования для итогов строк
       let totalFormatSettings = globalTableSettings?.rowTotalsValueFormat;
-      if (totalFormatSettings?.valueFormat === ADAPTIVE_FORMATTING) {
+      if (isAdaptiveFormatting(totalFormatSettings?.valueFormat)) {
         // Для итогов строк метрика определяется по rowKey (когда transposePivot = true)
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, [], rowAttrs, colAttrs);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
@@ -1656,7 +1661,7 @@ export class TableRenderer extends Component {
       
       // Обработка адаптивного форматирования для итогов колонок
       let totalRowFormatSettings = globalTableSettings?.columnTotalsValueFormat;
-      if (totalRowFormatSettings?.valueFormat === ADAPTIVE_FORMATTING) {
+      if (isAdaptiveFormatting(totalRowFormatSettings?.valueFormat)) {
         // Для итогов колонок метрика определяется по colKey (когда transposePivot = false)
         const adaptiveMetricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
