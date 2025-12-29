@@ -1170,6 +1170,18 @@ export class TableRenderer extends Component {
     const flatRowKey = flatKey(rowKey);
     const globalTableSettings = this.getGlobalTableSettings();
     const isRowSubtotalRow = rowKey.length < rowAttrs.length;
+    
+    // Debug: проверяем все строки для диагностики
+    if (rowKey.some(r => String(r).includes('Итого по БР'))) {
+      console.warn('Debug row with "Итого по БР":', {
+        rowKey,
+        rowKeyLength: rowKey.length,
+        rowAttrs,
+        rowAttrsLength: rowAttrs.length,
+        isRowSubtotalRow,
+        globalTableSettings: globalTableSettings?.rowSubTotalsValueFormat,
+      });
+    }
 
     const colIncrSpan = colAttrs.length !== 0 ? 1 : 0;
     const attrValueCells = rowKey.map((r, i) => {
