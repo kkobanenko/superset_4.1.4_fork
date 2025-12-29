@@ -1165,6 +1165,22 @@ export class TableRenderer extends Component {
         rowAttrsLength: rowAttrs.length,
         isRowSubtotalRow,
         globalTableSettings: globalTableSettings?.rowSubTotalsValueFormat,
+        valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
+        ADAPTIVE_FORMATTING,
+        match: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING,
+      });
+    }
+    
+    // Debug: логируем все строки подытогов для диагностики
+    if (isRowSubtotalRow) {
+      console.warn('Debug ALL row subtotals:', {
+        rowKey,
+        rowKeyLength: rowKey.length,
+        rowAttrsLength: rowAttrs.length,
+        isRowSubtotalRow,
+        valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
+        ADAPTIVE_FORMATTING,
+        match: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING,
       });
     }
 
