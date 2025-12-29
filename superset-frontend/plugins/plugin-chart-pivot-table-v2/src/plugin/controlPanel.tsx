@@ -3486,9 +3486,10 @@ const config: ControlPanelConfig = {
       const gts = globalTableSettings as Record<string, unknown>;
       
       // Синхронизируем rowTotalsValueFormat
+      // ВАЖНО: не перезаписываем значение, если оно уже задано через плоский ключ (из UI)
       if (gts.rowTotalsValueFormat && typeof gts.rowTotalsValueFormat === 'object') {
         const rtvf = gts.rowTotalsValueFormat as Record<string, unknown>;
-        if (rtvf.valueFormat !== undefined) {
+        if (rtvf.valueFormat !== undefined && formData['globalTableSettings.rowTotalsValueFormat.valueFormat'] === undefined) {
           resultFormData['globalTableSettings.rowTotalsValueFormat.valueFormat'] = rtvf.valueFormat;
         }
         if (rtvf.dateFormat !== undefined) {
@@ -3506,9 +3507,10 @@ const config: ControlPanelConfig = {
       }
       
       // Синхронизируем rowSubTotalsValueFormat
+      // ВАЖНО: не перезаписываем значение, если оно уже задано через плоский ключ (из UI)
       if (gts.rowSubTotalsValueFormat && typeof gts.rowSubTotalsValueFormat === 'object') {
         const rstvf = gts.rowSubTotalsValueFormat as Record<string, unknown>;
-        if (rstvf.valueFormat !== undefined) {
+        if (rstvf.valueFormat !== undefined && formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'] === undefined) {
           resultFormData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'] = rstvf.valueFormat;
         }
         if (rstvf.dateFormat !== undefined) {
@@ -3526,9 +3528,10 @@ const config: ControlPanelConfig = {
       }
       
       // Синхронизируем columnTotalsValueFormat
+      // ВАЖНО: не перезаписываем значение, если оно уже задано через плоский ключ (из UI)
       if (gts.columnTotalsValueFormat && typeof gts.columnTotalsValueFormat === 'object') {
         const ctvf = gts.columnTotalsValueFormat as Record<string, unknown>;
-        if (ctvf.valueFormat !== undefined) {
+        if (ctvf.valueFormat !== undefined && formData['globalTableSettings.columnTotalsValueFormat.valueFormat'] === undefined) {
           resultFormData['globalTableSettings.columnTotalsValueFormat.valueFormat'] = ctvf.valueFormat;
         }
         if (ctvf.dateFormat !== undefined) {
@@ -3546,9 +3549,10 @@ const config: ControlPanelConfig = {
       }
       
       // Синхронизируем colSubTotalsValueFormat
+      // ВАЖНО: не перезаписываем значение, если оно уже задано через плоский ключ (из UI)
       if (gts.colSubTotalsValueFormat && typeof gts.colSubTotalsValueFormat === 'object') {
         const cstvf = gts.colSubTotalsValueFormat as Record<string, unknown>;
-        if (cstvf.valueFormat !== undefined) {
+        if (cstvf.valueFormat !== undefined && formData['globalTableSettings.colSubTotalsValueFormat.valueFormat'] === undefined) {
           resultFormData['globalTableSettings.colSubTotalsValueFormat.valueFormat'] = cstvf.valueFormat;
         }
         if (cstvf.dateFormat !== undefined) {
