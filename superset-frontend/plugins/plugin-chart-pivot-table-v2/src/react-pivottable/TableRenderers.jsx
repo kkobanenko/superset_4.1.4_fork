@@ -486,10 +486,19 @@ export class TableRenderer extends Component {
       
       if (value === null || value === undefined || Number.isNaN(value)) {
         // Если значение базовой метрики не найдено, возвращаем null
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[computeFormulaValue] Base metric value not found:', { baseMetric, value, rowKey, colKey });
+        }
         return null;
       }
       
       baseValues.push(value);
+    }
+
+    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[computeFormulaValue] Base values:', { baseMetrics: parsed.baseMetrics, baseValues, operations: parsed.operations });
     }
 
     // Применяем операции к значениям базовых метрик
@@ -525,8 +534,17 @@ export class TableRenderer extends Component {
       }
     }
 
+    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[computeFormulaValue] Result:', { formulaMetricName, result, baseValues, operations: parsed.operations });
+    }
+
     // Проверяем результат на валидность
     if (result === null || result === undefined || Number.isNaN(result) || !Number.isFinite(result)) {
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[computeFormulaValue] Invalid result:', { formulaMetricName, result });
+      }
       return null;
     }
 
@@ -1614,6 +1632,10 @@ export class TableRenderer extends Component {
             metricsOrder,
             metricNameMapping
           );
+          // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[renderRow] formula calculation result:', { metricName, formulaValue, aggValue, rowKey, colKey });
+          }
           if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
             aggValue = formulaValue;
           }
