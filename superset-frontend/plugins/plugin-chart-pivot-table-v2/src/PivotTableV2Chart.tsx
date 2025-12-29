@@ -218,6 +218,7 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
     allowRenderHtml,
     fieldGroupingSettings,
     globalTableSettings,
+    metricsSqlExpressions,
   } = props;
 
   const theme = useTheme();
@@ -618,6 +619,8 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
       fieldGroupingSettings: fieldGroupingSettings || {},
       // Передаем глобальные настройки таблицы
       globalTableSettings: globalTableSettings || {},
+      // Передаем SQL-выражения метрик для определения формул
+      metricsSqlExpressions: metricsSqlExpressions || {},
     }),
     [
       colTotals,
@@ -627,6 +630,7 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
       fieldGroupingSettings,
       globalTableSettings,
       metricColorFormatters,
+      metricsSqlExpressions,
       rowTotals,
       rowSubTotals,
       selectedFilters,

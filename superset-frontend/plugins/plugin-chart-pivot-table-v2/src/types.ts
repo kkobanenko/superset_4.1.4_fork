@@ -177,4 +177,6 @@ export interface PivotTableV2QueryFormData extends PivotTableQueryFormData {
 export interface PivotTableV2Props extends PivotTableProps {
   fieldGroupingSettings?: Record<string, FieldGroupingSettings>;
   globalTableSettings?: GlobalTableSettings;
+  // SQL-выражения метрик для определения формул (ключ - имя метрики, значение - sqlExpression или null)
+  metricsSqlExpressions?: Record<string, string | null>;
 }

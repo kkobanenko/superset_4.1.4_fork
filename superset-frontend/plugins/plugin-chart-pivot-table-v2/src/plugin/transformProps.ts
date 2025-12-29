@@ -384,6 +384,42 @@ function buildEffectiveFieldGroupingSettings(
     return null;
   }
 
+  // Функция для извлечения sqlExpression из метрики
+  function getMetricSqlExpression(metric: unknown): string | null {
+    if (typeof metric === 'string') {
+      // Для строковых метрик (простые метрики из datasource) нет sqlExpression
+      return null;
+    }
+    if (!metric || typeof metric !== 'object') {
+      return null;
+    }
+    const m = metric as { sqlExpression?: unknown; expressionType?: unknown };
+    // Проверяем, что это SQL-выражение (expressionType === 'SQL')
+    if (m.expressionType === 'SQL' && typeof m.sqlExpression === 'string' && m.sqlExpression.length > 0) {
+      return m.sqlExpression;
+    }
+    return null;
+  }
+
+  // Функция для определения, является ли метрика формулой (содержит операции)
+  function isFormulaMetric(sqlExpression: string | null): boolean {
+    if (!sqlExpression || typeof sqlExpression !== 'string') {
+      return false;
+    }
+    // Проверяем наличие операций: /, *, +, -
+    // Исключаем случаи, когда операции используются только в именах функций (например, COUNT_DISTINCT)
+    const hasOperation = /[+\-*/]/.test(sqlExpression);
+    if (!hasOperation) {
+      return false;
+    }
+    // Проверяем, что это не просто имя функции с операцией внутри
+    // Формула должна содержать операции между выражениями, а не только внутри функций
+    // Простая проверка: если есть операции вне скобок функций, это формула
+    // Для упрощения считаем формулой, если есть операции и есть обратные кавычки (метрики)
+    const hasBackticks = /`[^`]+`/.test(sqlExpression);
+    return hasBackticks && hasOperation;
+  }
+
   const baseSettingsRaw = formData.fieldGroupingSettings;
   const baseSettings =
     (typeof baseSettingsRaw === 'object' && baseSettingsRaw !== null
@@ -1111,6 +1147,20 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     rawFormData as unknown as Record<string, unknown>,
   );
 
+  // Создаем объект с SQL-выражениями метрик для определения формул
+  const metricsSqlExpressions: Record<string, string | null> = {};
+  if (Array.isArray(metrics)) {
+    for (const metric of metrics) {
+      const metricName = getMetricLabel(metric);
+      if (!metricName) {
+        continue;
+      }
+      const sqlExpression = getMetricSqlExpression(metric);
+      // Сохраняем sqlExpression только если это формула (содержит операции)
+      metricsSqlExpressions[metricName] = isFormulaMetric(sqlExpression) ? sqlExpression : null;
+    }
+  }
+
   return {
     width,
     height,
@@ -1152,5 +1202,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     globalTableSettings: normalizedGlobalTableSettings,
     legacy_order_by: legacy_order_by || null,
     order_desc: order_desc ?? true,
+    // SQL-выражения метрик для определения формул
+    metricsSqlExpressions,
   };
 }

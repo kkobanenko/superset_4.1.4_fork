@@ -265,6 +265,257 @@ export class TableRenderer extends Component {
     return undefined;
   }
 
+  // Парсинг SQL-формулы для извлечения базовых метрик и операций
+  // Возвращает структуру: { baseMetrics: string[], operations: string[], isValid: boolean }
+  parseSqlFormula(sqlExpression, metricNames) {
+    if (!sqlExpression || typeof sqlExpression !== 'string') {
+      return { baseMetrics: [], operations: [], isValid: false };
+    }
+
+    // Регулярное выражение для поиска паттернов типа sum(`метрика`), count(`метрика`), avg(`метрика`)
+    // Поддерживаем основные агрегатные функции: SUM, COUNT, AVG, MIN, MAX, COUNT_DISTINCT
+    // Учитываем регистронезависимость и возможные пробелы
+    const aggregateFunctionPattern = /(?:sum|count|avg|min|max|count_distinct)\s*\(\s*`([^`]+)`\s*\)/gi;
+    
+    // Извлекаем все метрики из формулы
+    const baseMetrics = [];
+    const metricMatches = [];
+    let match;
+    
+    while ((match = aggregateFunctionPattern.exec(sqlExpression)) !== null) {
+      const metricName = match[1].trim();
+      // Проверяем, что извлеченная метрика действительно существует в списке метрик
+      if (metricNames && metricNames.includes(metricName)) {
+        baseMetrics.push(metricName);
+        metricMatches.push({
+          metricName,
+          startIndex: match.index,
+          endIndex: match.index + match[0].length,
+        });
+      }
+    }
+
+    // Если не нашли метрики, формула невалидна
+    if (baseMetrics.length === 0) {
+      return { baseMetrics: [], operations: [], isValid: false };
+    }
+
+    // Извлекаем операции между метриками
+    // Ищем операции /, *, +, - между найденными метриками
+    const operations = [];
+    const operationPattern = /[+\-*/]/g;
+    const operationMatches = [];
+    
+    while ((match = operationPattern.exec(sqlExpression)) !== null) {
+      operationMatches.push({
+        operation: match[0],
+        index: match.index,
+      });
+    }
+
+    // Определяем операции между метриками
+    // Операция должна быть между двумя метриками
+    for (let i = 0; i < metricMatches.length - 1; i += 1) {
+      const currentMetricEnd = metricMatches[i].endIndex;
+      const nextMetricStart = metricMatches[i + 1].startIndex;
+      
+      // Ищем операции между текущей и следующей метрикой
+      const operationsBetween = operationMatches.filter(
+        op => op.index > currentMetricEnd && op.index < nextMetricStart
+      );
+      
+      if (operationsBetween.length > 0) {
+        // Берем первую операцию между метриками
+        operations.push(operationsBetween[0].operation);
+      } else {
+        // Если операция не найдена, формула невалидна
+        return { baseMetrics: [], operations: [], isValid: false };
+      }
+    }
+
+    // Проверяем, что количество операций соответствует количеству метрик - 1
+    if (operations.length !== baseMetrics.length - 1) {
+      return { baseMetrics: [], operations: [], isValid: false };
+    }
+
+    return {
+      baseMetrics,
+      operations,
+      isValid: true,
+    };
+  }
+
+  // Получение значения базовой метрики из подытогов/итогов
+  // Для подытога строки: создаем colKey с базовой метрикой
+  // Для итога колонки: создаем rowKey или colKey с базовой метрикой (в зависимости от transposePivot)
+  getBaseMetricValue(baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey) {
+    if (!baseMetricName || !pivotData || !metricKey) {
+      return null;
+    }
+
+    const { tableOptions } = this.props;
+    const { transposePivot } = tableOptions || {};
+
+    try {
+      let targetRowKey = [...rowKey];
+      let targetColKey = [...colKey];
+
+      if (isRowSubtotal && !transposePivot) {
+        // Для подытога строки при transposePivot = false: метрики в колонках
+        // Нужно создать colKey с базовой метрикой
+        // Находим позицию metricKey в colAttrs
+        const metricKeyIndex = colAttrs.indexOf(metricKey);
+        if (metricKeyIndex !== -1) {
+          // Создаем colKey с базовой метрикой
+          // colKey должен быть достаточно длинным, чтобы включить позицию метрики
+          while (targetColKey.length <= metricKeyIndex) {
+            targetColKey.push(null);
+          }
+          targetColKey[metricKeyIndex] = baseMetricName;
+        } else {
+          return null;
+        }
+      } else if (isColSubtotal && !transposePivot) {
+        // Для подытога колонки при transposePivot = false: метрики в колонках
+        // Аналогично подытогу строки
+        const metricKeyIndex = colAttrs.indexOf(metricKey);
+        if (metricKeyIndex !== -1) {
+          while (targetColKey.length <= metricKeyIndex) {
+            targetColKey.push(null);
+          }
+          targetColKey[metricKeyIndex] = baseMetricName;
+        } else {
+          return null;
+        }
+      } else if (!transposePivot && rowKey.length === 0 && colKey.length > 0) {
+        // Для итога колонки при transposePivot = false: rowKey пустой, colKey содержит все измерения колонок
+        // Нужно заменить метрику в colKey на базовую метрику
+        const metricKeyIndex = colAttrs.indexOf(metricKey);
+        if (metricKeyIndex !== -1) {
+          // colKey уже должен содержать все измерения, включая метрику
+          // Заменяем метрику на базовую
+          if (targetColKey.length > metricKeyIndex) {
+            targetColKey[metricKeyIndex] = baseMetricName;
+          } else {
+            // Если colKey короче, расширяем его
+            while (targetColKey.length <= metricKeyIndex) {
+              targetColKey.push(null);
+            }
+            targetColKey[metricKeyIndex] = baseMetricName;
+          }
+        } else {
+          return null;
+        }
+      } else {
+        // Для transposePivot = true или других случаев - пока не поддерживаем
+        return null;
+      }
+
+      // Получаем агрегатор для базовой метрики
+      const agg = pivotData.getAggregator(targetRowKey, targetColKey);
+      if (!agg) {
+        return null;
+      }
+
+      const value = agg.value();
+      // Проверяем, что значение валидно (не null, не undefined, не NaN)
+      if (value === null || value === undefined || (typeof value === 'number' && Number.isNaN(value))) {
+        return null;
+      }
+
+      return typeof value === 'number' ? value : Number.parseFloat(value);
+    } catch (error) {
+      // В случае ошибки возвращаем null
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Error getting base metric value:', error);
+      }
+      return null;
+    }
+  }
+
+  // Вычисление значения формулы для подытогов/итогов
+  computeFormulaValue(formulaMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey, metricsSqlExpressions, metricsOrder) {
+    if (!formulaMetricName || !metricsSqlExpressions) {
+      return null;
+    }
+
+    const sqlExpression = metricsSqlExpressions[formulaMetricName];
+    if (!sqlExpression) {
+      // Если метрика не является формулой, возвращаем null (будет использовано стандартное поведение)
+      return null;
+    }
+
+    // Парсим формулу
+    const parsed = this.parseSqlFormula(sqlExpression, metricsOrder || []);
+    if (!parsed.isValid || parsed.baseMetrics.length === 0) {
+      // Если формула не может быть распарсена, возвращаем null (будет использовано стандартное поведение)
+      return null;
+    }
+
+    // Получаем значения базовых метрик
+    const baseValues = [];
+    for (const baseMetric of parsed.baseMetrics) {
+      const value = this.getBaseMetricValue(
+        baseMetric,
+        rowKey,
+        colKey,
+        isRowSubtotal,
+        isColSubtotal,
+        pivotData,
+        rowAttrs,
+        colAttrs,
+        metricKey
+      );
+      
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        // Если значение базовой метрики не найдено, возвращаем null
+        return null;
+      }
+      
+      baseValues.push(value);
+    }
+
+    // Применяем операции к значениям базовых метрик
+    let result = baseValues[0];
+    for (let i = 0; i < parsed.operations.length; i += 1) {
+      const operation = parsed.operations[i];
+      const nextValue = baseValues[i + 1];
+
+      if (nextValue === null || nextValue === undefined || Number.isNaN(nextValue)) {
+        return null;
+      }
+
+      switch (operation) {
+        case '/':
+          if (nextValue === 0) {
+            // Деление на ноль
+            return null;
+          }
+          result = result / nextValue;
+          break;
+        case '*':
+          result = result * nextValue;
+          break;
+        case '+':
+          result = result + nextValue;
+          break;
+        case '-':
+          result = result - nextValue;
+          break;
+        default:
+          // Неподдерживаемая операция
+          return null;
+      }
+    }
+
+    // Проверяем результат на валидность
+    if (result === null || result === undefined || Number.isNaN(result) || !Number.isFinite(result)) {
+      return null;
+    }
+
+    return result;
+  }
+
   buildTextStyle(settings, includeWidth = false) {
     const style = {};
     if (settings.fontSize) {
@@ -1314,10 +1565,40 @@ export class TableRenderer extends Component {
       ) : null;
 
     const rowClickHandlers = cellCallbacks[flatRowKey] || {};
+    const { tableOptions } = this.props;
+    const { transposePivot, metricsSqlExpressions, metricsOrder } = tableOptions || {};
+    const metricKey = this.getMetricKey();
+    
     const valueCells = visibleColKeys.map((colKey, colIndex) => {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator(rowKey, colKey);
-      const aggValue = agg.value();
+      
+      // Для подытогов строк при transposePivot = false проверяем, является ли метрика формулой
+      let aggValue = agg.value();
+      if (isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
+        const metricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
+        if (metricName && metricsSqlExpressions[metricName]) {
+          // Метрика является формулой, вычисляем значение по формуле
+          const formulaValue = this.computeFormulaValue(
+            metricName,
+            rowKey,
+            colKey,
+            true, // isRowSubtotal
+            false, // isColSubtotal
+            pivotData,
+            rowAttrs,
+            colAttrs,
+            metricKey,
+            metricsSqlExpressions,
+            metricsOrder
+          );
+          if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
+            aggValue = formulaValue;
+          }
+          // Если formulaValue равен null, используем стандартное значение aggValue
+        }
+      }
+      
       const isColSubtotalCol = colKey.length < colAttrs.length;
 
       const keys = [...rowKey, ...colKey];
@@ -1593,10 +1874,40 @@ export class TableRenderer extends Component {
       </th>
     );
 
+    const { tableOptions } = this.props;
+    const { transposePivot, metricsSqlExpressions, metricsOrder } = tableOptions || {};
+    const metricKey = this.getMetricKey();
+    
     const totalValueCells = visibleColKeys.map(colKey => {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator([], colKey);
-      const aggValue = agg.value();
+      
+      // Для итогов колонок при transposePivot = false проверяем, является ли метрика формулой
+      let aggValue = agg.value();
+      if (!transposePivot && metricsSqlExpressions && metricKey) {
+        const metricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
+        if (metricName && metricsSqlExpressions[metricName]) {
+          // Метрика является формулой, вычисляем значение по формуле
+          const formulaValue = this.computeFormulaValue(
+            metricName,
+            [], // rowKey для итога колонки пустой
+            colKey,
+            false, // isRowSubtotal
+            false, // isColSubtotal (это итог колонки, а не подытог)
+            pivotData,
+            rowAttrs,
+            colAttrs,
+            metricKey,
+            metricsSqlExpressions,
+            metricsOrder
+          );
+          if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
+            aggValue = formulaValue;
+          }
+          // Если formulaValue равен null, используем стандартное значение aggValue
+        }
+      }
+      
       const totalRowStyleRef = globalTableSettings?.columnTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
         : null;
