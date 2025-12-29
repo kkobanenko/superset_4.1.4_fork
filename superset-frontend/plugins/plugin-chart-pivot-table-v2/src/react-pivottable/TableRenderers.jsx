@@ -1160,34 +1160,6 @@ export class TableRenderer extends Component {
     const flatRowKey = flatKey(rowKey);
     const globalTableSettings = this.getGlobalTableSettings();
     const isRowSubtotalRow = rowKey.length < rowAttrs.length;
-    
-    // Debug: проверяем все строки для диагностики
-    if (rowKey.some(r => String(r).includes('Итого по БР'))) {
-      console.warn('Debug row with "Итого по БР":', {
-        rowKey,
-        rowKeyLength: rowKey.length,
-        rowAttrs,
-        rowAttrsLength: rowAttrs.length,
-        isRowSubtotalRow,
-        globalTableSettings: globalTableSettings?.rowSubTotalsValueFormat,
-        valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
-        ADAPTIVE_FORMATTING,
-        match: isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat),
-      });
-    }
-    
-    // Debug: логируем все строки подытогов для диагностики
-    if (isRowSubtotalRow) {
-      console.warn('Debug ALL row subtotals:', {
-        rowKey,
-        rowKeyLength: rowKey.length,
-        rowAttrsLength: rowAttrs.length,
-        isRowSubtotalRow,
-        valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
-        ADAPTIVE_FORMATTING,
-        match: isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat),
-      });
-    }
 
     const colIncrSpan = colAttrs.length !== 0 ? 1 : 0;
     const attrValueCells = rowKey.map((r, i) => {
@@ -1454,32 +1426,10 @@ export class TableRenderer extends Component {
         metricFormatSettings ||
         undefined;
       
-      // Debug: проверяем значения для диагностики
-      if (isRowSubtotalRow) {
-        console.warn('Debug row subtotal:', {
-          isRowSubtotalRow,
-          valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
-          valueFormatType: typeof globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
-          ADAPTIVE_FORMATTING,
-          ADAPTIVE_FORMATTINGType: typeof ADAPTIVE_FORMATTING,
-          match: isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat),
-          rowSubTotalsValueFormat: globalTableSettings?.rowSubTotalsValueFormat,
-          globalTableSettings: globalTableSettings,
-        });
-      }
-      
       // Если используется адаптивное форматирование для подытогов строк
       if (isRowSubtotalRow && isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
-        console.warn('Adaptive formatting (row subtotal):', {
-          adaptiveMetricName,
-          adaptiveMetricFormat,
-          colKey,
-          rowKey,
-          colIndex,
-          metricsOrder: this.props.tableOptions?.metricsOrder,
-        });
         if (adaptiveMetricFormat) {
           overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
         } else {
@@ -1492,14 +1442,6 @@ export class TableRenderer extends Component {
       if (isColSubtotalCol && isAdaptiveFormatting(globalTableSettings?.colSubTotalsValueFormat?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
-        console.warn('Adaptive formatting (col subtotal):', {
-          adaptiveMetricName,
-          adaptiveMetricFormat,
-          colKey,
-          rowKey,
-          colIndex,
-          metricsOrder: this.props.tableOptions?.metricsOrder,
-        });
         if (adaptiveMetricFormat) {
           overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
         } else {
