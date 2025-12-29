@@ -559,34 +559,19 @@ export class TableRenderer extends Component {
     if (colIndex !== null && metricsOrder && metricsOrder.length > 0) {
       if (!transposePivot) {
         // Если не transposed, метрики в колонках
-        // Вычисляем индекс метрики в группе (например, для каждой даты есть набор метрик)
-        const { visibleColKeys } = this.pivotSettings;
-        if (visibleColKeys && visibleColKeys.length > 0) {
-          // Находим индекс текущей колонки в visibleColKeys
-          const currentColIndex = visibleColKeys.findIndex(k => flatKey(k) === flatKey(colKey));
-          if (currentColIndex !== -1) {
-            // Предполагаем, что метрики повторяются в порядке для каждой группы дат
-            const metricsPerGroup = metricsOrder.length;
-            const metricIndexInGroup = currentColIndex % metricsPerGroup;
-            if (metricIndexInGroup < metricsOrder.length) {
-              return metricsOrder[metricIndexInGroup];
-            }
-          }
+        // Используем colIndex напрямую для определения метрики
+        // Предполагаем, что метрики повторяются в порядке для каждой группы дат
+        const metricsPerGroup = metricsOrder.length;
+        const metricIndexInGroup = colIndex % metricsPerGroup;
+        if (metricIndexInGroup < metricsOrder.length) {
+          return metricsOrder[metricIndexInGroup];
         }
       } else {
         // Если transposed, метрики в строках
-        // Аналогичная логика для строк
-        const { visibleRowKeys } = this.pivotSettings;
-        if (visibleRowKeys && visibleRowKeys.length > 0) {
-          const currentRowIndex = visibleRowKeys.findIndex(k => flatKey(k) === flatKey(rowKey));
-          if (currentRowIndex !== -1) {
-            const metricsPerGroup = metricsOrder.length;
-            const metricIndexInGroup = currentRowIndex % metricsPerGroup;
-            if (metricIndexInGroup < metricsOrder.length) {
-              return metricsOrder[metricIndexInGroup];
-            }
-          }
-        }
+        // Для строк используем rowKey.length для определения позиции
+        // Но это сложнее, так как нам нужен индекс строки
+        // Пока возвращаем null, так как для transposed нужна другая логика
+        return null;
       }
     }
 
