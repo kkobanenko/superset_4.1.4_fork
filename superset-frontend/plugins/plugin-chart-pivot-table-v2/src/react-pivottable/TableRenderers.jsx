@@ -1441,9 +1441,12 @@ export class TableRenderer extends Component {
         console.warn('Debug row subtotal:', {
           isRowSubtotalRow,
           valueFormat: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
+          valueFormatType: typeof globalTableSettings?.rowSubTotalsValueFormat?.valueFormat,
           ADAPTIVE_FORMATTING,
+          ADAPTIVE_FORMATTINGType: typeof ADAPTIVE_FORMATTING,
           match: globalTableSettings?.rowSubTotalsValueFormat?.valueFormat === ADAPTIVE_FORMATTING,
           rowSubTotalsValueFormat: globalTableSettings?.rowSubTotalsValueFormat,
+          globalTableSettings: globalTableSettings,
         });
       }
       
