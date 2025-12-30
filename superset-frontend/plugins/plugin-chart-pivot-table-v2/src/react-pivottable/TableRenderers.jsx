@@ -382,11 +382,20 @@ export class TableRenderer extends Component {
       }
 
       // Находим индекс базовой метрики в metricsOrder
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[getBaseMetricValue] Searching for baseMetricName:', baseMetricName, 'in metricsOrder:', metricsOrder, 'type:', typeof metricsOrder, 'isArray:', Array.isArray(metricsOrder));
+      }
       const baseMetricIndex = metricsOrder && Array.isArray(metricsOrder) ? metricsOrder.indexOf(baseMetricName) : -1;
       if (baseMetricIndex === -1) {
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Base metric not found in metricsOrder:', { baseMetricName, metricsOrder });
+          console.log('[getBaseMetricValue] Base metric not found in metricsOrder:', { 
+            baseMetricName, 
+            metricsOrder, 
+            metricsOrderLength: metricsOrder ? metricsOrder.length : 0,
+            metricsOrderItems: metricsOrder ? metricsOrder.map((m, i) => `${i}: "${m}"`) : []
+          });
         }
         return null;
       }
