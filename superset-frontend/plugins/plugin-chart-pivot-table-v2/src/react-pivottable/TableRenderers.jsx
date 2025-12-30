@@ -513,7 +513,19 @@ export class TableRenderer extends Component {
 
     // Получаем значения базовых метрик
     const baseValues = [];
+    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[computeFormulaValue] Starting to get base metric values:', { 
+        baseMetrics: parsed.baseMetrics, 
+        metricsOrder, 
+        metricNameMapping 
+      });
+    }
     for (const baseMetric of parsed.baseMetrics) {
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[computeFormulaValue] Getting value for base metric:', baseMetric, 'from metricsOrder:', metricsOrder);
+      }
       const value = this.getBaseMetricValue(
         baseMetric,
         rowKey,
@@ -525,6 +537,11 @@ export class TableRenderer extends Component {
         colAttrs,
         metricKey
       );
+      
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[computeFormulaValue] Got value for base metric:', { baseMetric, value });
+      }
       
       if (value === null || value === undefined || Number.isNaN(value)) {
         // Если значение базовой метрики не найдено, возвращаем null
