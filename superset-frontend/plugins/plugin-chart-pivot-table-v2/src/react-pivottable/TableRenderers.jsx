@@ -442,6 +442,19 @@ export class TableRenderer extends Component {
 
       // Находим позицию metricKey в colAttrs
       const metricKeyIndex = colAttrs.indexOf(metricKey);
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[getBaseMetricValue] colKey structure:', { 
+          colKey, 
+          colKeyLength: colKey ? colKey.length : 0,
+          colKeyItems: colKey ? colKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
+          metricKey, 
+          metricKeyIndex, 
+          colAttrs,
+          colAttrsLength: colAttrs ? colAttrs.length : 0,
+          colAttrsItems: colAttrs ? colAttrs.map((item, i) => `${i}: "${item}"`) : []
+        });
+      }
       if (metricKeyIndex === -1) {
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
