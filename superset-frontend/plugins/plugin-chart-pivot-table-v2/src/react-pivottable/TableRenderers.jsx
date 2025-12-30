@@ -1780,6 +1780,19 @@ export class TableRenderer extends Component {
     
     const valueCells = visibleColKeys.map((colKey, colIndex) => {
       const flatColKey = flatKey(colKey);
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ - логируем структуру colKey для обычных ячеек
+      if (typeof console !== 'undefined' && console.log && !isRowSubtotalRow && colIndex === 0) {
+        console.log('[renderRow] Normal cell colKey structure:', {
+          rowKey,
+          colKey,
+          colKeyLength: colKey ? colKey.length : 0,
+          colKeyItems: colKey ? colKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
+          colKeyValues: colKey ? colKey.map((item, i) => ({ index: i, value: item, type: typeof item })) : [],
+          colAttrs,
+          colAttrsLength: colAttrs ? colAttrs.length : 0,
+          colAttrsItems: colAttrs ? colAttrs.map((item, i) => `${i}: "${item}"`) : []
+        });
+      }
       const agg = pivotData.getAggregator(rowKey, colKey);
       
       // Для подытогов строк при transposePivot = false проверяем, является ли метрика формулой
