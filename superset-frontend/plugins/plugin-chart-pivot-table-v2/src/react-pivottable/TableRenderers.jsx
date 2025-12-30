@@ -353,8 +353,9 @@ export class TableRenderer extends Component {
       }
       
       // Ищем операции между текущей и следующей метрикой
+      // Операция может находиться сразу после конца первой метрики (>=) и до начала следующей (<)
       const operationsBetween = operationMatches.filter(
-        op => op.index > currentMetricEnd && op.index < nextMetricStart
+        op => op.index >= currentMetricEnd && op.index < nextMetricStart
       );
       
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
