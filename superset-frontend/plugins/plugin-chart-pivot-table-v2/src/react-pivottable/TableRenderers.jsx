@@ -523,6 +523,27 @@ export class TableRenderer extends Component {
         console.log('[getBaseMetricValue] Before getAggregator:', { baseMetricName, baseMetricIndex, targetRowKey, targetColKey, metricKeyIndex });
       }
 
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ - проверяем, какие ключи есть в pivotData
+      if (typeof console !== 'undefined' && console.log && isRowSubtotal && !transposePivot) {
+        // Пытаемся найти пример обычной ячейки для той же строки, чтобы сравнить структуру colKey
+        // Для этого ищем первую обычную ячейку с той же строкой
+        const { colKeys } = this.props;
+        if (colKeys && colKeys.length > 0) {
+          // Берем первый colKey как пример
+          const exampleColKey = colKeys[0];
+          const exampleAgg = pivotData.getAggregator(rowKey, exampleColKey);
+          console.log('[getBaseMetricValue] Example normal cell:', {
+            rowKey,
+            exampleColKey,
+            exampleColKeyLength: exampleColKey ? exampleColKey.length : 0,
+            exampleColKeyItems: exampleColKey ? exampleColKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
+            exampleAgg: exampleAgg ? exampleAgg.value() : null,
+            colAttrs,
+            colAttrsLength: colAttrs ? colAttrs.length : 0
+          });
+        }
+      }
+
       // Получаем агрегатор для базовой метрики
       const agg = pivotData.getAggregator(targetRowKey, targetColKey);
       if (!agg) {
