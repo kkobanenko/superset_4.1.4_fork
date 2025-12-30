@@ -448,6 +448,7 @@ export class TableRenderer extends Component {
           colKey, 
           colKeyLength: colKey ? colKey.length : 0,
           colKeyItems: colKey ? colKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
+          colKeyValues: colKey ? colKey.map((item, i) => ({ index: i, value: item, type: typeof item })) : [],
           metricKey, 
           metricKeyIndex, 
           colAttrs,
@@ -467,11 +468,32 @@ export class TableRenderer extends Component {
         // Для подытога строки при transposePivot = false: метрики в колонках
         // Заменяем значение метрики в colKey на индекс базовой метрики
         // colKey должен быть достаточно длинным, чтобы включить позицию метрики
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[getBaseMetricValue] Before replacement (row subtotal):', {
+            targetColKeyBefore: [...targetColKey],
+            targetColKeyLength: targetColKey.length,
+            metricKeyIndex,
+            baseMetricIndex,
+            targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex]
+          });
+        }
         while (targetColKey.length <= metricKeyIndex) {
           targetColKey.push(null);
         }
         // Используем индекс базовой метрики вместо имени
+        const oldValue = targetColKey[metricKeyIndex];
         targetColKey[metricKeyIndex] = baseMetricIndex;
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[getBaseMetricValue] After replacement (row subtotal):', {
+            targetColKeyAfter: [...targetColKey],
+            targetColKeyLength: targetColKey.length,
+            oldValue,
+            newValue: baseMetricIndex,
+            targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex]
+          });
+        }
       } else if (isColSubtotal && !transposePivot) {
         // Для подытога колонки при transposePivot = false: метрики в колонках
         // Аналогично подытогу строки
