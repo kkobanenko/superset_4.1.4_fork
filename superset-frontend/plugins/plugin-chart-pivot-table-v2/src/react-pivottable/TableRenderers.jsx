@@ -506,8 +506,27 @@ export class TableRenderer extends Component {
 
     // Парсим формулу
     const parsed = this.parseSqlFormula(sqlExpression, metricsOrder || [], metricNameMapping || {});
+    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[computeFormulaValue] Parsed formula:', { 
+        isValid: parsed.isValid, 
+        baseMetrics: parsed.baseMetrics, 
+        operations: parsed.operations,
+        baseMetricsLength: parsed.baseMetrics ? parsed.baseMetrics.length : 0
+      });
+    }
     if (!parsed.isValid || parsed.baseMetrics.length === 0) {
       // Если формула не может быть распарсена, возвращаем null (будет использовано стандартное поведение)
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[computeFormulaValue] Formula parsing failed:', { 
+          formulaMetricName, 
+          sqlExpression, 
+          isValid: parsed.isValid, 
+          baseMetrics: parsed.baseMetrics,
+          baseMetricsLength: parsed.baseMetrics ? parsed.baseMetrics.length : 0
+        });
+      }
       return null;
     }
 
