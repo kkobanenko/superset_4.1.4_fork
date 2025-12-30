@@ -330,8 +330,8 @@ export class TableRenderer extends Component {
     // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
     if (typeof console !== 'undefined' && console.log) {
       console.log('[parseSqlFormula] Processing operations:', { 
-        metricMatches, 
-        operationMatches, 
+        metricMatches: metricMatches.map(m => ({ ...m, match: sqlExpression.substring(m.startIndex, m.endIndex) })),
+        operationMatches: operationMatches.map(op => ({ ...op, char: sqlExpression[op.index] })),
         sqlExpression 
       });
     }
