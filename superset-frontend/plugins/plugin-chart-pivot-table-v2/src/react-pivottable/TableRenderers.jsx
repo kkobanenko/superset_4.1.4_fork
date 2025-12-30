@@ -327,20 +327,59 @@ export class TableRenderer extends Component {
 
     // Определяем операции между метриками
     // Операция должна быть между двумя метриками
+    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[parseSqlFormula] Processing operations:', { 
+        metricMatches, 
+        operationMatches, 
+        sqlExpression 
+      });
+    }
+    
     for (let i = 0; i < metricMatches.length - 1; i += 1) {
       const currentMetricEnd = metricMatches[i].endIndex;
       const nextMetricStart = metricMatches[i + 1].startIndex;
+      
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[parseSqlFormula] Checking operations between metrics:', {
+          i,
+          currentMetricEnd,
+          nextMetricStart,
+          currentMetric: metricMatches[i].metricName,
+          nextMetric: metricMatches[i + 1].metricName,
+          substring: sqlExpression.substring(currentMetricEnd, nextMetricStart)
+        });
+      }
       
       // Ищем операции между текущей и следующей метрикой
       const operationsBetween = operationMatches.filter(
         op => op.index > currentMetricEnd && op.index < nextMetricStart
       );
       
+      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[parseSqlFormula] Operations found between metrics:', {
+          i,
+          operationsBetween,
+          operationsBetweenLength: operationsBetween.length
+        });
+      }
+      
       if (operationsBetween.length > 0) {
         // Берем первую операцию между метриками
         operations.push(operationsBetween[0].operation);
       } else {
         // Если операция не найдена, формула невалидна
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[parseSqlFormula] No operation found between metrics:', {
+            i,
+            currentMetricEnd,
+            nextMetricStart,
+            substring: sqlExpression.substring(currentMetricEnd, nextMetricStart)
+          });
+        }
         return { baseMetrics: [], operations: [], isValid: false };
       }
     }
