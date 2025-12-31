@@ -422,11 +422,20 @@ export class TableRenderer extends Component {
       }
 
       // Находим индекс базовой метрики в metricsOrder
+      // Используем trim() для сравнения, так как metricsOrder может содержать пробелы в конце
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
         console.log('[getBaseMetricValue] Searching for baseMetricName:', baseMetricName, 'in metricsOrder:', metricsOrder, 'type:', typeof metricsOrder, 'isArray:', Array.isArray(metricsOrder));
       }
-      const baseMetricIndex = metricsOrder && Array.isArray(metricsOrder) ? metricsOrder.indexOf(baseMetricName) : -1;
+      let baseMetricIndex = -1;
+      if (metricsOrder && Array.isArray(metricsOrder)) {
+        for (let i = 0; i < metricsOrder.length; i++) {
+          if (metricsOrder[i] && metricsOrder[i].trim() === baseMetricName.trim()) {
+            baseMetricIndex = i;
+            break;
+          }
+        }
+      }
       if (baseMetricIndex === -1) {
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
