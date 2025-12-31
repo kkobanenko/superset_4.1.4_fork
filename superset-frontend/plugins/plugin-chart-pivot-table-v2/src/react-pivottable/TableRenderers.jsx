@@ -475,8 +475,7 @@ export class TableRenderer extends Component {
 
       if (isRowSubtotal && !transposePivot) {
         // Для подытога строки при transposePivot = false: метрики в колонках
-        // Заменяем значение метрики в colKey на индекс базовой метрики
-        // colKey должен быть достаточно длинным, чтобы включить позицию метрики
+        // Пробуем найти colKey для базовой метрики из colKeys с тем же timestamp
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
           console.log('[getBaseMetricValue] Before replacement (row subtotal):', {
@@ -484,24 +483,62 @@ export class TableRenderer extends Component {
             targetColKeyLength: targetColKey.length,
             metricKeyIndex,
             baseMetricIndex,
-            targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex]
+            targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex],
+            colKey: colKey,
+            colKeyLength: colKey ? colKey.length : 0
           });
         }
-        while (targetColKey.length <= metricKeyIndex) {
-          targetColKey.push(null);
+        
+        // Для row subtotals, colKey имеет структуру [timestamp, metricIndex]
+        // Нужно найти colKey для базовой метрики с тем же timestamp
+        // Пробуем найти colKey из colKeys, который имеет тот же timestamp и базовую метрику
+        const { colKeys } = this.props;
+        let foundMatchingColKey = false;
+        if (colKeys && colKeys.length > 0 && colKey && colKey.length > 0) {
+          // timestamp находится в colKey[0] для row subtotals
+          const timestamp = colKey[0];
+          // Ищем colKey с тем же timestamp и базовой метрикой
+          for (let i = 0; i < colKeys.length; i++) {
+            const testColKey = colKeys[i];
+            // Проверяем, что timestamp совпадает и метрика совпадает с базовой
+            if (testColKey && testColKey.length > metricKeyIndex && 
+                testColKey[0] === timestamp && 
+                testColKey[metricKeyIndex] === baseMetricIndex) {
+              // Нашли подходящий colKey, используем его
+              targetColKey = [...testColKey];
+              foundMatchingColKey = true;
+              if (typeof console !== 'undefined' && console.log) {
+                console.log('[getBaseMetricValue] Found matching colKey for base metric:', {
+                  rowKey,
+                  originalColKey: colKey,
+                  foundColKey: targetColKey,
+                  timestamp,
+                  baseMetricIndex
+                });
+              }
+              break;
+            }
+          }
         }
-        // Используем индекс базовой метрики вместо имени
-        const oldValue = targetColKey[metricKeyIndex];
-        targetColKey[metricKeyIndex] = baseMetricIndex;
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] After replacement (row subtotal):', {
-            targetColKeyAfter: [...targetColKey],
-            targetColKeyLength: targetColKey.length,
-            oldValue,
-            newValue: baseMetricIndex,
-            targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex]
-          });
+        
+        // Если не нашли подходящий colKey, используем замену метрики в текущем colKey
+        if (!foundMatchingColKey) {
+          while (targetColKey.length <= metricKeyIndex) {
+            targetColKey.push(null);
+          }
+          // Используем индекс базовой метрики вместо имени
+          const oldValue = targetColKey[metricKeyIndex];
+          targetColKey[metricKeyIndex] = baseMetricIndex;
+          // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[getBaseMetricValue] After replacement (row subtotal):', {
+              targetColKeyAfter: [...targetColKey],
+              targetColKeyLength: targetColKey.length,
+              oldValue,
+              newValue: baseMetricIndex,
+              targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex]
+            });
+          }
         }
       } else if (isColSubtotal && !transposePivot) {
         // Для подытога колонки при transposePivot = false: метрики в колонках
