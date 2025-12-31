@@ -475,71 +475,123 @@ export class TableRenderer extends Component {
 
       if (isRowSubtotal && !transposePivot) {
         // Для подытога строки при transposePivot = false: метрики в колонках
-        // Пробуем найти colKey для базовой метрики из colKeys с тем же timestamp
+        // Для row subtotals нужно суммировать значения базовых метрик из всех обычных ячеек,
+        // которые принадлежат этой подытоге строки (имеют тот же rowKey[0] и colKey[0])
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Before replacement (row subtotal):', {
-            targetColKeyBefore: [...targetColKey],
-            targetColKeyLength: targetColKey.length,
-            metricKeyIndex,
+          console.log('[getBaseMetricValue] Row subtotal - summing from normal cells:', {
+            rowKey,
+            colKey,
+            baseMetricName,
             baseMetricIndex,
-            targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex],
-            colKey: colKey,
-            colKeyLength: colKey ? colKey.length : 0
+            metricKeyIndex
           });
         }
         
-        // Для row subtotals, colKey имеет структуру [timestamp, metricIndex]
-        // Нужно найти colKey для базовой метрики с тем же timestamp
-        // Пробуем найти colKey из colKeys, который имеет тот же timestamp и базовую метрику
-        const { colKeys } = this.props;
-        let foundMatchingColKey = false;
-        if (colKeys && colKeys.length > 0 && colKey && colKey.length > 0) {
-          // timestamp находится в colKey[0] для row subtotals
-          const timestamp = colKey[0];
-          // Ищем colKey с тем же timestamp и базовой метрикой
-          for (let i = 0; i < colKeys.length; i++) {
-            const testColKey = colKeys[i];
-            // Проверяем, что timestamp совпадает и метрика совпадает с базовой
-            if (testColKey && testColKey.length > metricKeyIndex && 
-                testColKey[0] === timestamp && 
-                testColKey[metricKeyIndex] === baseMetricIndex) {
-              // Нашли подходящий colKey, используем его
-              targetColKey = [...testColKey];
-              foundMatchingColKey = true;
-              if (typeof console !== 'undefined' && console.log) {
-                console.log('[getBaseMetricValue] Found matching colKey for base metric:', {
-                  rowKey,
-                  originalColKey: colKey,
-                  foundColKey: targetColKey,
-                  timestamp,
-                  baseMetricIndex
-                });
+        // Получаем rowKeys и colKeys из props для поиска всех обычных ячеек
+        const { rowKeys, colKeys } = this.props;
+        if (!rowKeys || !colKeys || rowKeys.length === 0 || colKeys.length === 0) {
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[getBaseMetricValue] No rowKeys or colKeys available for row subtotal');
+          }
+          return null;
+        }
+        
+        // Для row subtotals rowKey имеет структуру [groupingLevel1]
+        // Нужно найти все обычные ячейки с тем же rowKey[0] и colKey[0] (timestamp)
+        const subtotalRowKeyPrefix = rowKey[0]; // Первый уровень группировки (например, "Москва и Центр")
+        const timestamp = colKey && colKey.length > 0 ? colKey[0] : null;
+        
+        if (!subtotalRowKeyPrefix || timestamp === null) {
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[getBaseMetricValue] Invalid subtotal rowKey or timestamp:', {
+              subtotalRowKeyPrefix,
+              timestamp,
+              rowKey,
+              colKey
+            });
+          }
+          return null;
+        }
+        
+        // Суммируем значения базовых метрик из всех обычных ячеек
+        let sum = 0;
+        let foundAny = false;
+        
+        for (let i = 0; i < rowKeys.length; i++) {
+          const normalRowKey = rowKeys[i];
+          // Проверяем, что обычная ячейка принадлежит этой подытоге строки
+          // (имеет тот же rowKey[0])
+          if (!normalRowKey || normalRowKey.length === 0 || normalRowKey[0] !== subtotalRowKeyPrefix) {
+            continue;
+          }
+          
+          // Для каждой обычной ячейки ищем colKey с тем же timestamp и базовой метрикой
+          for (let j = 0; j < colKeys.length; j++) {
+            const normalColKey = colKeys[j];
+            // Проверяем, что timestamp совпадает
+            if (!normalColKey || normalColKey.length === 0 || normalColKey[0] !== timestamp) {
+              continue;
+            }
+            
+            // Создаем colKey для базовой метрики из этого colKey
+            const baseMetricColKey = [...normalColKey];
+            if (baseMetricColKey.length > metricKeyIndex) {
+              baseMetricColKey[metricKeyIndex] = baseMetricIndex;
+            } else {
+              while (baseMetricColKey.length <= metricKeyIndex) {
+                baseMetricColKey.push(null);
               }
-              break;
+              baseMetricColKey[metricKeyIndex] = baseMetricIndex;
+            }
+            
+            // Получаем агрегатор для обычной ячейки с базовой метрикой
+            const normalAgg = pivotData.getAggregator(normalRowKey, baseMetricColKey);
+            if (normalAgg) {
+              const normalValue = normalAgg.value();
+              if (normalValue !== null && normalValue !== undefined && !Number.isNaN(normalValue)) {
+                const numValue = typeof normalValue === 'number' ? normalValue : Number.parseFloat(normalValue);
+                if (!Number.isNaN(numValue)) {
+                  sum += numValue;
+                  foundAny = true;
+                  if (typeof console !== 'undefined' && console.log) {
+                    console.log('[getBaseMetricValue] Added value from normal cell:', {
+                      normalRowKey,
+                      baseMetricColKey,
+                      normalValue,
+                      numValue,
+                      sum
+                    });
+                  }
+                }
+              }
             }
           }
         }
         
-        // Если не нашли подходящий colKey, используем замену метрики в текущем colKey
-        if (!foundMatchingColKey) {
-          while (targetColKey.length <= metricKeyIndex) {
-            targetColKey.push(null);
-          }
-          // Используем индекс базовой метрики вместо имени
-          const oldValue = targetColKey[metricKeyIndex];
-          targetColKey[metricKeyIndex] = baseMetricIndex;
-          // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+        if (!foundAny) {
           if (typeof console !== 'undefined' && console.log) {
-            console.log('[getBaseMetricValue] After replacement (row subtotal):', {
-              targetColKeyAfter: [...targetColKey],
-              targetColKeyLength: targetColKey.length,
-              oldValue,
-              newValue: baseMetricIndex,
-              targetColKeyAtMetricKeyIndex: targetColKey[metricKeyIndex]
+            console.log('[getBaseMetricValue] No values found for row subtotal:', {
+              subtotalRowKeyPrefix,
+              timestamp,
+              baseMetricName,
+              baseMetricIndex
             });
           }
+          return null;
         }
+        
+        if (typeof console !== 'undefined' && console.log) {
+          console.log('[getBaseMetricValue] Row subtotal sum:', {
+            baseMetricName,
+            baseMetricIndex,
+            sum,
+            subtotalRowKeyPrefix,
+            timestamp
+          });
+        }
+        
+        return sum;
       } else if (isColSubtotal && !transposePivot) {
         // Для подытога колонки при transposePivot = false: метрики в колонках
         // Аналогично подытогу строки
