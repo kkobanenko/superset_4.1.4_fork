@@ -538,18 +538,64 @@ export class TableRenderer extends Component {
         // Для этого ищем первую обычную ячейку с той же строкой
         const { colKeys } = this.props;
         if (colKeys && colKeys.length > 0) {
-          // Берем первый colKey как пример
-          const exampleColKey = colKeys[0];
-          const exampleAgg = pivotData.getAggregator(rowKey, exampleColKey);
-          console.log('[getBaseMetricValue] Example normal cell:', {
+          // Ищем colKey для базовой метрики "Факт" (baseMetricIndex = 2)
+          // Для этого создаем colKey с индексом базовой метрики вместо имени
+          const exampleColKeyForBaseMetric = [...colKey];
+          // Заменяем имя метрики на индекс базовой метрики
+          if (exampleColKeyForBaseMetric.length > metricKeyIndex) {
+            exampleColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
+          } else {
+            while (exampleColKeyForBaseMetric.length <= metricKeyIndex) {
+              exampleColKeyForBaseMetric.push(null);
+            }
+            exampleColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
+          }
+          const exampleAgg = pivotData.getAggregator(rowKey, exampleColKeyForBaseMetric);
+          console.log('[getBaseMetricValue] Example normal cell for base metric:', {
             rowKey,
-            exampleColKey,
-            exampleColKeyLength: exampleColKey ? exampleColKey.length : 0,
-            exampleColKeyItems: exampleColKey ? exampleColKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
+            originalColKey: colKey,
+            exampleColKeyForBaseMetric,
+            exampleColKeyLength: exampleColKeyForBaseMetric ? exampleColKeyForBaseMetric.length : 0,
+            exampleColKeyItems: exampleColKeyForBaseMetric ? exampleColKeyForBaseMetric.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
             exampleAgg: exampleAgg ? exampleAgg.value() : null,
             colAttrs,
-            colAttrsLength: colAttrs ? colAttrs.length : 0
+            colAttrsLength: colAttrs ? colAttrs.length : 0,
+            metricKeyIndex,
+            baseMetricIndex
           });
+          // Также пробуем найти colKey для обычной ячейки с той же строкой и базовой метрикой
+          // Пробуем разные варианты colKey
+          for (let i = 0; i < Math.min(5, colKeys.length); i++) {
+            const testColKey = colKeys[i];
+            const testAgg = pivotData.getAggregator(rowKey, testColKey);
+            if (testAgg && testAgg.value() !== null) {
+              console.log('[getBaseMetricValue] Found working colKey for row:', {
+                rowKey,
+                testColKey,
+                testColKeyItems: testColKey ? testColKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
+                testAggValue: testAgg.value()
+              });
+              // Пробуем заменить метрику в этом colKey на базовую метрику
+              const testColKeyForBaseMetric = [...testColKey];
+              if (testColKeyForBaseMetric.length > metricKeyIndex) {
+                testColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
+              } else {
+                while (testColKeyForBaseMetric.length <= metricKeyIndex) {
+                  testColKeyForBaseMetric.push(null);
+                }
+                testColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
+              }
+              const testAggForBaseMetric = pivotData.getAggregator(rowKey, testColKeyForBaseMetric);
+              console.log('[getBaseMetricValue] Test colKey for base metric:', {
+                rowKey,
+                originalTestColKey: testColKey,
+                testColKeyForBaseMetric,
+                testColKeyForBaseMetricItems: testColKeyForBaseMetric ? testColKeyForBaseMetric.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
+                testAggForBaseMetric: testAggForBaseMetric ? testAggForBaseMetric.value() : null
+              });
+              break;
+            }
+          }
         }
       }
 
