@@ -1784,20 +1784,46 @@ export class TableRenderer extends Component {
       if (typeof console !== 'undefined' && console.log && !isRowSubtotalRow && colIndex === 0) {
         console.log('[renderRow] Normal cell colKey structure:', {
           rowKey,
+          rowKeyLength: rowKey ? rowKey.length : 0,
+          rowKeyItems: rowKey ? rowKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
           colKey,
           colKeyLength: colKey ? colKey.length : 0,
-          colKeyItems: colKey ? colKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
-          colKeyValues: colKey ? colKey.map((item, i) => ({ index: i, value: item, type: typeof item })) : [],
+          colKeyItems: colKey ? colKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
           colAttrs,
           colAttrsLength: colAttrs ? colAttrs.length : 0,
-          colAttrsItems: colAttrs ? colAttrs.map((item, i) => `${i}: "${item}"`) : []
+          colAttrsItems: colAttrs ? colAttrs.map((item, i) => `[${i}]: "${item}"`) : [],
+          metricKey,
+          metricsOrder
         });
+        const agg = pivotData.getAggregator(rowKey, colKey);
+        if (agg) {
+          console.log('[renderRow] Normal cell aggregator value:', { value: agg.value(), rowKey, colKey });
+        } else {
+          console.log('[renderRow] Normal cell aggregator not found for:', { rowKey, colKey });
+        }
       }
       const agg = pivotData.getAggregator(rowKey, colKey);
       
       // Для подытогов строк при transposePivot = false проверяем, является ли метрика формулой
       let aggValue = agg.value();
       if (isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
+        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ - логируем структуру colKey для подытогов строк
+        if (typeof console !== 'undefined' && console.log && colIndex === 0) {
+          console.log('[renderRow] Row subtotal colKey structure:', {
+            rowKey,
+            rowKeyLength: rowKey ? rowKey.length : 0,
+            rowKeyItems: rowKey ? rowKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
+            colKey,
+            colKeyLength: colKey ? colKey.length : 0,
+            colKeyItems: colKey ? colKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
+            colAttrs,
+            colAttrsLength: colAttrs ? colAttrs.length : 0,
+            colAttrsItems: colAttrs ? colAttrs.map((item, i) => `[${i}]: "${item}"`) : [],
+            metricKey,
+            metricsOrder
+          });
+          console.log('[renderRow] Row subtotal aggregator value:', { value: aggValue, rowKey, colKey });
+        }
         const metricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
