@@ -30,10 +30,17 @@ function formatValue(value: number) {
     return '0';
   }
   const absoluteValue = Math.abs(value);
-  if (absoluteValue >= 1000) {
-    // Normal human being are more familiar
-    // with billion (B) that giga (G)
-    return siFormatter(value).replace('G', 'B');
+  if (absoluteValue >= 1e12) {
+    return siFormatter(value).replace('T', ' трлн');
+  }
+  if (absoluteValue >= 1e9) {
+    return siFormatter(value).replace('G', ' млрд');
+  }
+  if (absoluteValue >= 1e6) {
+    return siFormatter(value).replace('M', ' млн');
+  }
+  if (absoluteValue >= 1e3) {
+    return siFormatter(value).replace('k', ' тыс');
   }
   if (absoluteValue >= 1) {
     return float2PointFormatter(value);
