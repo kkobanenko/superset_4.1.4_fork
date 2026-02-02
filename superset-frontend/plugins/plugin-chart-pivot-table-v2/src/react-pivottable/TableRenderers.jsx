@@ -1939,7 +1939,7 @@ export class TableRenderer extends Component {
           metricKey: JSON.stringify(metricKey),
           metricsOrder: JSON.stringify(metricsOrder)
         });
-        const agg = pivotData.getAggregator(rowKey, colKey);
+      const agg = pivotData.getAggregator(rowKey, colKey);
         if (agg) {
           console.log('[renderRow] Normal cell aggregator value:', { value: agg.value(), rowKey: JSON.stringify(rowKey), colKey: JSON.stringify(colKey) });
         } else {
@@ -2278,7 +2278,7 @@ export class TableRenderer extends Component {
     const { tableOptions } = this.props;
     const { transposePivot, metricsSqlExpressions, metricsOrder, metricNameMapping } = tableOptions || {};
     const metricKey = this.getMetricKey();
-    
+
     const totalValueCells = visibleColKeys.map(colKey => {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator([], colKey);
