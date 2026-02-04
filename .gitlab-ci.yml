@@ -33,6 +33,8 @@
 variables:
   DOCKER_DRIVER: overlay2
   DOCKER_TLS_CERTDIR: "/certs"
+  # Явное указание DOCKER_HOST для Docker-in-Docker
+  DOCKER_HOST: tcp://docker:2376
   # Используем GitLab Container Registry
   CI_REGISTRY_IMAGE: ${CI_REGISTRY}/gdpgroup/superset_4.1.4_fork
   # Таймаут для сборки (может быть переопределен на уровне проекта или runner)
@@ -41,33 +43,101 @@ variables:
   # - GitLab Runner config.toml -> [runners] -> timeout
 
 stages:
+  - validate
   - build
+
+# Валидация перед сборкой
+validate-build:
+  stage: validate
+  image: alpine:latest
+  script:
+    - echo "Validating build configuration..."
+    - |
+      # Проверка наличия Dockerfile
+      if [ ! -f Dockerfile ]; then
+        echo "❌ ERROR: Dockerfile not found!"
+        exit 1
+      fi
+      echo "✅ Dockerfile found"
+    - |
+      # Проверка синтаксиса .gitlab-ci.yml (базовая проверка)
+      if ! grep -q "stages:" .gitlab-ci.yml; then
+        echo "❌ ERROR: Invalid .gitlab-ci.yml syntax!"
+        exit 1
+      fi
+      echo "✅ .gitlab-ci.yml syntax check passed"
+    - echo "✅ Validation completed successfully"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
+    - if: $CI_COMMIT_BRANCH == "feature/pivot-table-v2"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  allow_failure: false
 
 # Сборка Docker образа для ветки feature/mixed-chart-v2
 build-docker-lean:
   stage: build
   image: docker:24-dind
   services:
-    - docker:24-dind
+    - name: docker:24-dind
+      alias: docker
   variables:
     DOCKER_BUILDKIT: 1
     # Переменные для настройки сборки (можно переопределить в GitLab UI)
     BUILD_TARGET: "lean"
     BUILD_PLATFORM: "linux/amd64"
   before_script:
-    # Ожидание готовности Docker daemon
+    # Установка необходимых утилит для диагностики
+    - apk add --no-cache curl netcat-openbsd
+    # Ожидание готовности Docker daemon с таймаутом и улучшенной диагностикой
+    - echo "=========================================="
     - echo "Waiting for Docker daemon to be ready..."
+    - echo "DOCKER_HOST=${DOCKER_HOST}"
+    - echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
+    - echo "=========================================="
     - |
-      until docker info > /dev/null 2>&1; do
-        echo "Docker daemon is not ready yet, waiting..."
-        sleep 1
-      done
-    - echo "Docker daemon is ready!"
-    - docker info
-    # Вход в GitLab Container Registry
+      # Функция ожидания с таймаутом (60 секунд)
+      wait_for_docker() {
+        local max_attempts=60
+        local attempt=0
+        
+        while [ $attempt -lt $max_attempts ]; do
+          # Проверка доступности порта Docker daemon
+          if nc -z docker 2376 2>/dev/null; then
+            echo "Docker port 2376 is accessible"
+          fi
+          
+          # Проверка доступности Docker daemon
+          if docker info > /dev/null 2>&1; then
+            echo "✅ Docker daemon is ready!"
+            docker info | head -20
+            return 0
+          fi
+          
+          attempt=$((attempt + 1))
+          echo "Attempt $attempt/$max_attempts: Docker daemon is not ready yet, waiting..."
+          sleep 1
+        done
+        
+        echo "❌ ERROR: Docker daemon failed to start within ${max_attempts} seconds"
+        echo "Diagnostic information:"
+        echo "DOCKER_HOST=${DOCKER_HOST}"
+        echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
+        ls -la ${DOCKER_TLS_CERTDIR}/client/ 2>/dev/null || echo "TLS certs directory not found"
+        return 1
+      }
+      
+      set -e
+      wait_for_docker
+    # Вход в GitLab Container Registry с проверкой ошибок
     - echo "Logging to GitLab Container Registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - |
+      if ! docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY; then
+        echo "❌ ERROR: Failed to login to Container Registry"
+        exit 1
+      fi
+      echo "✅ Successfully logged in to Container Registry"
   script:
+    - set -e  # Немедленный выход при ошибках
     # Определяем теги для образа в зависимости от ветки
     - |
       if [ "$CI_COMMIT_BRANCH" = "feature/pivot-table-v2" ]; then
@@ -84,9 +154,13 @@ build-docker-lean:
       echo "  - ${IMAGE_TAG_LATEST}"
       echo "  - ${IMAGE_TAG_COMMIT}"
     
+    # Создание директории для артефактов
+    - mkdir -p build-artifacts
+    
     # Сборка образа с таргетом lean (production образ)
     - |
-      docker build \
+      echo "Starting Docker build..."
+      if ! docker build \
         --target ${BUILD_TARGET} \
         --build-arg BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS:-false} \
         --build-arg LOAD_EXAMPLES_DUCKDB=${LOAD_EXAMPLES_DUCKDB:-false} \
@@ -95,14 +169,113 @@ build-docker-lean:
         --tag ${IMAGE_TAG_LATEST} \
         --tag ${IMAGE_TAG_COMMIT} \
         --platform ${BUILD_PLATFORM} \
-        -f Dockerfile .
+        -f Dockerfile .; then
+        echo "❌ ERROR: Docker build failed"
+        exit 1
+      fi
+      echo "✅ Docker build completed successfully"
     
-    # Отправка образов в GitLab Container Registry
+    # Генерация метаданных сборки
+    - |
+      cat > build-artifacts/build-info.json <<EOF
+      {
+        "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+        "commit_sha": "${CI_COMMIT_SHA}",
+        "commit_short_sha": "${CI_COMMIT_SHORT_SHA}",
+        "branch": "${CI_COMMIT_BRANCH}",
+        "branch_tag": "${BRANCH_TAG}",
+        "pipeline_id": "${CI_PIPELINE_ID}",
+        "job_id": "${CI_JOB_ID}",
+        "images": {
+          "branch": "${IMAGE_TAG_BRANCH}",
+          "latest": "${IMAGE_TAG_LATEST}",
+          "commit": "${IMAGE_TAG_COMMIT}"
+        },
+        "build_config": {
+          "target": "${BUILD_TARGET}",
+          "platform": "${BUILD_PLATFORM}",
+          "build_translations": "${BUILD_TRANSLATIONS:-false}",
+          "load_examples_duckdb": "${LOAD_EXAMPLES_DUCKDB:-false}",
+          "include_chromium": "${INCLUDE_CHROMIUM:-false}"
+        },
+        "registry": {
+          "url": "${CI_REGISTRY}",
+          "image": "${CI_REGISTRY_IMAGE}"
+        }
+      }
+      EOF
+      cat build-artifacts/build-info.json
+    # Генерация файла переменных окружения для использования в других job'ах
+    - |
+      cat > build-artifacts/build-env.env <<EOF
+      IMAGE_TAG_BRANCH=${IMAGE_TAG_BRANCH}
+      IMAGE_TAG_LATEST=${IMAGE_TAG_LATEST}
+      IMAGE_TAG_COMMIT=${IMAGE_TAG_COMMIT}
+      BRANCH_TAG=${BRANCH_TAG}
+      BUILD_TARGET=${BUILD_TARGET}
+      BUILD_PLATFORM=${BUILD_PLATFORM}
+      EOF
+      cat build-artifacts/build-env.env
+    
+    # Создание манифеста для продакшена
+    - |
+      cat > build-artifacts/deployment-manifest.yaml <<EOF
+      # Deployment Manifest for Superset
+      # Generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+      # Commit: ${CI_COMMIT_SHORT_SHA}
+      # Branch: ${CI_COMMIT_BRANCH}
+      
+      version: 1.0
+      build_info:
+        commit_sha: ${CI_COMMIT_SHA}
+        commit_short_sha: ${CI_COMMIT_SHORT_SHA}
+        branch: ${CI_COMMIT_BRANCH}
+        build_date: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+        pipeline_id: ${CI_PIPELINE_ID}
+      
+      images:
+        production:
+          image: ${IMAGE_TAG_BRANCH}
+          platform: ${BUILD_PLATFORM}
+        latest:
+          image: ${IMAGE_TAG_LATEST}
+          platform: ${BUILD_PLATFORM}
+        commit:
+          image: ${IMAGE_TAG_COMMIT}
+          platform: ${BUILD_PLATFORM}
+      
+      usage:
+        dockerfile: |
+          FROM ${IMAGE_TAG_BRANCH}
+        docker_compose: |
+          services:
+            superset:
+              image: ${IMAGE_TAG_BRANCH}
+              # Add your configuration here
+      EOF
+      cat build-artifacts/deployment-manifest.yaml
+    
+    # Отправка образов в GitLab Container Registry с проверкой
     - |
       echo "Pushing images to GitLab Container Registry..."
-      docker push ${IMAGE_TAG_BRANCH}
-      docker push ${IMAGE_TAG_LATEST}
-      docker push ${IMAGE_TAG_COMMIT}
+      failed_pushes=0
+      
+      for tag in ${IMAGE_TAG_BRANCH} ${IMAGE_TAG_LATEST} ${IMAGE_TAG_COMMIT}; do
+        echo "Pushing ${tag}..."
+        if docker push ${tag}; then
+          echo "✅ Successfully pushed ${tag}"
+        else
+          echo "❌ ERROR: Failed to push ${tag}"
+          failed_pushes=$((failed_pushes + 1))
+        fi
+      done
+      
+      if [ $failed_pushes -gt 0 ]; then
+        echo "❌ ERROR: Failed to push $failed_pushes image(s)"
+        exit 1
+      fi
+      
+      echo "✅ All images pushed successfully"
     
     # Вывод информации о собранном образе
     - |
@@ -117,6 +290,15 @@ build-docker-lean:
       echo "Для использования в проекте добавьте в Dockerfile:"
       echo "  FROM ${IMAGE_TAG_BRANCH}"
       echo "=========================================="
+  artifacts:
+    name: "build-artifacts-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - build-artifacts/
+    expire_in: 30 days
+    reports:
+      # Сохраняем метаданные как артефакты
+      dotenv: build-artifacts/build-env.env
+    when: on_success
   after_script:
     # Очистка локальных образов для экономии места
     - docker system prune -f || true
@@ -135,23 +317,63 @@ build-docker-dev:
   stage: build
   image: docker:24-dind
   services:
-    - docker:24-dind
+    - name: docker:24-dind
+      alias: docker
   variables:
     DOCKER_BUILDKIT: 1
   before_script:
-    # Ожидание готовности Docker daemon
+    # Установка необходимых утилит для диагностики
+    - apk add --no-cache curl netcat-openbsd
+    # Ожидание готовности Docker daemon с таймаутом и улучшенной диагностикой
+    - echo "=========================================="
     - echo "Waiting for Docker daemon to be ready..."
+    - echo "DOCKER_HOST=${DOCKER_HOST}"
+    - echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
+    - echo "=========================================="
     - |
-      until docker info > /dev/null 2>&1; do
-        echo "Docker daemon is not ready yet, waiting..."
-        sleep 1
-      done
-    - echo "Docker daemon is ready!"
-    - docker info
-    # Вход в GitLab Container Registry
+      # Функция ожидания с таймаутом (60 секунд)
+      wait_for_docker() {
+        local max_attempts=60
+        local attempt=0
+        
+        while [ $attempt -lt $max_attempts ]; do
+          # Проверка доступности порта Docker daemon
+          if nc -z docker 2376 2>/dev/null; then
+            echo "Docker port 2376 is accessible"
+          fi
+          
+          # Проверка доступности Docker daemon
+          if docker info > /dev/null 2>&1; then
+            echo "✅ Docker daemon is ready!"
+            docker info | head -20
+            return 0
+          fi
+          
+          attempt=$((attempt + 1))
+          echo "Attempt $attempt/$max_attempts: Docker daemon is not ready yet, waiting..."
+          sleep 1
+        done
+        
+        echo "❌ ERROR: Docker daemon failed to start within ${max_attempts} seconds"
+        echo "Diagnostic information:"
+        echo "DOCKER_HOST=${DOCKER_HOST}"
+        echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
+        ls -la ${DOCKER_TLS_CERTDIR}/client/ 2>/dev/null || echo "TLS certs directory not found"
+        return 1
+      }
+      
+      set -e
+      wait_for_docker
+    # Вход в GitLab Container Registry с проверкой ошибок
     - echo "Logging to GitLab Container Registry..."
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - |
+      if ! docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY; then
+        echo "❌ ERROR: Failed to login to Container Registry"
+        exit 1
+      fi
+      echo "✅ Successfully logged in to Container Registry"
   script:
+    - set -e  # Немедленный выход при ошибках
     - |
       if [ "$CI_COMMIT_BRANCH" = "feature/pivot-table-v2" ]; then
         BRANCH_TAG="feature-pivot-table-v2"
@@ -165,8 +387,13 @@ build-docker-dev:
       echo "  - ${IMAGE_TAG_DEV}"
       echo "  - ${IMAGE_TAG_DEV_COMMIT}"
     
+    # Создание директории для артефактов
+    - mkdir -p build-artifacts
+    
+    # Сборка dev образа
     - |
-      docker build \
+      echo "Starting Docker dev build..."
+      if ! docker build \
         --target dev \
         --build-arg BUILD_TRANSLATIONS=false \
         --build-arg LOAD_EXAMPLES_DUCKDB=false \
@@ -174,17 +401,75 @@ build-docker-dev:
         --tag ${IMAGE_TAG_DEV} \
         --tag ${IMAGE_TAG_DEV_COMMIT} \
         --platform linux/amd64 \
-        -f Dockerfile .
+        -f Dockerfile .; then
+        echo "❌ ERROR: Docker dev build failed"
+        exit 1
+      fi
+      echo "✅ Docker dev build completed successfully"
     
+    # Генерация метаданных для dev образа
+    - |
+      cat > build-artifacts/build-info-dev.json <<EOF
+      {
+        "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+        "commit_sha": "${CI_COMMIT_SHA}",
+        "commit_short_sha": "${CI_COMMIT_SHORT_SHA}",
+        "branch": "${CI_COMMIT_BRANCH}",
+        "branch_tag": "${BRANCH_TAG}",
+        "pipeline_id": "${CI_PIPELINE_ID}",
+        "job_id": "${CI_JOB_ID}",
+        "build_type": "dev",
+        "images": {
+          "dev": "${IMAGE_TAG_DEV}",
+          "dev_commit": "${IMAGE_TAG_DEV_COMMIT}"
+        },
+        "build_config": {
+          "target": "dev",
+          "platform": "linux/amd64",
+          "build_translations": "false",
+          "load_examples_duckdb": "false",
+          "include_chromium": "false"
+        },
+        "registry": {
+          "url": "${CI_REGISTRY}",
+          "image": "${CI_REGISTRY_IMAGE}"
+        }
+      }
+      EOF
+      cat build-artifacts/build-info-dev.json
+    
+    # Отправка dev образов в GitLab Container Registry с проверкой
     - |
       echo "Pushing dev images to GitLab Container Registry..."
-      docker push ${IMAGE_TAG_DEV}
-      docker push ${IMAGE_TAG_DEV_COMMIT}
+      failed_pushes=0
+      
+      for tag in ${IMAGE_TAG_DEV} ${IMAGE_TAG_DEV_COMMIT}; do
+        echo "Pushing ${tag}..."
+        if docker push ${tag}; then
+          echo "✅ Successfully pushed ${tag}"
+        else
+          echo "❌ ERROR: Failed to push ${tag}"
+          failed_pushes=$((failed_pushes + 1))
+        fi
+      done
+      
+      if [ $failed_pushes -gt 0 ]; then
+        echo "❌ ERROR: Failed to push $failed_pushes image(s)"
+        exit 1
+      fi
+      
+      echo "✅ All dev images pushed successfully"
     
     - |
       echo "✅ Docker dev образ успешно собран и отправлен"
       echo "  - ${IMAGE_TAG_DEV}"
       echo "  - ${IMAGE_TAG_DEV_COMMIT}"
+  artifacts:
+    name: "build-artifacts-dev-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - build-artifacts/
+    expire_in: 30 days
+    when: on_success
   after_script:
     - docker system prune -f || true
   rules:
