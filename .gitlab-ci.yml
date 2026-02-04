@@ -95,9 +95,9 @@ build-docker-lean:
     - echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
     - echo "=========================================="
     - |
-      # Функция ожидания с таймаутом (60 секунд)
+      # Функция ожидания с таймаутом (120 секунд)
       wait_for_docker() {
-        local max_attempts=60
+        local max_attempts=120
         local attempt=0
         
         while [ $attempt -lt $max_attempts ]; do
@@ -331,9 +331,9 @@ build-docker-dev:
     - echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
     - echo "=========================================="
     - |
-      # Функция ожидания с таймаутом (60 секунд)
+      # Функция ожидания с таймаутом (120 секунд)
       wait_for_docker() {
-        local max_attempts=60
+        local max_attempts=120
         local attempt=0
         
         while [ $attempt -lt $max_attempts ]; do
