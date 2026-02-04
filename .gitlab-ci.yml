@@ -35,6 +35,8 @@ variables:
   DOCKER_TLS_CERTDIR: "/certs"
   # Явное указание DOCKER_HOST для Docker-in-Docker
   DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
   # Используем GitLab Container Registry
   CI_REGISTRY_IMAGE: ${CI_REGISTRY}/gdpgroup/superset_4.1.4_fork
   # Таймаут для сборки (может быть переопределен на уровне проекта или runner)
@@ -100,7 +102,21 @@ build-docker-lean:
         local max_attempts=120
         local attempt=0
         
+        # Начальная задержка для генерации TLS сертификатов (критически важно!)
+        echo "Waiting 5 seconds for TLS certificates to be generated..."
+        sleep 5
+        
         while [ $attempt -lt $max_attempts ]; do
+          # Проверка наличия TLS сертификатов
+          if [ -f "${DOCKER_TLS_CERTDIR}/client/ca.pem" ] && [ -f "${DOCKER_TLS_CERTDIR}/client/cert.pem" ] && [ -f "${DOCKER_TLS_CERTDIR}/client/key.pem" ]; then
+            echo "TLS certificates found"
+          else
+            echo "TLS certificates not ready yet (attempt $attempt/$max_attempts)"
+            attempt=$((attempt + 1))
+            sleep 1
+            continue
+          fi
+          
           # Проверка доступности порта Docker daemon
           if nc -z docker 2376 2>/dev/null; then
             echo "Docker port 2376 is accessible"
@@ -122,7 +138,13 @@ build-docker-lean:
         echo "Diagnostic information:"
         echo "DOCKER_HOST=${DOCKER_HOST}"
         echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
+        echo "DOCKER_TLS_VERIFY=${DOCKER_TLS_VERIFY}"
+        echo "DOCKER_CERT_PATH=${DOCKER_CERT_PATH}"
         ls -la ${DOCKER_TLS_CERTDIR}/client/ 2>/dev/null || echo "TLS certs directory not found"
+        if [ -d "${DOCKER_TLS_CERTDIR}/client" ]; then
+          echo "Contents of ${DOCKER_TLS_CERTDIR}/client:"
+          ls -la ${DOCKER_TLS_CERTDIR}/client/
+        fi
         return 1
       }
       
@@ -336,7 +358,21 @@ build-docker-dev:
         local max_attempts=120
         local attempt=0
         
+        # Начальная задержка для генерации TLS сертификатов (критически важно!)
+        echo "Waiting 5 seconds for TLS certificates to be generated..."
+        sleep 5
+        
         while [ $attempt -lt $max_attempts ]; do
+          # Проверка наличия TLS сертификатов
+          if [ -f "${DOCKER_TLS_CERTDIR}/client/ca.pem" ] && [ -f "${DOCKER_TLS_CERTDIR}/client/cert.pem" ] && [ -f "${DOCKER_TLS_CERTDIR}/client/key.pem" ]; then
+            echo "TLS certificates found"
+          else
+            echo "TLS certificates not ready yet (attempt $attempt/$max_attempts)"
+            attempt=$((attempt + 1))
+            sleep 1
+            continue
+          fi
+          
           # Проверка доступности порта Docker daemon
           if nc -z docker 2376 2>/dev/null; then
             echo "Docker port 2376 is accessible"
@@ -358,7 +394,13 @@ build-docker-dev:
         echo "Diagnostic information:"
         echo "DOCKER_HOST=${DOCKER_HOST}"
         echo "DOCKER_TLS_CERTDIR=${DOCKER_TLS_CERTDIR}"
+        echo "DOCKER_TLS_VERIFY=${DOCKER_TLS_VERIFY}"
+        echo "DOCKER_CERT_PATH=${DOCKER_CERT_PATH}"
         ls -la ${DOCKER_TLS_CERTDIR}/client/ 2>/dev/null || echo "TLS certs directory not found"
+        if [ -d "${DOCKER_TLS_CERTDIR}/client" ]; then
+          echo "Contents of ${DOCKER_TLS_CERTDIR}/client:"
+          ls -la ${DOCKER_TLS_CERTDIR}/client/
+        fi
         return 1
       }
       
