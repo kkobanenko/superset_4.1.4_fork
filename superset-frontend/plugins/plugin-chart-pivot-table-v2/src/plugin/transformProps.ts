@@ -591,6 +591,23 @@ function buildEffectiveFieldGroupingSettings(
       }
     }
     
+    // Обратная совместимость: преобразуем subtotalEnabled (boolean) в subtotalShow
+    if (normalized.subtotalShow === undefined && normalized.subtotalEnabled !== undefined) {
+      normalized.subtotalShow = normalized.subtotalEnabled === true ? 'show' : 'no_show';
+    }
+    // Если subtotalShow не задан и subtotalEnabled тоже не задан, используем 'general_setting' по умолчанию
+    if (normalized.subtotalShow === undefined) {
+      normalized.subtotalShow = 'general_setting';
+    }
+    
+    // Нормализуем subtotalValueFormat (если задан)
+    if (normalized.subtotalValueFormat !== undefined) {
+      const normalizedSubtotalValueFormat = normalizeValueCellFormatSettings(normalized.subtotalValueFormat);
+      if (normalizedSubtotalValueFormat !== undefined) {
+        normalized.subtotalValueFormat = normalizedSubtotalValueFormat;
+      }
+    }
+    
     normalizedBaseSettings[fieldName] = normalized;
   }
 
@@ -634,6 +651,7 @@ function buildEffectiveFieldGroupingSettings(
       'truncate',
       'headerSort',
       'subtotalEnabled',
+      'subtotalShow',
       'subtotalLabel',
       'subtotalAggregation',
       'cellValueType',
@@ -663,6 +681,32 @@ function buildEffectiveFieldGroupingSettings(
       'metricValueBackgroundColor',
       'metricAggregationFunction',
     ];
+    
+    // Собираем subtotalValueFormat из плоских ключей (если заданы)
+    const subtotalValueFormat: Record<string, unknown> = {};
+    if (merged[fieldName]?.subtotalValueFormat && typeof merged[fieldName].subtotalValueFormat === 'object') {
+      Object.assign(subtotalValueFormat, merged[fieldName].subtotalValueFormat as Record<string, unknown>);
+    }
+    const formDataValueFormat = fd[`fieldGroupingSettings.${fieldName}.subtotalValueFormat.valueFormat`];
+    if (formDataValueFormat !== undefined) {
+      subtotalValueFormat.valueFormat = formDataValueFormat;
+    }
+    const formDataFontColor = fd[`fieldGroupingSettings.${fieldName}.subtotalValueFormat.fontColor`];
+    if (formDataFontColor !== undefined) {
+      subtotalValueFormat.fontColor = formDataFontColor;
+    }
+    const formDataBackgroundColor = fd[`fieldGroupingSettings.${fieldName}.subtotalValueFormat.backgroundColor`];
+    if (formDataBackgroundColor !== undefined) {
+      subtotalValueFormat.backgroundColor = formDataBackgroundColor;
+    }
+    if (Object.keys(subtotalValueFormat).length > 0) {
+      const normalizedSubtotalValueFormat = normalizeValueCellFormatSettings(subtotalValueFormat);
+      if (normalizedSubtotalValueFormat !== undefined) {
+        merged[fieldName].subtotalValueFormat = normalizedSubtotalValueFormat;
+      } else {
+        merged[fieldName].subtotalValueFormat = subtotalValueFormat;
+      }
+    }
     
     for (const key of flatKeys) {
       const flatKey = `fieldGroupingSettings.${fieldName}.${key}`;
@@ -694,11 +738,23 @@ function buildEffectiveFieldGroupingSettings(
             merged[fieldName][key] = colorCss;
           }
         }
+        // Обратная совместимость: преобразуем subtotalEnabled в subtotalShow
+        else if (key === 'subtotalEnabled' && typeof value === 'boolean') {
+          // Если subtotalShow уже задан, не перезаписываем его
+          if (merged[fieldName].subtotalShow === undefined) {
+            merged[fieldName].subtotalShow = value === true ? 'show' : 'no_show';
+          }
+        }
         // Остальные настройки копируем как есть
         else {
           merged[fieldName][key] = value;
         }
       }
+    }
+    
+    // Обеспечиваем обратную совместимость: если subtotalShow не задан, устанавливаем 'general_setting'
+    if (merged[fieldName].subtotalShow === undefined) {
+      merged[fieldName].subtotalShow = 'general_setting';
     }
   }
 
@@ -942,6 +998,47 @@ function buildEffectiveFieldGroupingSettings(
     const rowValueBackgroundColorCss = toCssColor(rowValueBackgroundColor);
     if (typeof rowValueBackgroundColorCss === 'string') {
       nextFieldSettings.rowValueBackgroundColor = rowValueBackgroundColorCss;
+    }
+
+    // Subtotal settings для поля
+    const subtotalShow = fd[`field_formatting_field${i}_subtotalShow`];
+    if (typeof subtotalShow === 'string' && subtotalShow.length > 0) {
+      nextFieldSettings.subtotalShow = subtotalShow;
+    }
+
+    const subtotalLabel = fd[`field_formatting_field${i}_subtotalLabel`];
+    if (typeof subtotalLabel === 'string' && subtotalLabel.length > 0) {
+      nextFieldSettings.subtotalLabel = subtotalLabel;
+    }
+
+    const subtotalAggregation = fd[`field_formatting_field${i}_subtotalAggregation`];
+    if (typeof subtotalAggregation === 'string' && subtotalAggregation.length > 0) {
+      nextFieldSettings.subtotalAggregation = subtotalAggregation;
+    }
+
+    // Собираем subtotalValueFormat из временных контролов
+    const subtotalValueFormat: Record<string, unknown> = {};
+    const subtotalValueFormatValue = fd[`field_formatting_field${i}_subtotalValueFormat`];
+    if (typeof subtotalValueFormatValue === 'string' && subtotalValueFormatValue.length > 0) {
+      subtotalValueFormat.valueFormat = subtotalValueFormatValue;
+    }
+    const subtotalFontColor = fd[`field_formatting_field${i}_subtotalFontColor`];
+    const subtotalFontColorCss = toCssColor(subtotalFontColor);
+    if (typeof subtotalFontColorCss === 'string') {
+      subtotalValueFormat.fontColor = subtotalFontColorCss;
+    }
+    const subtotalBackgroundColor = fd[`field_formatting_field${i}_subtotalBackgroundColor`];
+    const subtotalBackgroundColorCss = toCssColor(subtotalBackgroundColor);
+    if (typeof subtotalBackgroundColorCss === 'string') {
+      subtotalValueFormat.backgroundColor = subtotalBackgroundColorCss;
+    }
+    if (Object.keys(subtotalValueFormat).length > 0) {
+      const normalizedSubtotalValueFormat = normalizeValueCellFormatSettings(subtotalValueFormat);
+      if (normalizedSubtotalValueFormat !== undefined) {
+        nextFieldSettings.subtotalValueFormat = normalizedSubtotalValueFormat;
+      } else {
+        nextFieldSettings.subtotalValueFormat = subtotalValueFormat;
+      }
     }
 
     merged[selectedField] = nextFieldSettings;

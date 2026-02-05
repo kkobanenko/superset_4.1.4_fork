@@ -56,25 +56,32 @@ services:
       timeout: 5s
       retries: 5
 
-  superset_dev:
-    # Option 1: Build from Dockerfile with ClickHouse and MSSQL drivers (recommended for dev)
+  # Базовый dev-образ из основного Dockerfile (без драйверов ClickHouse/MSSQL).
+  # Собирать первым: docker-compose -f docker/docker-compose.dev.yml build superset_dev_base
+  superset_dev_base:
     build:
-      context: .
-      dockerfile: Dockerfile-superset-dev
-    
-    # Option 2: Use image from GitLab CI/CD (without additional drivers)
-    # image: gitlab.gdpgroup.ru:5050/gdpgroup/superset_4.1.4_fork:feature-mixed-chart-v2-dev
-    
-    # Option 3: Build locally from main Dockerfile (uncomment to use)
-    # build:
-    #   context: ..
-    #   dockerfile: Dockerfile
-    #   target: dev
-    #   args:
-    #     BUILD_TRANSLATIONS: "false"
-    #     LOAD_EXAMPLES_DUCKDB: "false"
-    #     INCLUDE_CHROMIUM: "false"
-    
+      context: ..
+      dockerfile: Dockerfile
+      target: dev
+      args:
+        BUILD_TRANSLATIONS: "false"
+        LOAD_EXAMPLES_DUCKDB: "false"
+        INCLUDE_CHROMIUM: "false"
+        INCLUDE_FIREFOX: "false"
+        DEV_MODE: "false"
+    image: superset_dev_base:latest
+    profiles:
+      - build  # не запускаем при up, только для сборки
+
+  superset_dev:
+    # Образ с драйверами БД (ClickHouse, MSSQL, psycopg2) из Dockerfile-superset-dev.
+    # Сборка: сначала build superset_dev_base, затем build superset_dev.
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile-superset-dev
+      args:
+        BASE_IMAGE: superset_dev_base:latest
+    image: superset_dev:latest
     container_name: superset_dev
     environment:
       - SUPERSET_WEBSERVER_PORT=8088
@@ -99,8 +106,9 @@ services:
       # ВАЖНО: mount должен быть RW, иначе внутри контейнера нельзя пересобрать плагины/фронтенд
       # (plugins:build пишет в lib/esm, а build пишет в кэш внутри superset-frontend).
       - ../superset-frontend:/app/superset-frontend
-    # Fix permissions for data directory
-    user: "1000:1000"
+      # Статика фронтенда: процесс использует пакет из site-packages
+      - ../superset/static/assets:/app/.venv/lib/python3.11/site-packages/superset/static/assets:ro
+      - ../superset/static/assets:/app/superset/static/assets:ro
     networks:
       - superset_dev_net
       - clhs_sandbox_click_network  # Connect to production network to access ClickHouse

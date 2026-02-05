@@ -148,16 +148,60 @@ export class TableRenderer extends Component {
       ...props.subtotalOptions,
     };
 
+    // Определяем включение subtotal с учетом per-field настроек
+    // Если хотя бы одно поле имеет subtotalShow === 'show', включаем subtotal глобально
+    // Если все поля используют 'general_setting', используем глобальную настройку
+    // Если хотя бы одно поле имеет subtotalShow === 'no_show', это не влияет на глобальное включение,
+    // но конкретные subtotal строки/колонки будут скрыты в методах рендеринга через getFieldSubtotalSettings
+    let colSubtotalEnabled = tableOptions.colSubTotals || false;
+    let rowSubtotalEnabled = tableOptions.rowSubTotals || false;
+    
+    // Проверяем per-field настройки для колонок
+    if (colAttrs && colAttrs.length > 0) {
+      const fieldGroupingSettings = tableOptions?.fieldGroupingSettings || {};
+      const hasExplicitShow = colAttrs.some(attrName => {
+        const fieldSettings = fieldGroupingSettings[attrName] || {};
+        const subtotalShow = fieldSettings.subtotalShow;
+        // Обратная совместимость с subtotalEnabled
+        if (subtotalShow === undefined && fieldSettings.subtotalEnabled === true) {
+          return true;
+        }
+        return subtotalShow === 'show';
+      });
+      // Если хотя бы одно поле явно требует показа subtotal, включаем глобально
+      if (hasExplicitShow) {
+        colSubtotalEnabled = true;
+      }
+    }
+    
+    // Проверяем per-field настройки для строк
+    if (rowAttrs && rowAttrs.length > 0) {
+      const fieldGroupingSettings = tableOptions?.fieldGroupingSettings || {};
+      const hasExplicitShow = rowAttrs.some(attrName => {
+        const fieldSettings = fieldGroupingSettings[attrName] || {};
+        const subtotalShow = fieldSettings.subtotalShow;
+        // Обратная совместимость с subtotalEnabled
+        if (subtotalShow === undefined && fieldSettings.subtotalEnabled === true) {
+          return true;
+        }
+        return subtotalShow === 'show';
+      });
+      // Если хотя бы одно поле явно требует показа subtotal, включаем глобально
+      if (hasExplicitShow) {
+        rowSubtotalEnabled = true;
+      }
+    }
+
     const colSubtotalDisplay = {
       displayOnTop: false,
-      enabled: tableOptions.colSubTotals,
+      enabled: colSubtotalEnabled,
       hideOnExpand: false,
       ...subtotalOptions.colSubtotalDisplay,
     };
 
     const rowSubtotalDisplay = {
       displayOnTop: false,
-      enabled: tableOptions.rowSubTotals,
+      enabled: rowSubtotalEnabled,
       hideOnExpand: false,
       ...subtotalOptions.rowSubtotalDisplay,
     };
@@ -251,6 +295,67 @@ export class TableRenderer extends Component {
 
   getGlobalTableSettings() {
     return this.props.tableOptions?.globalTableSettings || {};
+  }
+
+  /**
+   * Получить настройки subtotal для конкретного поля с учетом приоритета:
+   * - Если subtotalShow === 'general_setting' или не задан → используются общие настройки
+   * - Если subtotalShow === 'show' → используются настройки поля (с fallback на общие)
+   * - Если subtotalShow === 'no_show' → subtotal отключен для этого поля
+   * 
+   * Также поддерживается обратная совместимость с subtotalEnabled (boolean):
+   * - subtotalEnabled === true → subtotalShow = 'show'
+   * - subtotalEnabled === false → subtotalShow = 'no_show'
+   * 
+   * @param {string} attrName - имя поля группировки
+   * @param {boolean} isRow - true для row subtotal, false для col subtotal
+   * @returns {Object} объект с настройками: { enabled, label, valueFormat }
+   */
+  getFieldSubtotalSettings(attrName, isRow) {
+    const fieldSettings = this.getFieldSettings(attrName);
+    const globalTableSettings = this.getGlobalTableSettings();
+    
+    // Обратная совместимость: если subtotalShow не задан, используем subtotalEnabled
+    let subtotalShow = fieldSettings?.subtotalShow;
+    if (subtotalShow === undefined && fieldSettings?.subtotalEnabled !== undefined) {
+      subtotalShow = fieldSettings.subtotalEnabled === true ? 'show' : 'no_show';
+    }
+    // Если все еще не задано, используем 'general_setting' по умолчанию
+    if (subtotalShow === undefined) {
+      subtotalShow = 'general_setting';
+    }
+
+    // Если 'no_show', отключаем subtotal для этого поля
+    if (subtotalShow === 'no_show') {
+      return { enabled: false };
+    }
+
+    // Определяем общие настройки в зависимости от типа (row/col)
+    const globalLabel = isRow
+      ? globalTableSettings?.rowSubTotalsLabel
+      : globalTableSettings?.colSubTotalsLabel;
+    const globalValueFormat = isRow
+      ? globalTableSettings?.rowSubTotalsValueFormat
+      : globalTableSettings?.colSubTotalsValueFormat;
+
+    // Если 'general_setting', используем только общие настройки
+    if (subtotalShow === 'general_setting') {
+      return {
+        enabled: true,
+        label: globalLabel,
+        valueFormat: globalValueFormat,
+      };
+    }
+
+    // Если 'show', используем настройки поля с fallback на общие
+    const fieldLabel = fieldSettings?.subtotalLabel;
+    const fieldValueFormat = fieldSettings?.subtotalValueFormat;
+
+    return {
+      enabled: true,
+      label: fieldLabel !== undefined ? fieldLabel : globalLabel,
+      valueFormat: fieldValueFormat !== undefined ? fieldValueFormat : globalValueFormat,
+    };
   }
 
   // Получить формат метрики для адаптивного форматирования
@@ -1560,17 +1665,21 @@ export class TableRenderer extends Component {
           </th>,
         );
       } else if (attrIdx === colKey.length) {
+        // Подытог по колонкам: используем per-field настройки с учетом приоритета
+        const subtotalSettings = this.getFieldSubtotalSettings(attrName, false);
+        
+        // Если subtotal отключен для этого поля, не рендерим заголовок
+        if (!subtotalSettings.enabled) {
+          return null;
+        }
+
         const rowSpan = colAttrs.length - colKey.length + rowIncrSpan;
-        // Подытог по колонкам: глобальная метка (если задана) перекрывает per-field subtotalLabel.
-        const globalTableSettings = this.getGlobalTableSettings();
-        const fieldSettings = this.getFieldSettings(attrName);
         const subtotalLabel =
-          globalTableSettings?.colSubTotalsLabel ||
-          fieldSettings?.subtotalLabel ||
+          subtotalSettings.label ||
           t('Subtotal');
-        // Применяем стили форматирования для colSubTotals
-        const colSubtotalLabelStyleRef = globalTableSettings?.colSubTotalsValueFormat
-          ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
+        // Применяем стили форматирования из настроек поля или общих настроек
+        const colSubtotalLabelStyleRef = subtotalSettings.valueFormat
+          ? this.buildValueCellStyleRef(subtotalSettings.valueFormat)
           : null;
         attrValueCells.push(
           <th
@@ -1878,25 +1987,25 @@ export class TableRenderer extends Component {
       return null;
     });
 
-    // Получаем кастомную метку подытога для строки, если она задана
+    // Получаем настройки подытога для строки с учетом per-field настроек
     const rowSubtotalAttrName =
       rowKey.length > 0 && rowKey.length <= rowAttrs.length
         ? rowAttrs[rowKey.length - 1]
         : null;
-    const rowFieldSettings = rowSubtotalAttrName
-      ? this.getFieldSettings(rowSubtotalAttrName)
-      : {};
-    const rowSubtotalLabel =
-      globalTableSettings?.rowSubTotalsLabel ||
-      rowFieldSettings?.subtotalLabel ||
-      t('Subtotal');
-    // Для заголовка строки подытога применяем глобальный стиль rowSubTotalsValueFormat,
-    // чтобы настройки шрифта и цветов были заметны не только в числовых ячейках.
-    const rowSubtotalLabelStyleRef = globalTableSettings?.rowSubTotalsValueFormat
-      ? this.buildValueCellStyleRef(globalTableSettings.rowSubTotalsValueFormat)
+    const rowSubtotalSettings = rowSubtotalAttrName
+      ? this.getFieldSubtotalSettings(rowSubtotalAttrName, true)
+      : { enabled: true, label: globalTableSettings?.rowSubTotalsLabel || t('Subtotal'), valueFormat: globalTableSettings?.rowSubTotalsValueFormat };
+    
+    // Если subtotal отключен для этого поля, не рендерим заголовок
+    const rowSubtotalLabel = rowSubtotalSettings.enabled
+      ? (rowSubtotalSettings.label || t('Subtotal'))
+      : null;
+    // Применяем стили форматирования из настроек поля или общих настроек
+    const rowSubtotalLabelStyleRef = rowSubtotalSettings.enabled && rowSubtotalSettings.valueFormat
+      ? this.buildValueCellStyleRef(rowSubtotalSettings.valueFormat)
       : null;
     const attrValuePaddingCell =
-      rowKey.length < rowAttrs.length ? (
+      rowKey.length < rowAttrs.length && rowSubtotalSettings.enabled ? (
         <th
           className="pvtRowLabel pvtSubtotalLabel"
           key="rowKeyBuffer"
@@ -2044,10 +2153,28 @@ export class TableRenderer extends Component {
       
       // Объединяем стили: сначала стили форматирования, затем цвет фона из formatter
       // Создаем ref callback для применения стилей с !important для totals/subtotals
-      const rowSubtotalStyleRef = isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat
+      // Используем per-field настройки subtotal с учетом приоритета
+      const rowSubtotalAttrName = isRowSubtotalRow && rowKey.length > 0 && rowKey.length <= rowAttrs.length
+        ? rowAttrs[rowKey.length - 1]
+        : null;
+      const rowSubtotalSettings = rowSubtotalAttrName
+        ? this.getFieldSubtotalSettings(rowSubtotalAttrName, true)
+        : null;
+      const rowSubtotalStyleRef = isRowSubtotalRow && rowSubtotalSettings?.enabled && rowSubtotalSettings?.valueFormat
+        ? this.buildValueCellStyleRef(rowSubtotalSettings.valueFormat)
+        : isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.rowSubTotalsValueFormat)
         : null;
-      const colSubtotalStyleRef = isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
+      
+      const colSubtotalAttrName = isColSubtotalCol && colKey.length > 0 && colKey.length <= colAttrs.length
+        ? colAttrs[colKey.length - 1]
+        : null;
+      const colSubtotalSettings = colSubtotalAttrName
+        ? this.getFieldSubtotalSettings(colSubtotalAttrName, false)
+        : null;
+      const colSubtotalStyleRef = isColSubtotalCol && colSubtotalSettings?.enabled && colSubtotalSettings?.valueFormat
+        ? this.buildValueCellStyleRef(colSubtotalSettings.valueFormat)
+        : isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
         : null;
       
@@ -2101,19 +2228,33 @@ export class TableRenderer extends Component {
       // Важно: totals/subtotals форматы (globalTableSettings.*ValueFormat) имеют приоритет.
       const metricFormatSettings = metricName ? this.getFieldSettings(metricName) : undefined;
       
-      // Обработка адаптивного форматирования для подытогов/итогов
-      let overrideFormatSettings =
-        (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat) ||
-        (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat) ||
-        metricFormatSettings ||
-        undefined;
+      // Обработка форматирования для подытогов/итогов с учетом per-field настроек
+      // Используем per-field настройки если они заданы, иначе глобальные настройки
+      let overrideFormatSettings = undefined;
+      
+      if (isRowSubtotalRow && rowSubtotalSettings?.enabled && rowSubtotalSettings?.valueFormat) {
+        // Используем per-field настройки для row subtotal
+        overrideFormatSettings = rowSubtotalSettings.valueFormat;
+      } else if (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat) {
+        // Fallback на глобальные настройки
+        overrideFormatSettings = globalTableSettings.rowSubTotalsValueFormat;
+      } else if (isColSubtotalCol && colSubtotalSettings?.enabled && colSubtotalSettings?.valueFormat) {
+        // Используем per-field настройки для col subtotal
+        overrideFormatSettings = colSubtotalSettings.valueFormat;
+      } else if (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat) {
+        // Fallback на глобальные настройки
+        overrideFormatSettings = globalTableSettings.colSubTotalsValueFormat;
+      } else if (metricFormatSettings) {
+        // Используем настройки метрики для обычных ячеек
+        overrideFormatSettings = metricFormatSettings;
+      }
       
       // Если используется адаптивное форматирование для подытогов строк
-      if (isRowSubtotalRow && isAdaptiveFormatting(globalTableSettings?.rowSubTotalsValueFormat?.valueFormat)) {
+      if (isRowSubtotalRow && overrideFormatSettings && isAdaptiveFormatting(overrideFormatSettings?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
         if (adaptiveMetricFormat) {
-          overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
+          overrideFormatSettings = { ...overrideFormatSettings, valueFormat: adaptiveMetricFormat };
         } else {
           // Если формат метрики не найден, используем формат агрегатора
           overrideFormatSettings = undefined;
@@ -2121,11 +2262,11 @@ export class TableRenderer extends Component {
       }
       
       // Если используется адаптивное форматирование для подытогов колонок
-      if (isColSubtotalCol && isAdaptiveFormatting(globalTableSettings?.colSubTotalsValueFormat?.valueFormat)) {
+      if (isColSubtotalCol && overrideFormatSettings && isAdaptiveFormatting(overrideFormatSettings?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
         if (adaptiveMetricFormat) {
-          overrideFormatSettings = { valueFormat: adaptiveMetricFormat };
+          overrideFormatSettings = { ...overrideFormatSettings, valueFormat: adaptiveMetricFormat };
         } else {
           // Если формат метрики не найден, используем формат агрегатора
           overrideFormatSettings = undefined;

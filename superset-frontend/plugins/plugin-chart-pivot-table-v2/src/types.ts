@@ -112,9 +112,13 @@ export interface FieldGroupingSettings {
   maxWidth?: number; // максимальная ширина колонки в пикселях
   truncate?: boolean; // обрезать/не обрезать значение при превышении maxWidth
   headerSort?: 'alphabetical' | 'by_value' | 'custom'; // способ сортировки заголовков
-  subtotalEnabled?: boolean; // нужен/не нужен подытог по этому полю
-  subtotalLabel?: string; // наименование подытога, по умолчанию "Подытог"
+  // Legacy поле для обратной совместимости. Используется subtotalShow вместо него.
+  subtotalEnabled?: boolean; // нужен/не нужен подытог по этому полю (deprecated, используйте subtotalShow)
+  // Настройки subtotal для поля (переопределяют общие настройки таблицы)
+  subtotalShow?: 'show' | 'no_show' | 'general_setting'; // По умолчанию 'general_setting' - использовать общие настройки
+  subtotalLabel?: string; // Переопределяет globalTableSettings.rowSubTotalsLabel/colSubTotalsLabel
   subtotalAggregation?: 'sum' | 'max' | 'min'; // тип агрегирования для подытога
+  subtotalValueFormat?: ValueCellFormatSettings; // Переопределяет globalTableSettings.rowSubTotalsValueFormat/colSubTotalsValueFormat
   cellValueType?: 'absolute' | 'percentage' | 'absolute_and_percentage'; // тип отображаемого значения
   percentageType?: 'total' | 'parent_row' | 'parent_column'; // тип доли (если cellValueType включает percentage)
   valueFormat?: string; // D3 формат для значений (использует существующие форматеры Superset)

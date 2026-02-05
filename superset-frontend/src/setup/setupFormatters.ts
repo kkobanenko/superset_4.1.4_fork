@@ -19,6 +19,7 @@
 import {
   createDurationFormatter,
   getNumberFormatter,
+  createSmartNumberFormatter,
   getNumberFormatterRegistry,
   NumberFormats,
   getTimeFormatterRegistry,
@@ -91,6 +92,10 @@ export default function setupFormatters(
     .registerValue(
       'MEMORY_TRANSFER_RATE_BINARY',
       createMemoryFormatter({ binary: true, transfer: true }),
+    )
+    .registerValue(
+          'CURRENCY_RUSSIAN_RUBLE',
+          createSmartNumberFormatter({})
     );
 
   const timeFormatterRegistry = getTimeFormatterRegistry();

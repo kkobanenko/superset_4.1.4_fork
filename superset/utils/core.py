@@ -1401,7 +1401,9 @@ def get_user_id() -> int | None:
     """
 
     try:
-        return g.user.id
+        if hasattr(g, "user") and g.user is not None:
+            return g.user.id
+        return None
     except Exception:  # pylint: disable=broad-except
         return None
 

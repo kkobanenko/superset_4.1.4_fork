@@ -139,11 +139,17 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
             )
         )
 
-        owner_ids_query = (
-            db.session.query(Dashboard.id)
-            .join(Dashboard.owners)
-            .filter(security_manager.user_model.id == get_user_id())
-        )
+        # Получаем ID пользователя, если он установлен
+        user_id = get_user_id()
+        if user_id is not None:
+            owner_ids_query = (
+                db.session.query(Dashboard.id)
+                .join(Dashboard.owners)
+                .filter(security_manager.user_model.id == user_id)
+            )
+        else:
+            # Пустой запрос, если пользователь не установлен
+            owner_ids_query = db.session.query(Dashboard.id).filter(False)
 
         feature_flagged_filters = []
         if is_feature_enabled("DASHBOARD_RBAC"):
@@ -161,8 +167,11 @@ class DashboardAccessFilter(BaseFilter):  # pylint: disable=too-few-public-metho
 
             feature_flagged_filters.append(Dashboard.id.in_(roles_based_query))
 
-        if is_feature_enabled("EMBEDDED_SUPERSET") and security_manager.is_guest_user(
-            g.user
+        if (
+            is_feature_enabled("EMBEDDED_SUPERSET")
+            and hasattr(g, "user")
+            and g.user is not None
+            and security_manager.is_guest_user(g.user)
         ):
             guest_user: GuestUser = g.user
             embedded_dashboard_ids = [

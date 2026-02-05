@@ -124,13 +124,20 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
       ],
       [
         {
-          name: `fieldGroupingSettings.${fieldName}.subtotalEnabled`,
+          name: `fieldGroupingSettings.${fieldName}.subtotalShow`,
           config: {
-            type: 'CheckboxControl',
-            label: t('Enable subtotals'),
+            type: 'RadioButtonControl',
+            label: t('Show subtotal'),
             renderTrigger: true,
-            default: false,
-            description: t('Show subtotals for this field'),
+            default: 'general_setting',
+            options: [
+              ['show', t('Show')],
+              ['no_show', t('No Show')],
+              ['general_setting', t('General setting')],
+            ],
+            description: t(
+              'Show subtotal for this field. "General setting" uses table-wide settings from Data -> Options.',
+            ),
           },
         },
       ],
@@ -145,7 +152,15 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
             description: t('Label for subtotal row/column'),
             visibility: ({ controls }: { controls?: any }) => {
               const fieldSettings = controls?.fieldGroupingSettings?.value || {};
-              return fieldSettings[fieldName]?.subtotalEnabled === true;
+              const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
+              // Показываем если subtotalShow задан и не равен 'general_setting'
+              // Также поддерживаем обратную совместимость с subtotalEnabled
+              const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
+              return (
+                subtotalShow === 'show' ||
+                subtotalShow === 'no_show' ||
+                (subtotalShow === undefined && subtotalEnabled === true)
+              );
             },
           },
         },
@@ -164,7 +179,80 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
             description: t('Aggregation type for subtotals'),
             visibility: ({ controls }: { controls?: any }) => {
               const fieldSettings = controls?.fieldGroupingSettings?.value || {};
-              return fieldSettings[fieldName]?.subtotalEnabled === true;
+              const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
+              const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
+              return (
+                subtotalShow === 'show' ||
+                subtotalShow === 'no_show' ||
+                (subtotalShow === undefined && subtotalEnabled === true)
+              );
+            },
+          },
+        },
+      ],
+      [
+        {
+          name: `fieldGroupingSettings.${fieldName}.subtotalValueFormat.valueFormat`,
+          config: {
+            ...sharedControls.y_axis_format,
+            label: t('Subtotal number format'),
+            renderTrigger: true,
+            description: t('D3 number format for subtotal cells'),
+            choices: [
+              [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+              ...(sharedControls.y_axis_format.choices || []),
+            ],
+            visibility: ({ controls }: { controls?: any }) => {
+              const fieldSettings = controls?.fieldGroupingSettings?.value || {};
+              const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
+              const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
+              return (
+                subtotalShow === 'show' ||
+                subtotalShow === 'no_show' ||
+                (subtotalShow === undefined && subtotalEnabled === true)
+              );
+            },
+          },
+        },
+      ],
+      [
+        {
+          name: `fieldGroupingSettings.${fieldName}.subtotalValueFormat.fontColor`,
+          config: {
+            type: 'ColorPickerControl',
+            label: t('Subtotal font color'),
+            renderTrigger: true,
+            default: undefined,
+            description: t('Font color for subtotal cells'),
+            visibility: ({ controls }: { controls?: any }) => {
+              const fieldSettings = controls?.fieldGroupingSettings?.value || {};
+              const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
+              const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
+              return (
+                subtotalShow === 'show' ||
+                subtotalShow === 'no_show' ||
+                (subtotalShow === undefined && subtotalEnabled === true)
+              );
+            },
+          },
+        },
+        {
+          name: `fieldGroupingSettings.${fieldName}.subtotalValueFormat.backgroundColor`,
+          config: {
+            type: 'ColorPickerControl',
+            label: t('Subtotal background color'),
+            renderTrigger: true,
+            default: undefined,
+            description: t('Background color for subtotal cells'),
+            visibility: ({ controls }: { controls?: any }) => {
+              const fieldSettings = controls?.fieldGroupingSettings?.value || {};
+              const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
+              const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
+              return (
+                subtotalShow === 'show' ||
+                subtotalShow === 'no_show' ||
+                (subtotalShow === undefined && subtotalEnabled === true)
+              );
             },
           },
         },
@@ -2993,6 +3081,506 @@ const config: ControlPanelConfig = {
                   },
                 },
               ],
+              // Subtotal settings для поля
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_subtotalShow`,
+                  config: {
+                    type: 'RadioButtonControl',
+                    label: t('Show subtotal'),
+                    renderTrigger: true,
+                    default: 'general_setting',
+                    options: [
+                      ['show', t('Show')],
+                      ['no_show', t('No Show')],
+                      ['general_setting', t('General setting')],
+                    ],
+                    description: t(
+                      'Show subtotal for this field. "General setting" uses table-wide settings from Data -> Options.',
+                    ),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      return !!selectedField;
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: 'general_setting' };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: 'general_setting' };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      // Обратная совместимость с subtotalEnabled
+                      if (fieldSettings.subtotalShow !== undefined) {
+                        return { value: fieldSettings.subtotalShow };
+                      }
+                      if (fieldSettings.subtotalEnabled !== undefined) {
+                        return { value: fieldSettings.subtotalEnabled === true ? 'show' : 'no_show' };
+                      }
+                      return { value: 'general_setting' };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_subtotalLabel`,
+                  config: {
+                    type: 'TextControl',
+                    label: t('Subtotal label'),
+                    renderTrigger: true,
+                    default: t('Subtotal'),
+                    description: t('Label for subtotal row/column'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const subtotalShowControl =
+                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
+                      const subtotalShow = subtotalShowControl?.value;
+                      // Показываем если subtotalShow задан и не равен 'general_setting'
+                      // Также поддерживаем обратную совместимость с subtotalEnabled
+                      const fieldGroupingSettingsControl =
+                        controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
+                      const subtotalEnabled = fieldSettings.subtotalEnabled;
+                      return (
+                        subtotalShow === 'show' ||
+                        subtotalShow === 'no_show' ||
+                        (subtotalShow === undefined && subtotalEnabled === true)
+                      );
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      `field_formatting_field${fieldIndex}_subtotalShow`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value: fieldSettings?.subtotalLabel || undefined,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_subtotalAggregation`,
+                  config: {
+                    type: 'SelectControl',
+                    label: t('Subtotal aggregation'),
+                    renderTrigger: true,
+                    default: 'sum',
+                    choices: [
+                      ['sum', t('Sum')],
+                      ['max', t('Maximum')],
+                      ['min', t('Minimum')],
+                    ],
+                    description: t('Aggregation type for subtotals'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const subtotalShowControl =
+                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
+                      const subtotalShow = subtotalShowControl?.value;
+                      const fieldGroupingSettingsControl =
+                        controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
+                      const subtotalEnabled = fieldSettings.subtotalEnabled;
+                      return (
+                        subtotalShow === 'show' ||
+                        subtotalShow === 'no_show' ||
+                        (subtotalShow === undefined && subtotalEnabled === true)
+                      );
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      `field_formatting_field${fieldIndex}_subtotalShow`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: 'sum' };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: 'sum' };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value: fieldSettings?.subtotalAggregation || 'sum',
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_subtotalValueFormat`,
+                  config: {
+                    ...sharedControls.y_axis_format,
+                    label: t('Subtotal number format'),
+                    renderTrigger: true,
+                    description: t('D3 number format for subtotal cells'),
+                    choices: [
+                      [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                      ...(sharedControls.y_axis_format.choices || []),
+                    ],
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const subtotalShowControl =
+                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
+                      const subtotalShow = subtotalShowControl?.value;
+                      const fieldGroupingSettingsControl =
+                        controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
+                      const subtotalEnabled = fieldSettings.subtotalEnabled;
+                      return (
+                        subtotalShow === 'show' ||
+                        subtotalShow === 'no_show' ||
+                        (subtotalShow === undefined && subtotalEnabled === true)
+                      );
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      `field_formatting_field${fieldIndex}_subtotalShow`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      const subtotalValueFormat = fieldSettings?.subtotalValueFormat;
+                      return {
+                        value: subtotalValueFormat?.valueFormat || undefined,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_subtotalFontColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Subtotal font color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Font color for subtotal cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const subtotalShowControl =
+                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
+                      const subtotalShow = subtotalShowControl?.value;
+                      const fieldGroupingSettingsControl =
+                        controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
+                      const subtotalEnabled = fieldSettings.subtotalEnabled;
+                      return (
+                        subtotalShow === 'show' ||
+                        subtotalShow === 'no_show' ||
+                        (subtotalShow === undefined && subtotalEnabled === true)
+                      );
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      `field_formatting_field${fieldIndex}_subtotalShow`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      const subtotalValueFormat = fieldSettings?.subtotalValueFormat;
+                      return {
+                        value: subtotalValueFormat?.fontColor || undefined,
+                      };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_subtotalBackgroundColor`,
+                  config: {
+                    type: 'ColorPickerControl',
+                    label: t('Subtotal background color'),
+                    renderTrigger: true,
+                    default: undefined,
+                    description: t('Background color for subtotal cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const subtotalShowControl =
+                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
+                      const subtotalShow = subtotalShowControl?.value;
+                      const fieldGroupingSettingsControl =
+                        controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
+                      const subtotalEnabled = fieldSettings.subtotalEnabled;
+                      return (
+                        subtotalShow === 'show' ||
+                        subtotalShow === 'no_show' ||
+                        (subtotalShow === undefined && subtotalEnabled === true)
+                      );
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      `field_formatting_field${fieldIndex}_subtotalShow`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      const subtotalValueFormat = fieldSettings?.subtotalValueFormat;
+                      return {
+                        value: subtotalValueFormat?.backgroundColor || undefined,
+                      };
+                    },
+                  },
+                },
+              ],
             );
           }
           return controls;
@@ -3353,6 +3941,15 @@ const config: ControlPanelConfig = {
           fieldSettings.rowValueFontColor;
         resultFormData[`field_formatting_field${i}_rowValueBackgroundColor`] =
           fieldSettings.rowValueBackgroundColor;
+        // Восстанавливаем настройки subtotal
+        resultFormData[`field_formatting_field${i}_subtotalShow`] = fieldSettings.subtotalShow;
+        resultFormData[`field_formatting_field${i}_subtotalLabel`] = fieldSettings.subtotalLabel;
+        resultFormData[`field_formatting_field${i}_subtotalAggregation`] = fieldSettings.subtotalAggregation;
+        if (fieldSettings.subtotalValueFormat) {
+          resultFormData[`field_formatting_field${i}_subtotalValueFormat`] = fieldSettings.subtotalValueFormat.valueFormat;
+          resultFormData[`field_formatting_field${i}_subtotalFontColor`] = fieldSettings.subtotalValueFormat.fontColor;
+          resultFormData[`field_formatting_field${i}_subtotalBackgroundColor`] = fieldSettings.subtotalValueFormat.backgroundColor;
+        }
       }
     }
     
@@ -3438,6 +4035,15 @@ const config: ControlPanelConfig = {
         fieldSettings.rowValueFontColor;
       resultFormData[`field_formatting_field${nextFreeIndex}_rowValueBackgroundColor`] =
         fieldSettings.rowValueBackgroundColor;
+      // Восстанавливаем настройки subtotal
+      resultFormData[`field_formatting_field${nextFreeIndex}_subtotalShow`] = fieldSettings.subtotalShow;
+      resultFormData[`field_formatting_field${nextFreeIndex}_subtotalLabel`] = fieldSettings.subtotalLabel;
+      resultFormData[`field_formatting_field${nextFreeIndex}_subtotalAggregation`] = fieldSettings.subtotalAggregation;
+      if (fieldSettings.subtotalValueFormat) {
+        resultFormData[`field_formatting_field${nextFreeIndex}_subtotalValueFormat`] = fieldSettings.subtotalValueFormat.valueFormat;
+        resultFormData[`field_formatting_field${nextFreeIndex}_subtotalFontColor`] = fieldSettings.subtotalValueFormat.fontColor;
+        resultFormData[`field_formatting_field${nextFreeIndex}_subtotalBackgroundColor`] = fieldSettings.subtotalValueFormat.backgroundColor;
+      }
       
       nextFreeIndex += 1;
     }
@@ -3476,6 +4082,13 @@ const config: ControlPanelConfig = {
         resultFormData[`field_formatting_field${i}_rowValueFontSize`] = undefined;
         resultFormData[`field_formatting_field${i}_rowValueFontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_rowValueBackgroundColor`] = undefined;
+        // Очищаем настройки subtotal
+        resultFormData[`field_formatting_field${i}_subtotalShow`] = undefined;
+        resultFormData[`field_formatting_field${i}_subtotalLabel`] = undefined;
+        resultFormData[`field_formatting_field${i}_subtotalAggregation`] = undefined;
+        resultFormData[`field_formatting_field${i}_subtotalValueFormat`] = undefined;
+        resultFormData[`field_formatting_field${i}_subtotalFontColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_subtotalBackgroundColor`] = undefined;
       }
     }
     
