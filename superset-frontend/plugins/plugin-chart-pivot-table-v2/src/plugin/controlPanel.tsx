@@ -1214,7 +1214,13 @@ const config: ControlPanelConfig = {
                     clearable: true,
                     description: t('Select a field to configure formatting'),
                     placeholder: t('Select field...'),
-                    rerender: ['groupbyRows', 'groupbyColumns', 'metrics', 'fieldGroupingSettings'],
+                    rerender: [
+                      'groupbyRows',
+                      'groupbyColumns',
+                      'metrics',
+                      'fieldGroupingSettings',
+                      ...Array.from({ length: fieldIndex }, (_, k) => `field_formatting_field${k}_selector`),
+                    ],
                     mapStateToProps: (state: any, controlState?: any) => {
                       // Безопасная проверка входных параметров
                       if (!state || typeof state !== 'object') {
@@ -1310,6 +1316,19 @@ const config: ControlPanelConfig = {
                         });
                       }
                       
+                      // 2-2: поля, уже выбранные в предыдущих слотах Field 1..Field n-1, не показывать в списке
+                      const previouslySelectedSet = new Set<string>();
+                      for (let k = 0; k < fieldIndex; k += 1) {
+                        const prevCtrl = controls?.[`field_formatting_field${k}_selector`];
+                        const v = prevCtrl?.value;
+                        if (typeof v === 'string' && v.length > 0) {
+                          previouslySelectedSet.add(v);
+                        }
+                      }
+                      const availableFields = allFields.filter(
+                        field => !previouslySelectedSet.has(field.value),
+                      );
+
                       // Безопасно получаем выбранное поле для этого набора настроек
                       const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
                       const selectorControl = (controls && typeof controls === 'object' && selectorControlName in controls)
@@ -1318,9 +1337,9 @@ const config: ControlPanelConfig = {
                       const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
                         ? selectorControl.value
                         : undefined;
-                      
+
                       return {
-                        choices: allFields.map(field => [field.value, field.label]),
+                        choices: availableFields.map(field => [field.value, field.label]),
                         value: selectedField !== null && selectedField !== undefined ? selectedField : undefined,
                       };
                     },

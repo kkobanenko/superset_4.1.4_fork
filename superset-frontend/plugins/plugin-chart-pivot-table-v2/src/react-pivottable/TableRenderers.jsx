@@ -287,16 +287,76 @@ export class TableRenderer extends Component {
     const fieldGroupingSettings =
       tableOptions?.fieldGroupingSettings || {};
     
+    // Нормализация имени поля для сопоставления ключей, приходящих из UI.
+    //
+    // В UI поле может называться по-разному:
+    // - "Field2: Дата"
+    // - "Дата (Column)"
+    // - "Дата (Row)"
+    // а в pivot таблице в colAttrs/rowAttrs обычно используется просто "Дата".
+    //
+    // Чтобы per-field настройки (в т.ч. Show subtotal) корректно применялись,
+    // приводим оба варианта к единому виду.
+    const normalizeFieldName = (name) => {
+      if (typeof name !== 'string') {
+        return String(name);
+      }
+      let result = name.trim();
+      // Убираем префиксы вида "Field2:" / "Field 2:" если они есть
+      result = result.replace(/^Field\s*\d+\s*:\s*/i, '').trim();
+      // Убираем суффиксы вида " (Column)" / " (Row)" / " (Metric)"
+      result = result.replace(/\s*\((Column|Row|Metric)\)\s*$/i, '').trim();
+      return result;
+    };
+    const normalizedAttrName = normalizeFieldName(attrName);
+
     // Сначала пробуем точное совпадение
     if (fieldGroupingSettings[attrName]) {
       return fieldGroupingSettings[attrName];
     }
-    
+
+    // В pivot colAttrs для колонок с метрикой первый атрибут — константа "Metric" (METRIC_KEY),
+    // а в fieldGroupingSettings ключ может быть "Сумма (Metric)", "Field2: Сумма(Metric)" или просто "Сумма".
+    // Сопоставляем "Metric" с ключом, оканчивающимся на "(Metric)", или с единственным ключом с no_show.
+    if (
+      attrName === 'Metric' ||
+      normalizedAttrName.toLowerCase() === 'metric'
+    ) {
+      const metricKey = Object.keys(fieldGroupingSettings).find(k =>
+        /\(Metric\)\s*$/i.test(typeof k === 'string' ? k.trim() : ''),
+      );
+      if (metricKey) {
+        return fieldGroupingSettings[metricKey];
+      }
+      const noShowKeys = Object.keys(fieldGroupingSettings).filter(
+        k => fieldGroupingSettings[k]?.subtotalShow === 'no_show',
+      );
+      if (noShowKeys.length === 1) {
+        return fieldGroupingSettings[noShowKeys[0]];
+      }
+    }
+
     // Если точное совпадение не найдено, ищем по частичному совпадению
     // (например, если attrName = "Дата", а ключ = "Field2: Дата")
+    // Для метрик: ключ из UI "Field2: Сумма(Metric)" нормализуется в "Сумма", а в colAttrs может быть "Sum(Сумма)" — считаем совпадением по вхождению имени.
     const matchingKey = Object.keys(fieldGroupingSettings).find(key => {
-      // Проверяем, заканчивается ли ключ на attrName (с учетом возможного префикса)
-      return key === attrName || key.endsWith(`: ${attrName}`) || key.endsWith(` ${attrName}`);
+      if (key === attrName) {
+        return true;
+      }
+      // Проверяем вариант "Field2: Дата"
+      if (key.endsWith(`: ${attrName}`) || key.endsWith(` ${attrName}`)) {
+        return true;
+      }
+      // Проверяем вариант "Дата (Column)" / "Дата (Row)" / "Сумма (Metric)" через нормализацию
+      const normalizedKey = normalizeFieldName(key);
+      if (normalizedKey === normalizedAttrName) {
+        return true;
+      }
+      // Метрика в colAttrs часто приходит как "Sum(Сумма)", ключ в настройках — "Сумма" или "Сумма (Metric)"
+      if (normalizedKey && typeof attrName === 'string' && attrName.includes(normalizedKey)) {
+        return true;
+      }
+      return false;
     });
     
     if (matchingKey) {
@@ -340,18 +400,6 @@ export class TableRenderer extends Component {
     // Если все еще не задано, используем 'general_setting' по умолчанию
     if (subtotalShow === undefined) {
       subtotalShow = 'general_setting';
-    }
-
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ (только для колонок и атрибута "Дата")
-    if (typeof console !== 'undefined' && console.log && !isRow && attrName === 'Дата') {
-      console.log('[getFieldSubtotalSettings] For "Дата":', {
-        attrName,
-        isRow,
-        fieldSettings,
-        subtotalShow,
-        globalColSubTotals: globalTableSettings?.colSubTotals,
-        willReturnEnabled: subtotalShow !== 'no_show'
-      });
     }
 
     // Если 'no_show', отключаем subtotal для этого поля
@@ -1694,7 +1742,16 @@ export class TableRenderer extends Component {
           </th>,
         );
       } else if (attrIdx === colKey.length) {
-        // Подытог по колонкам: используем per-field настройки с учетом приоритета
+        // Подытог по колонкам.
+        //
+        // В PivotData колонки подытогов представлены как prefix-key меньшей длины
+        // (colKey.length < colAttrs.length). Такой prefix-key агрегирует значения
+        // по "дочерним" атрибутам, а значит относится к *родительскому* атрибуту
+        // (последнему элементу prefix-key).
+        //
+        // Важно: заголовок "Subtotal" рендерится на строке текущего атрибута
+        // (attrIdx === colKey.length). Следовательно, per-field `Show subtotal`
+        // нужно проверять именно для этого attrName (например, "Дата").
         const subtotalSettings = this.getFieldSubtotalSettings(attrName, false);
         
         // Если subtotal отключен для этого поля, пропускаем добавление th для subtotal
@@ -2076,55 +2133,12 @@ export class TableRenderer extends Component {
     
     const valueCells = visibleColKeys.map((colKey, colIndex) => {
       const flatColKey = flatKey(colKey);
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ - логируем структуру colKey для обычных ячеек
-      if (typeof console !== 'undefined' && console.log && !isRowSubtotalRow && colIndex === 0) {
-        console.log('[renderRow] Normal cell colKey structure:', {
-          rowKey: JSON.stringify(rowKey),
-          rowKeyLength: rowKey ? rowKey.length : 0,
-          rowKeyItems: rowKey ? rowKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
-          colKey: JSON.stringify(colKey),
-          colKeyLength: colKey ? colKey.length : 0,
-          colKeyItems: colKey ? colKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
-          colAttrs: JSON.stringify(colAttrs),
-          colAttrsLength: colAttrs ? colAttrs.length : 0,
-          colAttrsItems: colAttrs ? colAttrs.map((item, i) => `[${i}]: "${item}"`) : [],
-          metricKey: JSON.stringify(metricKey),
-          metricsOrder: JSON.stringify(metricsOrder)
-        });
-      const agg = pivotData.getAggregator(rowKey, colKey);
-        if (agg) {
-          console.log('[renderRow] Normal cell aggregator value:', { value: agg.value(), rowKey: JSON.stringify(rowKey), colKey: JSON.stringify(colKey) });
-        } else {
-          console.log('[renderRow] Normal cell aggregator not found for:', { rowKey: JSON.stringify(rowKey), colKey: JSON.stringify(colKey) });
-        }
-      }
       const agg = pivotData.getAggregator(rowKey, colKey);
       
       // Для подытогов строк при transposePivot = false проверяем, является ли метрика формулой
       let aggValue = agg.value();
       if (isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ - логируем структуру colKey для подытогов строк
-        if (typeof console !== 'undefined' && console.log && colIndex === 0) {
-          console.log('[renderRow] Row subtotal colKey structure:', {
-            rowKey: JSON.stringify(rowKey),
-            rowKeyLength: rowKey ? rowKey.length : 0,
-            rowKeyItems: rowKey ? rowKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
-            colKey: JSON.stringify(colKey),
-            colKeyLength: colKey ? colKey.length : 0,
-            colKeyItems: colKey ? colKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
-            colAttrs: JSON.stringify(colAttrs),
-            colAttrsLength: colAttrs ? colAttrs.length : 0,
-            colAttrsItems: colAttrs ? colAttrs.map((item, i) => `[${i}]: "${item}"`) : [],
-            metricKey: JSON.stringify(metricKey),
-            metricsOrder: JSON.stringify(metricsOrder)
-          });
-          console.log('[renderRow] Row subtotal aggregator value:', { value: aggValue, rowKey: JSON.stringify(rowKey), colKey: JSON.stringify(colKey) });
-        }
         const metricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[renderRow] isRowSubtotalRow:', isRowSubtotalRow, 'metricName:', metricName, 'hasSqlExpression:', metricName && metricsSqlExpressions[metricName]);
-        }
         if (metricName && metricsSqlExpressions[metricName]) {
           // Метрика является формулой, вычисляем значение по формуле
           const formulaValue = this.computeFormulaValue(
@@ -2141,10 +2155,6 @@ export class TableRenderer extends Component {
             metricsOrder,
             metricNameMapping
           );
-          // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[renderRow] formula calculation result:', { metricName, formulaValue, aggValue, rowKey, colKey });
-          }
           if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
             aggValue = formulaValue;
           }
@@ -2152,54 +2162,36 @@ export class TableRenderer extends Component {
         }
       }
       
-      // Проверяем, является ли колонка subtotal для какого-либо атрибута с настройкой "No Show"
-      // Проверяем каждый атрибут отдельно, так как колонка может быть subtotal для одного атрибута, но не для другого
-      let colSubtotalSettings = null; // Определяем вне цикла для использования дальше в коде
-      let colSubtotalAttrName = null; // Сохраняем имя атрибута для subtotal
-      
-      for (let attrIdx = 1; attrIdx < colAttrs.length && attrIdx < colKey.length; attrIdx++) {
-        // Если значение для этого атрибута равно 0, это subtotal для данного атрибута
-        // ВАЖНО: Используем строгое сравнение === 0, чтобы не скрывать колонки с конкретными значениями
-        const isSubtotalForThisAttr = colKey[attrIdx] === 0;
-        
-        if (isSubtotalForThisAttr) {
-          const attrName = colAttrs[attrIdx];
-          const attrSubtotalSettings = attrName
-            ? this.getFieldSubtotalSettings(attrName, false)
-            : null;
-          
-          // Сохраняем настройки первого найденного атрибута для использования в стилях и форматировании
-          if (!colSubtotalSettings && attrSubtotalSettings) {
-            colSubtotalSettings = attrSubtotalSettings;
-            colSubtotalAttrName = attrName;
-          }
-          
-          // ВРЕМЕННОЕ ЛОГИРОВАНИЕ (только для первой колонки)
-          if (typeof console !== 'undefined' && console.log && colIndex === 0) {
-            console.log('[ValueCell] Checking subtotal:', {
-              colKey: JSON.stringify(colKey),
-              attrIdx,
-              attrName,
-              colKeyValue: colKey[attrIdx],
-              colKeyValueType: typeof colKey[attrIdx],
-              isSubtotalForThisAttr,
-              attrSubtotalSettings,
-              enabled: attrSubtotalSettings?.enabled,
-              willHide: attrSubtotalSettings && !attrSubtotalSettings.enabled,
-              rowKey: JSON.stringify(rowKey)
-            });
-          }
-          
-          // Скрываем ячейку, если для этого атрибута установлено "No Show"
-          if (attrSubtotalSettings && !attrSubtotalSettings.enabled) {
-            return null; // Скрываем эту ячейку
-          }
-          // Если subtotal для этого атрибута разрешен, продолжаем проверку других атрибутов
-        }
+      // Определяем, является ли текущая ячейка колонкой подытога.
+      //
+      // Ключевой принцип: per-field `No Show` должен влиять только на колонки,
+      // которые реально появляются из-за `Data → Show columns subtotal`, то есть
+      // на prefix-ключи PivotData (colKey.length < colAttrs.length) с флагом
+      // `agg.isColSubtotal === true`.
+      // В PivotData флаги subtotal хранятся по-разному:
+      // - для обычных ячеек в tree выставляется `isColSubtotal`
+      // - для totals по колонкам (rowKey = []) выставляется только `isSubtotal`
+      // Поэтому используем оба флага, но дополнительно ограничиваемся prefix-key (length < colAttrs.length),
+      // чтобы не затронуть leaf-колонки.
+      const isColSubtotalCol =
+        Boolean(agg && (agg.isColSubtotal || agg.isSubtotal)) &&
+        colKey.length < colAttrs.length;
+
+      // К какому полю относится subtotal колонка:
+      // prefix-key длины L относится к subtotal для атрибута на позиции L.
+      // Пример: colAttrs=[Metric, Дата, Тип, Величина], colKey.length=1 => subtotal для "Дата".
+      const colSubtotalAttrName =
+        isColSubtotalCol && colKey.length < colAttrs.length ? colAttrs[colKey.length] : null;
+
+      const colSubtotalSettings = colSubtotalAttrName
+        ? this.getFieldSubtotalSettings(colSubtotalAttrName, false)
+        : null;
+
+      // Если subtotal отключён для этого поля, не рендерим ячейку колонки подытога.
+      // Важно: это условие не должно затрагивать обычные (leaf) колонки.
+      if (isColSubtotalCol && colSubtotalSettings && !colSubtotalSettings.enabled) {
+        return null;
       }
-      
-      // Определяем isColSubtotalCol для дальнейшего использования (для стилей и форматирования)
-      const isColSubtotalCol = colKey.slice(1).includes(0);
 
       const keys = [...rowKey, ...colKey];
       let backgroundColor;
@@ -2261,11 +2253,6 @@ export class TableRenderer extends Component {
         : isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
         : null;
-      
-      // Если subtotal отключен для этого поля, не рендерим ячейку колонки подытога
-      if (isColSubtotalCol && colSubtotalSettings && !colSubtotalSettings.enabled) {
-        return null;
-      }
       
       // Создаем ref callbacks для cellStyle и metricValueStyle
       // Используем правильные настройки для значений колонок/строк
@@ -2672,6 +2659,7 @@ export class TableRenderer extends Component {
       rowSubtotalDisplay,
       colSubtotalDisplay,
       allowRenderHtml,
+      pivotData,
     } = this.cachedBasePivotSettings;
 
     // Need to account for exclusions to compute the effective row
@@ -2689,193 +2677,66 @@ export class TableRenderer extends Component {
       colSubtotalDisplay,
     );
 
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ структуры данных
-    if (typeof console !== 'undefined' && console.log) {
-      const fieldGroupingSettings = this.props.tableOptions?.fieldGroupingSettings || {};
-      // Проверяем все возможные варианты имени "Дата"
-      const possibleDateKeys = Object.keys(fieldGroupingSettings).filter(k => 
-        k.includes('Дата') || k.toLowerCase().includes('date')
-      );
-      
-      // Детальная информация о настройках для "Дата"
-      const dateSettings = fieldGroupingSettings['Дата'] || fieldGroupingSettings['Field2: Дата'] || null;
-      const dateSettingsDetail = dateSettings ? {
-        subtotalShow: dateSettings.subtotalShow,
-        subtotalEnabled: dateSettings.subtotalEnabled,
-        allKeys: Object.keys(dateSettings)
-      } : 'NOT FOUND';
-      
-      console.log('[FilterColKeys] Initial data:', {
-        colAttrs: JSON.stringify(colAttrs),
-        colAttrsLength: colAttrs.length,
-        colAttrsItems: colAttrs.map((item, i) => `${i}: "${item}"`),
-        visibleColKeysLength: visibleColKeys.length,
-        firstFewColKeys: visibleColKeys.slice(0, 3).map(k => JSON.stringify(k)),
-        fieldGroupingSettingsKeys: Object.keys(fieldGroupingSettings),
-        fieldGroupingSettingsKeysCount: Object.keys(fieldGroupingSettings).length,
-        possibleDateKeys,
-        dateFieldSettings: dateSettingsDetail,
-        allFieldSettings: Object.keys(fieldGroupingSettings).reduce((acc, key) => {
-          acc[key] = {
-            subtotalShow: fieldGroupingSettings[key]?.subtotalShow,
-            subtotalEnabled: fieldGroupingSettings[key]?.subtotalEnabled
-          };
-          return acc;
-        }, {})
-      });
-      
-      // Дополнительное логирование для отладки
-      if (Object.keys(fieldGroupingSettings).length > 0) {
-        console.log('[FilterColKeys] Full fieldGroupingSettings:', JSON.stringify(fieldGroupingSettings, null, 2));
+    // Фильтруем subtotal-колонки с настройкой per-field `Show subtotal = No Show`.
+    //
+    // Ключевой принцип: кандидаты на скрытие должны быть строго подмножеством колонок,
+    // которые появляются из-за `Data → Options → Show columns subtotal`.
+    // В PivotData это prefix-key меньшей длины (colKey.length < colAttrs.length),
+    // у которого агрегатор имеет флаг `isColSubtotal`.
+    //
+    // Важно: per-field `No Show` не должен менять обычные (leaf) колонки и их заголовки.
+    // Нормализация имени атрибута для сравнений внутри colAttrs.
+    // (trim + замена NBSP + суффиксы (Column)/(Row)/(Metric) + извлечение имени метрики из "Sum(Сумма)")
+    const normalizeAttrName = (name) => {
+      if (typeof name !== 'string') {
+        return String(name);
+      }
+      let s = name
+        .replace(/\u00a0/g, ' ')
+        .trim()
+        .replace(/\s*\((Column|Row|Metric)\)\s*$/i, '')
+        .trim();
+      // Метрика в colAttrs может быть "Sum(Сумма)" — приводим к "Сумма" для совпадения с ключами настроек
+      const aggMatch = s.match(/^[A-Za-z]+\s*\(([^)]*)\)\s*$/);
+      if (aggMatch) {
+        s = aggMatch[1].trim();
+      }
+      return s;
+    };
+
+    const disabledSubtotalAttrs = new Set();
+    for (let attrIdx = 0; attrIdx < colAttrs.length; attrIdx++) {
+      const attrName = colAttrs[attrIdx];
+      if (!attrName) {
+        continue;
+      }
+      const subtotalSettings = this.getFieldSubtotalSettings(attrName, false);
+      if (subtotalSettings && !subtotalSettings.enabled) {
+        disabledSubtotalAttrs.add(normalizeAttrName(attrName));
       }
     }
 
-    // Фильтруем subtotal колонки с настройкой "No Show"
-    // ПОДСКАЗКА: Колонка подытогов для поля "Дата" - это последняя колонка в блоке колонок,
-    // расположенных под каждым уникальным значением поля "Дата".
-    // 
-    // Алгоритм:
-    // 1. Для каждого атрибута (например, "Дата") находим все колонки с одинаковыми значениями
-    //    для предыдущих атрибутов (группа колонок)
-    // 2. В каждой группе последняя колонка - это subtotal колонка (colKey[attrIdx] === 0)
-    // 3. Если для этого атрибута установлено "No Show", скрываем эту последнюю колонку
-    
-    const originalVisibleColKeysLength = visibleColKeys.length;
-    let hiddenColKeysCount = 0;
-    
-    // Находим индексы атрибутов, для которых нужно проверить настройки subtotal
-    const attrIndicesToCheck = [];
-    for (let attrIdx = 1; attrIdx < colAttrs.length; attrIdx++) {
-      const attrName = colAttrs[attrIdx];
-      if (attrName) {
-        const subtotalSettings = this.getFieldSubtotalSettings(attrName, false);
-        // Проверяем только те атрибуты, для которых установлено "No Show"
-        if (subtotalSettings && !subtotalSettings.enabled) {
-          attrIndicesToCheck.push(attrIdx);
-        }
-      }
-    }
-    
-    // Если нет атрибутов с "No Show", пропускаем фильтрацию
-    if (attrIndicesToCheck.length === 0) {
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[FilterColKeys] No attributes with "No Show" setting, skipping filtering');
-      }
-    } else {
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[FilterColKeys] Checking attributes with "No Show":', {
-          attrIndicesToCheck,
-          attrNames: attrIndicesToCheck.map(idx => colAttrs[idx])
-        });
-      }
-      
-      // Функция для определения, является ли колонка последней в группе для конкретного атрибута
-      // Группа колонок определяется одинаковыми значениями для всех атрибутов ДО текущего атрибута
-      // Последняя колонка в группе - это subtotal колонка (colKey[attrIdx] === 0),
-      // после которой следующая колонка имеет ДРУГОЕ значение для текущего атрибута
-      const isLastInGroup = (colKeyIndex, attrIdx) => {
-        const currentColKey = visibleColKeys[colKeyIndex];
-        
-        // Если это не subtotal колонка для данного атрибута, то это не последняя в группе
-        if (currentColKey[attrIdx] !== 0) {
-          return false;
-        }
-        
-        // Проверяем, что все предыдущие значения (до attrIdx) не равны 0
-        // (т.е. это не subtotal для предыдущих атрибутов)
-        for (let prevIdx = 1; prevIdx < attrIdx; prevIdx++) {
-          if (currentColKey[prevIdx] === 0) {
-            return false; // Это subtotal для предыдущего атрибута, не для текущего
-          }
-        }
-        
-        // Если это последняя колонка в списке, то она точно последняя в группе
-        if (colKeyIndex === visibleColKeys.length - 1) {
+    if (disabledSubtotalAttrs.size > 0) {
+      visibleColKeys = visibleColKeys.filter(colKey => {
+        // Всегда оставляем grand total (пустой ключ) и leaf-ключи полной длины.
+        if (!Array.isArray(colKey) || colKey.length === 0 || colKey.length >= colAttrs.length) {
           return true;
         }
-        
-        const nextColKey = visibleColKeys[colKeyIndex + 1];
-        
-        // Проверяем, что следующая колонка существует и имеет достаточную длину
-        if (!nextColKey || nextColKey.length <= attrIdx) {
-          return true; // Следующая колонка не существует или короче, значит это последняя
+
+        const colAgg = pivotData.getAggregator([], colKey);
+        const isColSubtotalKey =
+          Boolean(colAgg && (colAgg.isColSubtotal || colAgg.isSubtotal)) &&
+          colKey.length < colAttrs.length;
+        if (!isColSubtotalKey) {
+          return true;
         }
-        
-        // ВАЖНО: Проверяем, что следующая колонка имеет ДРУГОЕ значение для текущего атрибута (attrIdx)
-        // Это означает, что мы перешли к следующему значению поля "Дата"
-        // Если следующая колонка НЕ является subtotal для текущего атрибута (nextColKey[attrIdx] !== 0),
-        // значит мы точно закончили группу
-        if (nextColKey[attrIdx] !== 0) {
-          return true; // Следующая колонка имеет конкретное значение для "Дата", значит мы закончили группу
-        }
-        
-        // Если следующая колонка тоже subtotal (nextColKey[attrIdx] === 0),
-        // нужно проверить, относятся ли они к одной группе
-        // Группа определяется одинаковыми значениями для всех атрибутов ДО attrIdx
-        // Если предыдущие значения отличаются, значит это разные группы
-        for (let prevIdx = 1; prevIdx < attrIdx; prevIdx++) {
-          // Проверяем, что оба массива имеют достаточную длину
-          if (currentColKey.length <= prevIdx || nextColKey.length <= prevIdx) {
-            return true; // Разная длина, значит это разные группы
-          }
-          if (currentColKey[prevIdx] !== nextColKey[prevIdx]) {
-            return true; // Предыдущие значения отличаются, значит это разные группы
-          }
-        }
-        
-        // Если все предыдущие значения совпадают и следующая колонка тоже subtotal,
-        // то это может быть subtotal для того же набора предыдущих значений,
-        // но для другого значения текущего атрибута (что маловероятно для subtotal)
-        // В этом случае считаем, что текущая колонка - последняя в группе
-        // (так как следующая колонка тоже subtotal, но для другой группы)
-        return true;
-      };
-      
-      visibleColKeys = visibleColKeys.filter((colKey, colKeyIndex) => {
-        // Проверяем каждый атрибут, для которого установлено "No Show"
-        for (const attrIdx of attrIndicesToCheck) {
-          const isLast = isLastInGroup(colKeyIndex, attrIdx);
-          
-          // ВРЕМЕННОЕ ЛОГИРОВАНИЕ (для всех subtotal колонок)
-          if (typeof console !== 'undefined' && console.log && colKey[attrIdx] === 0) {
-            const attrName = colAttrs[attrIdx];
-            const nextColKey = colKeyIndex < visibleColKeys.length - 1 
-              ? visibleColKeys[colKeyIndex + 1]
-              : null;
-            console.log('[FilterColKeys] Checking subtotal column:', {
-              colKeyIndex,
-              colKey: JSON.stringify(colKey),
-              attrIdx,
-              attrName,
-              isLast,
-              nextColKey: nextColKey ? JSON.stringify(nextColKey) : 'LAST',
-              nextColKeyAttrValue: nextColKey ? nextColKey[attrIdx] : 'N/A',
-              willHide: isLast
-            });
-          }
-          
-          if (isLast) {
-            const attrName = colAttrs[attrIdx];
-            
-            hiddenColKeysCount++;
-            return false; // Скрываем эту колонку
-          }
-        }
-        
-        return true; // Показываем колонку
-      });
-    }
-    
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[FilterColKeys] Filtering result:', {
-        originalLength: originalVisibleColKeysLength,
-        filteredLength: visibleColKeys.length,
-        hiddenCount: hiddenColKeysCount,
-        colAttrs: JSON.stringify(colAttrs),
-        firstFewColKeys: visibleColKeys.slice(0, 3).map(k => JSON.stringify(k))
+
+        // prefix-key длины L (< colAttrs.length) соответствует subtotal для атрибута
+        // на позиции L (строка заголовка, где рисуется "Subtotal").
+        // Пример: colAttrs=[Metric, Дата, Тип]; colKey.length=2 => subtotal для "Metric".
+        const subtotalAttrNameRaw = colAttrs[colKey.length];
+        const subtotalAttrName = normalizeAttrName(subtotalAttrNameRaw);
+        return !disabledSubtotalAttrs.has(subtotalAttrName);
       });
     }
 

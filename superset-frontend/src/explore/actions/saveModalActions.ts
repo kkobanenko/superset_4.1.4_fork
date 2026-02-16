@@ -83,6 +83,28 @@ const hasTemporalRangeFilter = (formData: Partial<QueryFormData>): boolean =>
     (filter: SimpleAdhocFilter) => filter.operator === Operators.TemporalRange,
   );
 
+/**
+ * Рекурсивно заменяет undefined и пустые строки (для селекторов) на null,
+ * чтобы при JSON.stringify ключи с очищёнными значениями попадали в payload и сохранялись на бэкенде.
+ */
+function replaceUndefinedWithNull(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  Object.keys(obj).forEach(key => {
+    const v = obj[key];
+    const isSelectorKey =
+      key.endsWith('_selector') || key.includes('field_formatting_field');
+    const shouldBeNull = v === undefined || (isSelectorKey && v === '');
+    if (shouldBeNull) {
+      result[key] = null;
+    } else if (v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) {
+      result[key] = replaceUndefinedWithNull(v as Record<string, unknown>);
+    } else {
+      result[key] = v;
+    }
+  });
+  return result;
+}
+
 export const getSlicePayload = async (
   sliceName: string,
   formDataWithNativeFilters: QueryFormData = {} as QueryFormData,
@@ -144,6 +166,16 @@ export const getSlicePayload = async (
     ...adhocFilters,
     dashboards,
   };
+  // Гарантируем наличие ключей селекторов полей в params при сохранении:
+  // если ключ отсутствует или undefined (редьюсер мог удалить при clear),
+  // явно добавляем null, чтобы очистка поля сохранялась в БД.
+  const formDataRecord = formData as Record<string, unknown>;
+  for (let i = 0; i < 10; i += 1) {
+    const key = `field_formatting_field${i}_selector`;
+    if (formDataRecord[key] === undefined) {
+      formDataRecord[key] = null;
+    }
+  }
   let datasourceId = 0;
   let datasourceType: DatasourceType = DatasourceType.Table;
 
@@ -169,7 +201,9 @@ export const getSlicePayload = async (
   });
 
   const payload: Partial<PayloadSlice> = {
-    params: JSON.stringify(formData),
+    params: JSON.stringify(
+      replaceUndefinedWithNull(formData as Record<string, unknown>),
+    ),
     slice_name: sliceName,
     viz_type: formData.viz_type,
     datasource_id: datasourceId,
@@ -238,7 +272,24 @@ export const updateSlice =
   ) =>
   async (dispatch: Dispatch, getState: () => Partial<QueryFormData>) => {
     const { slice_id: sliceId, owners, form_data: formDataFromSlice } = slice;
-    const formData = getState().explore?.form_data;
+    const exploreState = getState().explore as
+      | { form_data?: QueryFormData; controls?: Record<string, { value?: unknown }> }
+      | undefined;
+    const formData = {
+      ...(exploreState?.form_data ?? {}),
+    } as QueryFormData;
+    // Берём field_formatting_field*_selector только из state.controls (если контрол есть),
+    // чтобы очистка (undefined/null/'') гарантированно попадала в payload.
+    const formDataRecord = formData as Record<string, unknown>;
+    for (let i = 0; i < 10; i += 1) {
+      const key = `field_formatting_field${i}_selector`;
+      const ctrl = exploreState?.controls?.[key];
+      if (ctrl !== undefined) {
+        const v = ctrl.value;
+        formDataRecord[key] =
+          v === undefined || v === null || v === '' ? null : v;
+      }
+    }
     try {
       const response = await SupersetClient.put({
         endpoint: `/api/v1/chart/${sliceId}`,

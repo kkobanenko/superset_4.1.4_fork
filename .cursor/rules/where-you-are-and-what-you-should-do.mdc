@@ -1,0 +1,15 @@
+---
+description: 
+alwaysApply: true
+---
+
+Every time you need you rebuild plugins, front-end, then rebuild docker and restart container on the base of content of ./docker  at local:18088 .
+Use MCP sequentiathinking every time you answer
+Every time you check if you fulfill the task using MCP Playwrite on the test version localhost:18088 
+while entering use 
+login: admin 
+password: admin
+http://localhost:18088/explore/?form_data_key=v56qw5jg_sY&dashboard_page_id=n1VbmsWxakwba3O0a9bhN&slice_id=166 - here is page with formatting parameters
+http://localhost:18088/superset/dashboard/16/ - here is  dashboard we use for debugging
+Test_20260213 - here is chart name we use for debugging
+cursor (you) are on the target server so can perform terminal for  looking through logs of test version in docker.

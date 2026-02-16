@@ -391,10 +391,24 @@ function buildEffectiveFieldGroupingSettings(
       ? (baseSettingsRaw as Record<string, Record<string, unknown>>)
       : {}) || {};
 
+  // Множество полей, выбранных в хотя бы одном слоте Field 1..10.
+  // При очистке селектора (пусто) и Save настройки для этого поля не попадают в результат.
+  const selectedFieldsSet = new Set<string>();
+  for (let i = 0; i < 10; i += 1) {
+    const v = formData[`field_formatting_field${i}_selector`];
+    if (typeof v === 'string' && v.length > 0) {
+      selectedFieldsSet.add(v);
+    }
+  }
+
   // Нормализуем настройки из сохраненного объекта fieldGroupingSettings
-  // (аналогично тому, как это делается для globalTableSettings)
+  // (аналогично тому, как это делается для globalTableSettings).
+  // Включаем только поля, выбранные в одном из слотов (2-1: при пустом слоте поле не входит).
   const normalizedBaseSettings: Record<string, Record<string, unknown>> = {};
   for (const [fieldName, fieldSettings] of Object.entries(baseSettings)) {
+    if (!selectedFieldsSet.has(fieldName)) {
+      continue;
+    }
     if (!fieldSettings || typeof fieldSettings !== 'object') {
       continue;
     }
@@ -639,8 +653,11 @@ function buildEffectiveFieldGroupingSettings(
     }
   }
   
-  // Собираем настройки из плоских ключей для каждого поля
+  // Собираем настройки из плоских ключей только для полей, выбранных в слотах (2-1).
   for (const fieldName of allFields) {
+    if (!selectedFieldsSet.has(fieldName)) {
+      continue;
+    }
     if (!merged[fieldName]) {
       merged[fieldName] = {};
     }
