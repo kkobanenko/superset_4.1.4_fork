@@ -20,8 +20,10 @@ import {
   ChartProps,
   DataRecord,
   extractTimegrain,
+  getColumnLabel,
   getTimeFormatter,
   getTimeFormatterForGranularity,
+  QueryFormColumn,
   SMART_DATE_ID,
   TimeFormats,
 } from '@superset-ui/core';
@@ -391,6 +393,41 @@ function buildEffectiveFieldGroupingSettings(
       ? (baseSettingsRaw as Record<string, Record<string, unknown>>)
       : {}) || {};
 
+  // Получаем список всех доступных полей из groupbyRows, groupbyColumns и metrics
+  // для фильтрации "висячих" записей в fieldGroupingSettings
+  const fd = formData;
+  const groupbyRows = Array.isArray(fd.groupbyRows) ? fd.groupbyRows : [];
+  const groupbyColumns = Array.isArray(fd.groupbyColumns) ? fd.groupbyColumns : [];
+  const metrics = Array.isArray(fd.metrics) ? fd.metrics : [];
+
+  // Создаём множество всех доступных полей
+  const availableFieldsSet = new Set<string>();
+
+  // Добавляем поля из rows и columns
+  for (const field of [...groupbyRows, ...groupbyColumns]) {
+    if (typeof field === 'string' && field.length > 0) {
+      availableFieldsSet.add(field);
+    } else if (field && typeof field === 'object') {
+      // Для объектов используем getColumnLabel
+      try {
+        const fieldLabel = getColumnLabel(field as QueryFormColumn);
+        if (typeof fieldLabel === 'string' && fieldLabel.length > 0) {
+          availableFieldsSet.add(fieldLabel);
+        }
+      } catch (e) {
+        // Игнорируем ошибки
+      }
+    }
+  }
+
+  // Добавляем метрики
+  for (const metric of metrics) {
+    const metricLabel = getMetricLabel(metric);
+    if (metricLabel && typeof metricLabel === 'string' && metricLabel.length > 0) {
+      availableFieldsSet.add(metricLabel);
+    }
+  }
+
   // Множество полей, выбранных в хотя бы одном слоте Field 1..10.
   // При очистке селектора (пусто) и Save настройки для этого поля не попадают в результат.
   const selectedFieldsSet = new Set<string>();
@@ -401,11 +438,26 @@ function buildEffectiveFieldGroupingSettings(
     }
   }
 
+  // Фильтруем baseSettings: оставляем только поля, которые есть в доступных полях
+  // и выбраны в селекторах (защита от "висячих" записей)
+  const cleanedBaseSettings: Record<string, Record<string, unknown>> = {};
+  for (const [fieldName, fieldSettings] of Object.entries(baseSettings)) {
+    if (
+      availableFieldsSet.has(fieldName) &&
+      selectedFieldsSet.has(fieldName) &&
+      fieldSettings &&
+      typeof fieldSettings === 'object'
+    ) {
+      cleanedBaseSettings[fieldName] = fieldSettings;
+    }
+  }
+
   // Нормализуем настройки из сохраненного объекта fieldGroupingSettings
   // (аналогично тому, как это делается для globalTableSettings).
+  // Используем уже очищенную версию cleanedBaseSettings (без "висячих" записей).
   // Включаем только поля, выбранные в одном из слотов (2-1: при пустом слоте поле не входит).
   const normalizedBaseSettings: Record<string, Record<string, unknown>> = {};
-  for (const [fieldName, fieldSettings] of Object.entries(baseSettings)) {
+  for (const [fieldName, fieldSettings] of Object.entries(cleanedBaseSettings)) {
     if (!selectedFieldsSet.has(fieldName)) {
       continue;
     }
@@ -630,13 +682,7 @@ function buildEffectiveFieldGroupingSettings(
 
   // Собираем настройки из плоских ключей formData (перезаписывает значения из сохраненного объекта)
   // Это нужно для того, чтобы настройки правильно применялись при загрузке чарта в дашборде
-  const fd = formData;
-  
-  // Получаем список всех полей из groupbyRows, groupbyColumns и metrics
   const allFields: string[] = [];
-  const groupbyRows = Array.isArray(fd.groupbyRows) ? fd.groupbyRows : [];
-  const groupbyColumns = Array.isArray(fd.groupbyColumns) ? fd.groupbyColumns : [];
-  const metrics = Array.isArray(fd.metrics) ? fd.metrics : [];
   
   // Добавляем поля из rows и columns
   for (const field of [...groupbyRows, ...groupbyColumns]) {
@@ -1226,7 +1272,46 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
   // При этом `rawFormData` содержит полную форму из Explore, включая эти контролы.
   // Поэтому собираем настройки именно из `rawFormData`.
   const effectiveFieldGroupingSettings =
-    buildEffectiveFieldGroupingSettings(rawFormData as unknown as Record<string, unknown>);
+    buildEffectiveFieldGroupingSettings(
+      rawFormData as unknown as Record<string, unknown>,
+    );
+
+  // Очистка "висячих" настроек fieldGroupingSettings:
+  // оставляем только те поля, которые реально присутствуют
+  // в groupbyRows / groupbyColumns / metrics.
+  const fieldsInUse = new Set<string>();
+
+  const addFieldFromColumn = (col: QueryFormColumn) => {
+    try {
+      const label = getColumnLabel(col);
+      if (typeof label === 'string' && label.length > 0) {
+        fieldsInUse.add(label);
+      }
+    } catch {
+      // Игнорируем ошибки при получении label
+    }
+  };
+
+  (groupbyRows || []).forEach(addFieldFromColumn);
+  (groupbyColumns || []).forEach(addFieldFromColumn);
+
+  const addFieldFromMetric = (metric: unknown) => {
+    const label = getMetricLabel(metric);
+    if (label && label.length > 0) {
+      fieldsInUse.add(label);
+    }
+  };
+
+  (metrics || []).forEach(addFieldFromMetric);
+
+  const cleanedFieldGroupingSettings: Record<string, Record<string, unknown>> = {};
+  if (effectiveFieldGroupingSettings && typeof effectiveFieldGroupingSettings === 'object') {
+    Object.entries(effectiveFieldGroupingSettings).forEach(([fieldName, settings]) => {
+      if (fieldsInUse.has(fieldName) && settings && typeof settings === 'object') {
+        cleanedFieldGroupingSettings[fieldName] = settings;
+      }
+    });
+  }
 
   const dateFormatters = colnames
     .filter(
@@ -1347,8 +1432,8 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     onContextMenu,
     timeGrainSqla,
     allowRenderHtml,
-    // Используем "эффективные" настройки (из fieldGroupingSettings + динамических контролов)
-    fieldGroupingSettings: effectiveFieldGroupingSettings,
+    // Используем "очищенные" настройки (без висячих записей)
+    fieldGroupingSettings: cleanedFieldGroupingSettings,
     globalTableSettings: normalizedGlobalTableSettings,
     legacy_order_by: legacy_order_by || null,
     order_desc: order_desc ?? true,
