@@ -36,6 +36,9 @@ FLASK_ENV = "development"
 # Logging level for development
 LOG_LEVEL = "DEBUG"
 
+# Version shown in Settings -> About (overrides version_info.json / package.json)
+VERSION_STRING = os.environ.get("SUPERSET_VERSION", "0.0.89")
+
 # Explicitly set database URI to PostgreSQL (override any defaults)
 # This ensures we use PostgreSQL instead of SQLite
 import os

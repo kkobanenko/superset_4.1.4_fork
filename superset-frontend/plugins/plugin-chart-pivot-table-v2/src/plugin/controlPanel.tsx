@@ -1194,99 +1194,6 @@ const config: ControlPanelConfig = {
               type: 'HiddenControl',
               default: {},
               renderTrigger: true,
-              rerender: [
-                'groupbyRows',
-                'groupbyColumns',
-                'metrics',
-                ...Array.from({ length: 10 }, (_, k) => `field_formatting_field${k}_selector`),
-              ],
-              mapStateToProps: (state: any) => {
-                // Безопасная проверка входных параметров
-                if (!state || typeof state !== 'object') {
-                  return { value: {} };
-                }
-
-                const controls = (state.controls && typeof state.controls === 'object')
-                  ? state.controls
-                  : {};
-                
-                // Получаем текущий fieldGroupingSettings
-                const currentFieldGroupingSettings = (controls?.fieldGroupingSettings?.value && 
-                  typeof controls.fieldGroupingSettings.value === 'object')
-                  ? controls.fieldGroupingSettings.value
-                  : {};
-
-                // Получаем все доступные поля: rows, columns и metrics
-                const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
-                const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
-                const metrics = ensureIsArray(controls?.metrics?.value || []);
-
-                // Создаём множество всех доступных полей
-                const availableFieldsSet = new Set<string>();
-
-                // Добавляем поля из Rows
-                groupbyRows.forEach((field: QueryFormColumn) => {
-                  try {
-                    const fieldLabel = getColumnLabel(field);
-                    if (typeof fieldLabel === 'string' && fieldLabel.length > 0) {
-                      availableFieldsSet.add(fieldLabel);
-                    }
-                  } catch (e) {
-                    // Игнорируем ошибки при обработке полей
-                  }
-                });
-
-                // Добавляем поля из Columns
-                groupbyColumns.forEach((field: QueryFormColumn) => {
-                  try {
-                    const fieldLabel = getColumnLabel(field);
-                    if (typeof fieldLabel === 'string' && fieldLabel.length > 0) {
-                      availableFieldsSet.add(fieldLabel);
-                    }
-                  } catch (e) {
-                    // Игнорируем ошибки при обработке полей
-                  }
-                });
-
-                // Добавляем метрики
-                metrics.forEach((metric: QueryFormMetric) => {
-                  try {
-                    const metricLabel = getMetricLabel(metric);
-                    if (metricLabel && typeof metricLabel === 'string' && metricLabel.length > 0) {
-                      availableFieldsSet.add(metricLabel);
-                    }
-                  } catch (e) {
-                    // Игнорируем ошибки при обработке метрик
-                  }
-                });
-
-                // Получаем множество полей, выбранных в селекторах Field 1..10
-                const selectedFieldsSet = new Set<string>();
-                for (let i = 0; i < 10; i += 1) {
-                  const selectorControl = controls?.[`field_formatting_field${i}_selector`];
-                  const v = selectorControl?.value;
-                  if (typeof v === 'string' && v.length > 0) {
-                    selectedFieldsSet.add(v);
-                  }
-                }
-
-                // Создаём очищенную версию fieldGroupingSettings:
-                // оставляем только поля, которые есть в доступных полях И выбраны в селекторах
-                const cleanedFieldGroupingSettings: Record<string, Record<string, unknown>> = {};
-                for (const [fieldName, fieldSettings] of Object.entries(currentFieldGroupingSettings)) {
-                  // Оставляем только если поле доступно И выбрано в селекторе
-                  if (
-                    availableFieldsSet.has(fieldName) &&
-                    selectedFieldsSet.has(fieldName) &&
-                    fieldSettings &&
-                    typeof fieldSettings === 'object'
-                  ) {
-                    cleanedFieldGroupingSettings[fieldName] = { ...fieldSettings };
-                  }
-                }
-
-                return { value: cleanedFieldGroupingSettings };
-              },
             },
           },
         ],
@@ -1314,7 +1221,7 @@ const config: ControlPanelConfig = {
                       'fieldGroupingSettings',
                       ...Array.from({ length: fieldIndex }, (_, k) => `field_formatting_field${k}_selector`),
                     ],
-                    onChange: (
+                    formDataOnChange: (
                       value: unknown,
                       prevValue: unknown,
                       formData: any,
@@ -1326,8 +1233,7 @@ const config: ControlPanelConfig = {
                       const hasPrev =
                         typeof prevValue === 'string' && prevValue.length > 0;
 
-                      // Очищаем настройки только при переходе
-                      // из непустого значения в пустое.
+                      // Очищаем fieldGroupingSettings только при переходе из непустого значения в пустое.
                       if (!isEmpty || !hasPrev || !formData) {
                         return formData;
                       }
@@ -3862,12 +3768,8 @@ const config: ControlPanelConfig = {
       const selectorKey = `field_formatting_field${i}_selector` as keyof typeof formData;
       const selectedField = formData[selectorKey] as string | undefined;
       
-      // 2-1: если поле очищено — удалить его настройки из fieldGroupingSettings
-      // Очистка выполняется автоматически в mapStateToProps для fieldGroupingSettings,
-      // но здесь также удаляем для немедленного эффекта в formDataOverrides
+      // 2-1: если поле не выбрано — не добавляем его в formDataOverrides (очистка через formDataOnChange в селекторе)
       if (!selectedField) {
-        // Удаляем настройки для всех полей, которые больше не выбраны в селекторах
-        // Полная очистка выполняется в mapStateToProps для fieldGroupingSettings
         continue;
       }     
       

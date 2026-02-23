@@ -159,6 +159,24 @@ export default function exploreReducer(state = {}, action) {
         getControlConfig(action.controlName, vizType) ||
         null;
 
+      // Optional: let control config transform formData when value changes (e.g. clear fieldGroupingSettings)
+      const rawConfig = getControlConfig(action.controlName, vizType);
+      if (rawConfig?.formDataOnChange && typeof rawConfig.formDataOnChange === 'function') {
+        try {
+          const prevValue = state.form_data?.[controlName];
+          const updated = rawConfig.formDataOnChange(
+            action.value,
+            prevValue,
+            new_form_data,
+          );
+          if (updated && typeof updated === 'object' && !Array.isArray(updated)) {
+            new_form_data = updated;
+          }
+        } catch (err) {
+          // ignore formDataOnChange errors
+        }
+      }
+
       // will call validators again
       const control = {
         ...getControlStateFromControlConfig(controlConfig, state, action.value),

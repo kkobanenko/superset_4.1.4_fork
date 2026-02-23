@@ -92,6 +92,7 @@ services:
       - FLASK_ENV=development
       - SUPERSET_ENV=development
       - SUPERSET_LOAD_EXAMPLES=yes
+      - SUPERSET_VERSION=0.0.89
     ports:
       - "18088:8088"  # Dev Superset accessible at http://localhost:18088
     volumes:
@@ -106,9 +107,11 @@ services:
       # ВАЖНО: mount должен быть RW, иначе внутри контейнера нельзя пересобрать плагины/фронтенд
       # (plugins:build пишет в lib/esm, а build пишет в кэш внутри superset-frontend).
       - ../superset-frontend:/app/superset-frontend
-      # Статика фронтенда: процесс использует пакет из site-packages
-      - ../superset/static/assets:/app/.venv/lib/python3.11/site-packages/superset/static/assets:ro
-      - ../superset/static/assets:/app/superset/static/assets:ro
+      # Статика фронтенда: НЕ монтируем с хоста — иначе при несовпадении manifest.json и файлов
+      # браузер получает 404 (HTML) вместо .js → MIME type error. Используем артефакты из образа.
+      # Раскомментировать для hot-reload статики после локального npm run build:
+      # - ../superset/static/assets:/app/.venv/lib/python3.11/site-packages/superset/static/assets:ro
+      # - ../superset/static/assets:/app/superset/static/assets:ro
     networks:
       - superset_dev_net
       - clhs_sandbox_click_network  # Connect to production network to access ClickHouse

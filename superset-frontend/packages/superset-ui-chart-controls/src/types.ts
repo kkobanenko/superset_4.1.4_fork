@@ -274,6 +274,16 @@ export interface BaseControlConfig<
   hidden?:
     | boolean
     | ((props: ControlPanelsContainerProps, controlData: AnyDict) => boolean);
+  /**
+   * Optional hook called by Explore reducer when this control's value changes.
+   * Receives (newValue, prevValue, formData) and must return updated formData (immutable).
+   * Used e.g. to clear related keys (e.g. fieldGroupingSettings) when a selector is cleared.
+   */
+  formDataOnChange?: (
+    value: JsonValue,
+    prevValue: JsonValue,
+    formData: QueryFormData,
+  ) => QueryFormData;
 }
 
 export interface ControlValueValidator<
