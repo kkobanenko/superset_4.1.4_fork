@@ -59,7 +59,7 @@ const { DATABASE_DATETIME } = TimeFormats;
 
 function isNumeric(key: string, data: DataRecord[] = []) {
   return data.every(
-    x => x[key] === null || x[key] === undefined || typeof x[key] === 'number',
+    x => x === null || x === undefined || x[key] === null || x[key] === undefined || typeof x[key] === 'number',
   );
 }
 
@@ -75,7 +75,7 @@ const processDataRecords = memoizeOne(function processDataRecords(
   );
 
   if (timeColumns.length > 0) {
-    return data.map(x => {
+    return data.filter(x => x !== null && x !== undefined).map(x => {
       const datum = { ...x };
       timeColumns.forEach(({ key, formatter }) => {
         // Convert datetime with a custom date class so we can use `String(...)`
@@ -207,12 +207,16 @@ const processColumns = memoizeOne(function processColumns(
       table_timestamp_format: tableTimestampFormat,
       metrics: metrics_,
       percent_metrics: percentMetrics_,
-      column_config: columnConfig = {},
+      column_config: columnConfig_ = {},
     },
     queriesData,
   } = props;
+  const columnConfig = columnConfig_ || {};
   const granularity = extractTimegrain(props.rawFormData);
-  const { data: records, colnames, coltypes } = queriesData[0] || {};
+  const { data: rawRecords, colnames, coltypes } = queriesData[0] || {};
+  const records = Array.isArray(rawRecords)
+    ? rawRecords.filter((r): r is DataRecord => r !== null && typeof r === 'object')
+    : rawRecords;
   // convert `metrics` and `percentMetrics` to the key names in `data.records`
   const metrics = (metrics_ ?? []).map(getMetricLabel);
   const rawPercentMetrics = (percentMetrics_ ?? []).map(getMetricLabel);
@@ -354,8 +358,9 @@ const processComparisonColumns = (
     .map(col => {
       const {
         datasource: { columnFormats, currencyFormats },
-        rawFormData: { column_config: columnConfig = {} },
+        rawFormData: { column_config: columnConfig_ = {} },
       } = props;
+      const columnConfig = columnConfig_ || {};
       const savedFormat = columnFormats?.[col.key];
       const savedCurrency = currencyFormats?.[col.key];
       const originalLabel = col.label;

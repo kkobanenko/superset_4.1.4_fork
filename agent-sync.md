@@ -89,5 +89,14 @@ const safeData = Array.isArray(data)
 
 ## 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-* **Статус**: 🟨 В процессе сборки
-* **Информация**: Проблема идентифицирована в коммите b8fa60b3e, связанном с `smart number formatter`. В текущую ветку `feature/bug_w_null_values_table` восстановлены превентивные меры (null-проверки в `getColorFormatters.ts` и `transformProps.ts`). Запущена сборка фронтенда (`npm run plugins:build && npm run build`). Версия обновлена до `0.0.112`.
+*   **Статус**: ✅ Завершено (Фикс внедрен и проверен)
+*   **Итог**:
+    *   Проблема `TypeError: cannot read properties of null (reading 'last_name')` устранена.
+    *   **Причина**: Входящие данные содержали элементы `null`, а конфигурация колонок `column_config` иногда приходила как `null` вместо ожидаемого объекта. Это приводило к падению в методах трансформации данных (`isNumeric`, `processColumns`, `getColorFormatters`).
+    *   **Реализовано**:
+        1. Внедрена фильтрация `null` записей на самом раннем этапе в `processColumns` (плагин `plugin-chart-table`).
+        2. Добавлены защитные проверки (null-guards) для `column_config` в `transformProps.ts`, так как дефолтные значения ES6 не срабатывают на `null`.
+        3. Добавлены проверки в вспомогательных функциях `isNumeric` и `processDataRecords`.
+        4. Релизована фильтрация в пакете `superset-ui-chart-controls/getColorFormatters.ts`.
+    *   **Проверка**: Дашборд «Монитор Superset» (ERO5NmxGB2m) загружается без ошибок, таблицы отображают данные. Бандл успешно пересобран (`9929.0376bffdf349841e7cc3.entry.js`).
+    *   **Вспомогательные файлы**: Все временные скрипты (`test_commit.mjs`) удалены, версии в `VERSION` и `docker-compose.dev.yml` возвращены к `0.0.112`.
