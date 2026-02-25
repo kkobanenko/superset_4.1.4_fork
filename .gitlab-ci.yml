@@ -73,6 +73,7 @@ validate-build:
     - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
     - if: $CI_COMMIT_BRANCH == "feature/pivot-table-v2"
     - if: $CI_COMMIT_BRANCH == "feature/field-format-cleanup"
+    - if: $CI_COMMIT_BRANCH == "dev"
     - if: $CI_PIPELINE_SOURCE == "web"
   allow_failure: false
 
@@ -171,6 +172,8 @@ build-docker-lean:
     - |
       if [ "$CI_COMMIT_BRANCH" = "feature/pivot-table-v2" ]; then
         BRANCH_TAG="feature-pivot-table-v2"
+      elif [ "$CI_COMMIT_BRANCH" = "dev" ]; then
+        BRANCH_TAG="dev"
       elif [ "$CI_COMMIT_BRANCH" = "feature/field-format-cleanup" ]; then
         BRANCH_TAG="feature-field-format-cleanup"
       else
@@ -334,10 +337,11 @@ build-docker-lean:
     # Очистка локальных образов для экономии места
     - docker system prune -f || true
   rules:
-    # Автоматический запуск при push в ветку feature/mixed-chart-v2, feature/pivot-table-v2 или feature/field-format-cleanup
+    # Автоматический запуск при push в ветку feature/mixed-chart-v2, feature/pivot-table-v2, feature/field-format-cleanup или dev
     - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
     - if: $CI_COMMIT_BRANCH == "feature/pivot-table-v2"
     - if: $CI_COMMIT_BRANCH == "feature/field-format-cleanup"
+    - if: $CI_COMMIT_BRANCH == "dev"
     # Разрешить ручной запуск через GitLab UI
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
@@ -435,6 +439,8 @@ build-docker-dev:
     - |
       if [ "$CI_COMMIT_BRANCH" = "feature/pivot-table-v2" ]; then
         BRANCH_TAG="feature-pivot-table-v2"
+      elif [ "$CI_COMMIT_BRANCH" = "dev" ]; then
+        BRANCH_TAG="dev"
       elif [ "$CI_COMMIT_BRANCH" = "feature/field-format-cleanup" ]; then
         BRANCH_TAG="feature-field-format-cleanup"
       else
@@ -533,12 +539,14 @@ build-docker-dev:
   after_script:
     - docker system prune -f || true
   rules:
-    # Ручной запуск для веток feature/mixed-chart-v2, feature/pivot-table-v2 или feature/field-format-cleanup
+    # Ручной запуск для веток feature/mixed-chart-v2, feature/pivot-table-v2, feature/field-format-cleanup или dev
     - if: $CI_COMMIT_BRANCH == "feature/mixed-chart-v2"
       when: manual
     - if: $CI_COMMIT_BRANCH == "feature/pivot-table-v2"
       when: manual
     - if: $CI_COMMIT_BRANCH == "feature/field-format-cleanup"
+      when: manual
+    - if: $CI_COMMIT_BRANCH == "dev"
       when: manual
   # tags: []  # Убрано требование тега docker для совместимости с разными runner'ами
   timeout: 3h  # Сборка может занять до 3 часов (frontend build может быть долгим)
