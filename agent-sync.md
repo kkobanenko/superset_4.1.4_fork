@@ -89,7 +89,7 @@ const safeData = Array.isArray(data)
 
 ## 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-*   **Статус**: ✅ Завершено (Фикс внедрен и проверен)
+*   **Статус**: ✅ Завершено (Фикс внедрен, проверен и слит в dev)
 *   **Итог**:
     *   Проблема `TypeError: cannot read properties of null (reading 'last_name')` устранена.
     *   **Причина**: Входящие данные содержали элементы `null`, а конфигурация колонок `column_config` иногда приходила как `null` вместо ожидаемого объекта. Это приводило к падению в методах трансформации данных (`isNumeric`, `processColumns`, `getColorFormatters`).
@@ -99,4 +99,6 @@ const safeData = Array.isArray(data)
         3. Добавлены проверки в вспомогательных функциях `isNumeric` и `processDataRecords`.
         4. Релизована фильтрация в пакете `superset-ui-chart-controls/getColorFormatters.ts`.
     *   **Проверка**: Дашборд «Монитор Superset» (ERO5NmxGB2m) загружается без ошибок, таблицы отображают данные. Бандл успешно пересобран (`9929.0376bffdf349841e7cc3.entry.js`).
-    *   **Вспомогательные файлы**: Все временные скрипты (`test_commit.mjs`) удалены, версии в `VERSION` и `docker-compose.dev.yml` возвращены к `0.0.112`.
+    *   **Git**: Изменения слиты в ветку `dev` и отправлены в репозитории GitLab и GitHub.
+    *   **CI/CD**: Исправлена ошибка `exit code 141` (SIGPIPE) в пайплайне GitLab. Проблема была вызвана использованием `head -20` в связке с `docker info` при активном `set -e`, что приводило к срыву пайпа.
+    *   **Вспомогательные файлы**: Все временные скрипты удалены, версии в `VERSION` и `docker-compose.dev.yml` возвращены к `0.0.112`.
