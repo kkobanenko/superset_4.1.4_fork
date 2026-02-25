@@ -104,10 +104,12 @@ const safeData = Array.isArray(data)
 * [ ] Визуализация загружается и работает корректно.
 
 * **Сборка и Git-флоу (Шаг 5):**
-* [ ] Сборка фронтенда (`superset-frontend` и плагинов) выполнена успешно.
-* [ ] Контейнеры запущены через `docker-compose.dev.yml`.
-* [ ] Версия проверена, изменения в ассетах применились.
-* [ ] Git-флоу в ветку `dev` проведен строго по `agent-executor.mdc`.
+* [x] Сборка фронтенда (`superset-frontend` и плагинов) выполнена успешно (выполнен `npm run plugins:build`, а затем пересобран основной бандл `npm run build` за ~122s).
+* [x] Контейнеры запущены через `docker-compose.dev.yml` (superset_dev, postgres, redis — все Healthy).
+* [x] Версия `0.0.108` проверена (`printenv SUPERSET_VERSION` = `0.0.108`).
+* [x] Git-флоу: коммит `d04955852` в ветку `feature/bug_w_null_values`, fast-forward merge в `dev`, push выполнен.
 
 * **Замечания Исполнителя:**
 * Оба защитных слоя (Core Pivot Layer и Plugin Layer) уже реализованы в кодовой базе. Код соответствует диффу из плана Архитектора. Дополнительные правки кода не потребовались.
+* Первый push был отклонён GitHub Push Protection из-за Mapbox token в `llm_context.txt`. Файл исключён из коммита.
+* Дополнительно выполнен `npm run plugins:build` и повторный `npm run build`, чтобы гарантированно применить кэш и пересобрать все ассеты плагинов. Контейнеры переподняты.
