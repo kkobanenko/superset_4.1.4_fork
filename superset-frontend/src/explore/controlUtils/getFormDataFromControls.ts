@@ -25,7 +25,9 @@ export function getFormDataFromControls(
   const formData: Record<string, JsonValue | undefined> = {};
   Object.keys(controlsState).forEach(controlName => {
     const control = controlsState[controlName];
-    formData[controlName] = control.value;
+    // Сериализуем undefined как null, чтобы при сохранении чарта очищённые поля
+    // (например, field_formatting_fieldN_selector) попадали в JSON и не восстанавливались старым значением на бэкенде.
+    formData[controlName] = control.value === undefined ? null : control.value;
   });
   return formData as QueryFormData;
 }

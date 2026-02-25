@@ -2556,7 +2556,13 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
 
     def get_user_roles(self, user: Optional[User] = None) -> list[Role]:
         if not user:
-            user = g.user
+            # Проверяем наличие g.user перед использованием
+            if hasattr(g, "user") and g.user is not None:
+                user = g.user
+            else:
+                # Если g.user не установлен, возвращаем публичную роль или пустой список
+                public_role = get_conf().get("AUTH_ROLE_PUBLIC")
+                return [self.get_public_role()] if public_role else []
         if user.is_anonymous:
             public_role = get_conf().get("AUTH_ROLE_PUBLIC")
             return [self.get_public_role()] if public_role else []

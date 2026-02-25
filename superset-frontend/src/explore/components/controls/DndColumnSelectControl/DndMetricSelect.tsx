@@ -111,7 +111,7 @@ const getOptionsForSavedMetrics = (
 type ValueType = Metric | AdhocMetric | QueryFormMetric;
 
 const DndMetricSelect = (props: any) => {
-  const { onChange, multi, datasource, savedMetrics } = props;
+  const { onChange, multi, datasource, savedMetrics, aggregateOptions } = props;
 
   const extra = useMemo<{ disallow_adhoc_metrics?: boolean }>(() => {
     let extra = {};
@@ -279,6 +279,7 @@ const DndMetricSelect = (props: any) => {
         columns={props.columns}
         savedMetrics={props.savedMetrics}
         savedMetricsOptions={getSavedMetricOptionsForMetric(index)}
+        aggregateOptions={aggregateOptions}
         datasource={props.datasource}
         onMoveLabel={moveLabel}
         onDropLabel={handleDropLabel}
@@ -292,6 +293,7 @@ const DndMetricSelect = (props: any) => {
       />
     ),
     [
+      aggregateOptions,
       getSavedMetricOptionsForMetric,
       handleDropLabel,
       moveLabel,
@@ -385,6 +387,7 @@ const DndMetricSelect = (props: any) => {
         savedMetricsOptions={newSavedMetricOptions}
         savedMetric={EMPTY_OBJECT as savedMetricType}
         datasource={props.datasource}
+        aggregateOptions={aggregateOptions}
         isControlledComponent
         visible={newMetricPopoverVisible}
         togglePopover={togglePopover}

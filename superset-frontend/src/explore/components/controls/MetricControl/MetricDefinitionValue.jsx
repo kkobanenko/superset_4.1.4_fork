@@ -32,6 +32,7 @@ const propTypes = {
   columns: PropTypes.arrayOf(columnType),
   savedMetrics: PropTypes.arrayOf(savedMetricType),
   savedMetricsOptions: PropTypes.arrayOf(savedMetricType),
+  aggregateOptions: PropTypes.arrayOf(PropTypes.string),
   multi: PropTypes.bool,
   datasource: PropTypes.object,
   datasourceWarningMessage: PropTypes.string,
@@ -45,6 +46,7 @@ export default function MetricDefinitionValue({
   savedMetrics,
   savedMetricsOptions,
   datasource,
+  aggregateOptions,
   onMoveLabel,
   onDropLabel,
   index,
@@ -80,6 +82,7 @@ export default function MetricDefinitionValue({
       type,
       multi,
       datasourceWarningMessage,
+      aggregateOptions,
     };
 
     return <AdhocMetricOption {...metricOptionProps} />;

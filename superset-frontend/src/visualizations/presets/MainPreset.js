@@ -62,6 +62,7 @@ import {
   EchartsSankeyChartPlugin,
   EchartsTreemapChartPlugin,
   EchartsMixedTimeseriesChartPlugin,
+  EchartsMixedTimeseriesV2ChartPlugin,
   EchartsTreeChartPlugin,
   EchartsSunburstChartPlugin,
   EchartsBubbleChartPlugin,
@@ -78,6 +79,7 @@ import {
   TimeGrainFilterPlugin,
 } from 'src/filters/components';
 import { PivotTableChartPlugin as PivotTableChartPluginV2 } from '@superset-ui/plugin-chart-pivot-table';
+import { PivotTableV2ChartPlugin } from '@superset-ui/plugin-chart-pivot-table-v2';
 import { HandlebarsChartPlugin } from '@superset-ui/plugin-chart-handlebars';
 import { FilterPlugins } from 'src/constants';
 import AgGridTableChartPlugin from '@superset-ui/plugin-chart-ag-grid-table';
@@ -124,6 +126,9 @@ export default class MainPreset extends Preset {
         new EchartsMixedTimeseriesChartPlugin().configure({
           key: VizType.MixedTimeseries,
         }),
+        new EchartsMixedTimeseriesV2ChartPlugin().configure({
+          key: VizType.MixedTimeseriesV2,
+        }),
         new HorizonChartPlugin().configure({ key: VizType.Horizon }),
         new MapBoxChartPlugin().configure({ key: VizType.MapBox }),
         new PairedTTestChartPlugin().configure({ key: VizType.PairedTTest }),
@@ -133,6 +138,7 @@ export default class MainPreset extends Preset {
         new PartitionChartPlugin().configure({ key: VizType.Partition }),
         new EchartsPieChartPlugin().configure({ key: VizType.Pie }),
         new PivotTableChartPluginV2().configure({ key: VizType.PivotTable }),
+        new PivotTableV2ChartPlugin().configure({ key: VizType.PivotTableV2 }),
         new RoseChartPlugin().configure({ key: VizType.Rose }),
         new TableChartPlugin().configure({ key: VizType.Table }),
         new TimePivotChartPlugin().configure({ key: VizType.TimePivot }),

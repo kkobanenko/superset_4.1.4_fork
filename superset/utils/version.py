@@ -54,6 +54,39 @@ def get_version_metadata() -> dict[str, Any]:
     if branch_name:
         metadata["branch_name"] = branch_name
 
+    # Add Pivot Table V2 plugin version
+    try:
+        import json
+        # Try multiple base paths: app root (container/web), then __file__ (CLI/site-packages)
+        candidates = []
+        if app.root_path:
+            candidates.append(os.path.normpath(os.path.join(app.root_path, "..")))
+        candidates.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..")))
+        plugin_package_json = None
+        for base_dir in candidates:
+            path = os.path.join(
+                base_dir,
+                "superset-frontend",
+                "plugins",
+                "plugin-chart-pivot-table-v2",
+                "package.json",
+            )
+            if os.path.exists(path):
+                plugin_package_json = path
+                break
+        if plugin_package_json:
+            with open(plugin_package_json, encoding="utf-8") as f:
+                plugin_data = json.load(f)
+                plugin_version = plugin_data.get("version", "")
+                if plugin_version:
+                    metadata["pivot_table_v2_version"] = plugin_version
+                    # Append plugin version to version_string if not already present
+                    if plugin_version not in metadata["version_string"]:
+                        metadata["version_string"] = f"{metadata['version_string']} (Pivot Table V2: {plugin_version})"
+    except Exception:  # pylint: disable=broad-except
+        # Silently fail if plugin version cannot be read
+        pass
+
     return metadata
 
 

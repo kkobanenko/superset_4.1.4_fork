@@ -48,6 +48,7 @@ const propTypes = {
   multi: PropTypes.bool,
   clearable: PropTypes.bool,
   datasource: PropTypes.object,
+  aggregateOptions: PropTypes.arrayOf(PropTypes.string),
 };
 
 const defaultProps = {
@@ -55,6 +56,7 @@ const defaultProps = {
   clearable: true,
   savedMetrics: [],
   columns: [],
+  aggregateOptions: undefined,
 };
 
 function getOptionsForSavedMetrics(
@@ -121,6 +123,7 @@ const MetricsControl = ({
   columns,
   savedMetrics,
   datasource,
+  aggregateOptions,
   ...props
 }) => {
   const [value, setValue] = useState(coerceAdhocMetrics(propsValue));
@@ -230,12 +233,14 @@ const MetricsControl = ({
           savedMetric={emptySavedMetric}
           datasource={datasource}
           isNew
+          aggregateOptions={aggregateOptions}
         >
           {trigger}
         </AdhocMetricPopoverTrigger>
       );
     },
     [
+      aggregateOptions,
       columns,
       datasource,
       isAddNewMetricDisabled,
@@ -289,12 +294,14 @@ const MetricsControl = ({
           value,
           value?.[index],
         )}
+        aggregateOptions={aggregateOptions}
         onMoveLabel={moveLabel}
         onDropLabel={onDropLabel}
         multi={multi}
       />
     ),
     [
+      aggregateOptions,
       columns,
       datasource,
       moveLabel,

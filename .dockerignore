@@ -46,3 +46,5 @@ superset/static/assets/
 superset-websocket/dist/
 venv
 .venv
+postgres_data_dev/
+superset_data_dev/

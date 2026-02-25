@@ -30,6 +30,94 @@ import {
 import * as actions from 'src/explore/actions/exploreActions';
 import { HYDRATE_EXPLORE } from '../actions/hydrateExplore';
 
+const MAX_FIELD_FORMATTING_SLOTS = 10;
+const FIELD_SELECTOR_REGEX = /^field_formatting_field(\d+)_selector$/;
+const FIELD_REMOVE_REGEX = /^field_formatting_field(\d+)_remove$/;
+
+function getFieldSelectorName(index) {
+  return `field_formatting_field${index}_selector`;
+}
+
+function compactPivotFieldFormattingState(formData, changedIndex, nextValue) {
+  const nextFormData = { ...formData };
+  const changedSelectorName = getFieldSelectorName(changedIndex);
+
+  if (typeof nextValue === 'string' && nextValue.length > 0) {
+    nextFormData[changedSelectorName] = nextValue;
+  } else {
+    nextFormData[changedSelectorName] = undefined;
+  }
+
+  const snapshot = { ...nextFormData };
+
+  const compactSourceIndexes = [];
+  const seenSelected = new Set();
+  for (let index = 0; index < MAX_FIELD_FORMATTING_SLOTS; index += 1) {
+    const selectorValue = snapshot[getFieldSelectorName(index)];
+    if (
+      typeof selectorValue === 'string' &&
+      selectorValue.length > 0 &&
+      !seenSelected.has(selectorValue)
+    ) {
+      seenSelected.add(selectorValue);
+      compactSourceIndexes.push(index);
+    }
+  }
+
+  Object.keys(nextFormData).forEach(key => {
+    if (/^field_formatting_field\d+_/.test(key)) {
+      delete nextFormData[key];
+    }
+  });
+
+  for (let destIndex = 0; destIndex < MAX_FIELD_FORMATTING_SLOTS; destIndex += 1) {
+    const sourceIndex = compactSourceIndexes[destIndex];
+    if (sourceIndex === undefined) {
+      continue;
+    }
+
+    const sourcePrefix = `field_formatting_field${sourceIndex}_`;
+    const destPrefix = `field_formatting_field${destIndex}_`;
+
+    Object.entries(snapshot).forEach(([key, slotValue]) => {
+      if (key.startsWith(sourcePrefix)) {
+        const suffix = key.slice(sourcePrefix.length);
+        nextFormData[`${destPrefix}${suffix}`] = slotValue;
+      }
+    });
+
+    const selectedField = snapshot[getFieldSelectorName(sourceIndex)];
+    nextFormData[getFieldSelectorName(destIndex)] =
+      typeof selectedField === 'string' && selectedField.length > 0
+        ? selectedField
+        : undefined;
+    nextFormData[`field_formatting_field${destIndex}_remove`] = false;
+  }
+
+  const selected = compactSourceIndexes
+    .map(sourceIndex => snapshot[getFieldSelectorName(sourceIndex)])
+    .filter(
+      selectorValue =>
+        typeof selectorValue === 'string' && selectorValue.length > 0,
+    );
+
+  const settings =
+    nextFormData.fieldGroupingSettings &&
+    typeof nextFormData.fieldGroupingSettings === 'object'
+      ? nextFormData.fieldGroupingSettings
+      : {};
+  const selectedSet = new Set(selected);
+  const sanitizedSettings = {};
+  Object.entries(settings).forEach(([fieldName, fieldSettings]) => {
+    if (selectedSet.has(fieldName) && fieldSettings !== null) {
+      sanitizedSettings[fieldName] = fieldSettings;
+    }
+  });
+  nextFormData.fieldGroupingSettings = sanitizedSettings;
+
+  return nextFormData;
+}
+
 export default function exploreReducer(state = {}, action) {
   const actionHandlers = {
     [DYNAMIC_PLUGIN_CONTROLS_READY]() {
@@ -125,6 +213,30 @@ export default function exploreReducer(state = {}, action) {
     [actions.SET_FIELD_VALUE]() {
       const { controlName, value, validationErrors } = action;
       let new_form_data = { ...state.form_data, [controlName]: value };
+      const selectorMatch = FIELD_SELECTOR_REGEX.exec(controlName);
+      const isPivotFieldControl = Boolean(selectorMatch || FIELD_REMOVE_REGEX.exec(controlName));
+      if (selectorMatch) {
+        const changedIndex = Number(selectorMatch[1]);
+        if (Number.isInteger(changedIndex) && changedIndex >= 0) {
+          new_form_data = compactPivotFieldFormattingState(
+            new_form_data,
+            changedIndex,
+            value,
+          );
+        }
+      }
+      const removeMatch = FIELD_REMOVE_REGEX.exec(controlName);
+      if (removeMatch && value === true) {
+        const changedIndex = Number(removeMatch[1]);
+        if (Number.isInteger(changedIndex) && changedIndex >= 0) {
+          new_form_data = compactPivotFieldFormattingState(
+            new_form_data,
+            changedIndex,
+            undefined,
+          );
+          delete new_form_data[controlName];
+        }
+      }
       const old_metrics_data = state.form_data.metrics;
       const new_column_config = state.form_data.column_config;
 
@@ -159,9 +271,42 @@ export default function exploreReducer(state = {}, action) {
         getControlConfig(action.controlName, vizType) ||
         null;
 
+      // Optional: let control config transform formData when value changes (e.g. clear fieldGroupingSettings)
+      // For dynamic controls (generated names), config can exist only in state.controls.
+      const rawConfig = controlConfig || getControlConfig(action.controlName, vizType);
+      if (
+        !isPivotFieldControl &&
+        rawConfig?.formDataOnChange &&
+        typeof rawConfig.formDataOnChange === 'function'
+      ) {
+        try {
+          const prevValue = state.form_data?.[controlName];
+          const updated = rawConfig.formDataOnChange(
+            action.value,
+            prevValue,
+            new_form_data,
+          );
+          if (updated && typeof updated === 'object' && !Array.isArray(updated)) {
+            new_form_data = updated;
+          }
+        } catch (err) {
+          // ignore formDataOnChange errors
+        }
+      }
+
       // will call validators again
+      const nextControlValue = Object.prototype.hasOwnProperty.call(
+        new_form_data,
+        controlName,
+      )
+        ? new_form_data[controlName]
+        : action.value;
       const control = {
-        ...getControlStateFromControlConfig(controlConfig, state, action.value),
+        ...getControlStateFromControlConfig(
+          controlConfig,
+          state,
+          nextControlValue,
+        ),
       };
 
       const column_config = {
@@ -181,11 +326,17 @@ export default function exploreReducer(state = {}, action) {
       const rerenderedControls = {};
       if (Array.isArray(control.rerender)) {
         control.rerender.forEach(controlName => {
+          const rerenderValue = Object.prototype.hasOwnProperty.call(
+            new_form_data,
+            controlName,
+          )
+            ? new_form_data[controlName]
+            : newState.controls[controlName].value;
           rerenderedControls[controlName] = {
             ...getControlStateFromControlConfig(
               newState.controls[controlName],
               newState,
-              newState.controls[controlName].value,
+              rerenderValue,
             ),
           };
         });
@@ -229,14 +380,10 @@ export default function exploreReducer(state = {}, action) {
       if (dependantControls.length > 0) {
         const updatedControls = dependantControls.map(
           ({ controlState, dependantControlName }) => {
-            // overwrite state form data with current control value as the redux state will not
-            // have latest action value
+            // use transformed form_data to validate dependent controls consistently
             const overWrittenState = {
               ...state,
-              form_data: {
-                ...state.form_data,
-                [controlName]: action.value,
-              },
+              form_data: new_form_data,
             };
 
             return {
@@ -263,18 +410,29 @@ export default function exploreReducer(state = {}, action) {
       return {
         ...state,
         form_data: new_form_data,
-        triggerRender: control.renderTrigger && !hasErrors,
-        controls: {
-          ...currentControlsState,
-          ...(controlConfig && {
-            [action.controlName]: {
-              ...control,
-              validationErrors: errors,
+        triggerRender: isPivotFieldControl
+          ? true
+          : control.renderTrigger && !hasErrors,
+        controls: isPivotFieldControl
+          ? getControlsState(
+              {
+                ...state,
+                form_data: new_form_data,
+                controls: currentControlsState,
+              },
+              new_form_data,
+            )
+          : {
+              ...currentControlsState,
+              ...(controlConfig && {
+                [action.controlName]: {
+                  ...control,
+                  validationErrors: errors,
+                },
+              }),
+              ...rerenderedControls,
+              ...updatedControlStates,
             },
-          }),
-          ...rerenderedControls,
-          ...updatedControlStates,
-        },
       };
     },
     [actions.SET_EXPLORE_CONTROLS]() {

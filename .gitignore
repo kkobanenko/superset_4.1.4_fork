@@ -137,3 +137,18 @@ PROJECT.md
 .claude_rc*
 .env.local
 oxc-custom-build/
+
+# Dev environment data directories
+postgres_data_dev/
+superset_data_dev/
+
+# Ignore Playwright artifacts
+playwright-report/
+test-results/
+changed_files.txt
+changes_since_c42e3c6_files.zip
+CHANGES_since_c42e3c6.md
+changes_since_c42e3c6.patch
+changes.patch
+changes.zip
+SECURITY_REVIEW_changes_since_c42e3c6.md

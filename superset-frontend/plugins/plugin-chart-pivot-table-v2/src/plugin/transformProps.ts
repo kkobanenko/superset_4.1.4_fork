@@ -1,0 +1,1445 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+import {
+  ChartProps,
+  DataRecord,
+  extractTimegrain,
+  getColumnLabel,
+  getTimeFormatter,
+  getTimeFormatterForGranularity,
+  QueryFormColumn,
+  SMART_DATE_ID,
+  TimeFormats,
+} from '@superset-ui/core';
+
+// Russian month names
+const RUSSIAN_MONTHS = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+];
+
+// Custom formatter for MONTH_YEAR_RU format
+function createMonthYearRuFormatter(): (date: Date | number | string) => string {
+  return (date: Date | number | string) => {
+    let dateObj: Date;
+    if (typeof date === 'number') {
+      dateObj = new Date(date);
+    } else if (typeof date === 'string') {
+      dateObj = new Date(date);
+    } else {
+      dateObj = date;
+    }
+    
+    if (isNaN(dateObj.getTime())) {
+      return String(date);
+    }
+    
+    const month = dateObj.getMonth(); // 0-11
+    const year = dateObj.getFullYear();
+    return `${RUSSIAN_MONTHS[month]} ${year}`;
+  };
+}
+import { GenericDataType } from '@apache-superset/core/api/core';
+import { getColorFormatters } from '@superset-ui/chart-controls';
+import {
+  DateFormatter,
+  PivotTableV2QueryFormData,
+  PivotTableV2Props,
+} from '../types';
+
+const { DATABASE_DATETIME } = TimeFormats;
+
+function isNumeric(key: string, data: DataRecord[] = []) {
+  return data.every(
+    record =>
+      record[key] === null ||
+      record[key] === undefined ||
+      typeof record[key] === 'number',
+  );
+}
+
+// Преобразовать цвет, который приходит из ColorPickerControl (RGBColor), в CSS-строку.
+// Это нужно потому, что в Explore ColorPickerControl возвращает объект вида:
+// { r: number, g: number, b: number, a?: number }
+// а TableRenderers ожидает строку для style.color / style.backgroundColor.
+function toCssColor(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const v = value as { r?: unknown; g?: unknown; b?: unknown; a?: unknown };
+  if (
+    typeof v.r !== 'number' ||
+    typeof v.g !== 'number' ||
+    typeof v.b !== 'number'
+  ) {
+    return undefined;
+  }
+
+  const r = Math.round(v.r);
+  const g = Math.round(v.g);
+  const b = Math.round(v.b);
+  const a = typeof v.a === 'number' ? v.a : 1;
+
+  // rgba работает и для alpha=1
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+// Нормализовать настройки форматирования value-ячеек (для total/subtotal).
+// ColorPickerControl возвращает RGBColor, поэтому конвертируем в CSS цвет.
+function normalizeValueCellFormatSettings(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const v = value as {
+    valueFormat?: unknown;
+    dateFormat?: unknown;
+    fontSize?: unknown;
+    fontColor?: unknown;
+    backgroundColor?: unknown;
+  };
+
+  const out: Record<string, unknown> = {};
+
+  if (typeof v.valueFormat === 'string' && v.valueFormat.length > 0) {
+    out.valueFormat = v.valueFormat;
+  }
+  if (typeof v.dateFormat === 'string' && v.dateFormat.length > 0) {
+    out.dateFormat = v.dateFormat;
+  }
+  // fontSize может приходить как число или строка (из NumberControl)
+  if (typeof v.fontSize === 'number' && v.fontSize > 0) {
+    out.fontSize = v.fontSize;
+  } else if (typeof v.fontSize === 'string' && v.fontSize.length > 0) {
+    const fontSizeNum = parseFloat(v.fontSize);
+    if (!isNaN(fontSizeNum) && fontSizeNum > 0) {
+      out.fontSize = fontSizeNum;
+    }
+  }
+  const fontColorCss = toCssColor(v.fontColor);
+  if (typeof fontColorCss === 'string') {
+    out.fontColor = fontColorCss;
+  }
+  const backgroundColorCss = toCssColor(v.backgroundColor);
+  if (typeof backgroundColorCss === 'string') {
+    out.backgroundColor = backgroundColorCss;
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * Собрать globalTableSettings из formData.
+ * Superset может не сохранять вложенные объекты правильно, поэтому собираем
+ * из плоской структуры formData (как для fieldGroupingSettings).
+ */
+function buildGlobalTableSettings(
+  formData: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+
+  // Сначала пробуем взять из уже собранного объекта и нормализовать его
+  const existing = formData.globalTableSettings;
+  if (existing && typeof existing === 'object') {
+    const existingObj = existing as Record<string, unknown>;
+    // Копируем все поля из существующего объекта
+    Object.assign(out, existingObj);
+    
+    // Нормализуем ValueFormat объекты
+    // ВАЖНО: всегда нормализуем, даже если результат undefined - это гарантирует правильную обработку fontSize
+    if (existingObj.rowTotalsValueFormat) {
+      const normalized = normalizeValueCellFormatSettings(existingObj.rowTotalsValueFormat);
+      out.rowTotalsValueFormat = normalized !== undefined ? normalized : existingObj.rowTotalsValueFormat;
+    }
+    if (existingObj.columnTotalsValueFormat) {
+      const normalized = normalizeValueCellFormatSettings(existingObj.columnTotalsValueFormat);
+      out.columnTotalsValueFormat = normalized !== undefined ? normalized : existingObj.columnTotalsValueFormat;
+    }
+    if (existingObj.rowSubTotalsValueFormat) {
+      const normalized = normalizeValueCellFormatSettings(existingObj.rowSubTotalsValueFormat);
+      out.rowSubTotalsValueFormat = normalized !== undefined ? normalized : existingObj.rowSubTotalsValueFormat;
+    }
+    if (existingObj.colSubTotalsValueFormat) {
+      const normalized = normalizeValueCellFormatSettings(existingObj.colSubTotalsValueFormat);
+      out.colSubTotalsValueFormat = normalized !== undefined ? normalized : existingObj.colSubTotalsValueFormat;
+    }
+  }
+
+  // Собираем rowTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  const rowTotalsValueFormat: Record<string, unknown> = {};
+  // Начинаем с существующего объекта, если он есть
+  if (out.rowTotalsValueFormat && typeof out.rowTotalsValueFormat === 'object') {
+    Object.assign(rowTotalsValueFormat, out.rowTotalsValueFormat as Record<string, unknown>);
+  }
+  // Перезаписываем значениями из плоских ключей
+  if (formData['globalTableSettings.rowTotalsValueFormat.valueFormat'] !== undefined) {
+    rowTotalsValueFormat.valueFormat = formData['globalTableSettings.rowTotalsValueFormat.valueFormat'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.dateFormat'] !== undefined) {
+    rowTotalsValueFormat.dateFormat = formData['globalTableSettings.rowTotalsValueFormat.dateFormat'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.fontSize'] !== undefined) {
+    rowTotalsValueFormat.fontSize = formData['globalTableSettings.rowTotalsValueFormat.fontSize'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.fontColor'] !== undefined) {
+    rowTotalsValueFormat.fontColor = formData['globalTableSettings.rowTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.rowTotalsValueFormat.backgroundColor'] !== undefined) {
+    rowTotalsValueFormat.backgroundColor = formData['globalTableSettings.rowTotalsValueFormat.backgroundColor'];
+  }
+  if (Object.keys(rowTotalsValueFormat).length > 0) {
+    out.rowTotalsValueFormat = normalizeValueCellFormatSettings(rowTotalsValueFormat) || rowTotalsValueFormat;
+  }
+
+  // Собираем rowSubTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  // ВАЖНО: всегда начинаем со старого объекта, если он есть, чтобы сохранить значения,
+  // которые не заданы через плоские ключи (например, при загрузке сохраненного чарта)
+  const rowSubTotalsValueFormat: Record<string, unknown> = {};
+  if (out.rowSubTotalsValueFormat && typeof out.rowSubTotalsValueFormat === 'object') {
+    Object.assign(rowSubTotalsValueFormat, out.rowSubTotalsValueFormat as Record<string, unknown>);
+  }
+  // Перезаписываем значениями из плоских ключей (если они заданы)
+  // Проверяем !== undefined чтобы не перезаписывать на null/0
+  const formDataValueFormat = formData['globalTableSettings.rowSubTotalsValueFormat.valueFormat'];
+  if (formDataValueFormat !== undefined) {
+    rowSubTotalsValueFormat.valueFormat = formDataValueFormat;
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'] !== undefined) {
+    rowSubTotalsValueFormat.dateFormat = formData['globalTableSettings.rowSubTotalsValueFormat.dateFormat'];
+  }
+  // fontSize может быть числом или строкой из NumberControl
+  const fontSizeValue = formData['globalTableSettings.rowSubTotalsValueFormat.fontSize'];
+  if (fontSizeValue !== undefined && fontSizeValue !== null) {
+    rowSubTotalsValueFormat.fontSize = fontSizeValue;
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.fontColor'] !== undefined) {
+    rowSubTotalsValueFormat.fontColor = formData['globalTableSettings.rowSubTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.rowSubTotalsValueFormat.backgroundColor'] !== undefined) {
+    rowSubTotalsValueFormat.backgroundColor = formData['globalTableSettings.rowSubTotalsValueFormat.backgroundColor'];
+  }
+  // Нормализуем и сохраняем только если есть хотя бы одно значение
+  if (Object.keys(rowSubTotalsValueFormat).length > 0) {
+    const normalized = normalizeValueCellFormatSettings(rowSubTotalsValueFormat);
+    // Если нормализация вернула результат (даже пустой объект), используем его
+    // Иначе используем исходный объект (может содержать невалидные значения, но лучше чем ничего)
+    out.rowSubTotalsValueFormat = normalized !== undefined ? normalized : rowSubTotalsValueFormat;
+  }
+
+  // Собираем columnTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  const columnTotalsValueFormat: Record<string, unknown> = {};
+  if (out.columnTotalsValueFormat && typeof out.columnTotalsValueFormat === 'object') {
+    Object.assign(columnTotalsValueFormat, out.columnTotalsValueFormat as Record<string, unknown>);
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.valueFormat'] !== undefined) {
+    columnTotalsValueFormat.valueFormat = formData['globalTableSettings.columnTotalsValueFormat.valueFormat'];
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.dateFormat'] !== undefined) {
+    columnTotalsValueFormat.dateFormat = formData['globalTableSettings.columnTotalsValueFormat.dateFormat'];
+  }
+  // fontSize может быть числом или строкой из NumberControl
+  const columnFontSizeValue = formData['globalTableSettings.columnTotalsValueFormat.fontSize'];
+  if (columnFontSizeValue !== undefined && columnFontSizeValue !== null) {
+    columnTotalsValueFormat.fontSize = columnFontSizeValue;
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.fontColor'] !== undefined) {
+    columnTotalsValueFormat.fontColor = formData['globalTableSettings.columnTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.columnTotalsValueFormat.backgroundColor'] !== undefined) {
+    columnTotalsValueFormat.backgroundColor = formData['globalTableSettings.columnTotalsValueFormat.backgroundColor'];
+  }
+  // Нормализуем и сохраняем только если есть хотя бы одно значение
+  if (Object.keys(columnTotalsValueFormat).length > 0) {
+    const normalized = normalizeValueCellFormatSettings(columnTotalsValueFormat);
+    // Если нормализация вернула результат (даже пустой объект), используем его
+    // Иначе используем исходный объект (может содержать невалидные значения, но лучше чем ничего)
+    out.columnTotalsValueFormat = normalized !== undefined ? normalized : columnTotalsValueFormat;
+  }
+
+  // Собираем colSubTotalsValueFormat из плоских ключей (перезаписывает существующие значения)
+  const colSubTotalsValueFormat: Record<string, unknown> = {};
+  if (out.colSubTotalsValueFormat && typeof out.colSubTotalsValueFormat === 'object') {
+    Object.assign(colSubTotalsValueFormat, out.colSubTotalsValueFormat as Record<string, unknown>);
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.valueFormat'] !== undefined) {
+    colSubTotalsValueFormat.valueFormat = formData['globalTableSettings.colSubTotalsValueFormat.valueFormat'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.dateFormat'] !== undefined) {
+    colSubTotalsValueFormat.dateFormat = formData['globalTableSettings.colSubTotalsValueFormat.dateFormat'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.fontSize'] !== undefined) {
+    colSubTotalsValueFormat.fontSize = formData['globalTableSettings.colSubTotalsValueFormat.fontSize'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.fontColor'] !== undefined) {
+    colSubTotalsValueFormat.fontColor = formData['globalTableSettings.colSubTotalsValueFormat.fontColor'];
+  }
+  if (formData['globalTableSettings.colSubTotalsValueFormat.backgroundColor'] !== undefined) {
+    colSubTotalsValueFormat.backgroundColor = formData['globalTableSettings.colSubTotalsValueFormat.backgroundColor'];
+  }
+  if (Object.keys(colSubTotalsValueFormat).length > 0) {
+    out.colSubTotalsValueFormat = normalizeValueCellFormatSettings(colSubTotalsValueFormat) || colSubTotalsValueFormat;
+  }
+
+  // Собираем label настройки из плоских ключей formData (перезаписывает существующие значения)
+  if (formData['globalTableSettings.rowTotalsLabel'] !== undefined) {
+    out.rowTotalsLabel = formData['globalTableSettings.rowTotalsLabel'];
+  }
+  if (formData['globalTableSettings.rowSubTotalsLabel'] !== undefined) {
+    out.rowSubTotalsLabel = formData['globalTableSettings.rowSubTotalsLabel'];
+  }
+  if (formData['globalTableSettings.columnTotalsLabel'] !== undefined) {
+    out.columnTotalsLabel = formData['globalTableSettings.columnTotalsLabel'];
+  }
+  if (formData['globalTableSettings.colSubTotalsLabel'] !== undefined) {
+    out.colSubTotalsLabel = formData['globalTableSettings.colSubTotalsLabel'];
+  }
+
+  // Добавляем другие поля из существующего объекта (если они еще не добавлены)
+  if (existing && typeof existing === 'object') {
+    const existingObj = existing as Record<string, unknown>;
+    if (existingObj.rowTotalsLabel !== undefined && out.rowTotalsLabel === undefined) {
+      out.rowTotalsLabel = existingObj.rowTotalsLabel;
+    }
+    if (existingObj.rowSubTotalsLabel !== undefined && out.rowSubTotalsLabel === undefined) {
+      out.rowSubTotalsLabel = existingObj.rowSubTotalsLabel;
+    }
+    if (existingObj.columnTotalsLabel !== undefined && out.columnTotalsLabel === undefined) {
+      out.columnTotalsLabel = existingObj.columnTotalsLabel;
+    }
+    if (existingObj.colSubTotalsLabel !== undefined && out.colSubTotalsLabel === undefined) {
+      out.colSubTotalsLabel = existingObj.colSubTotalsLabel;
+    }
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+
+/**
+ * Собрать итоговые настройки форматирования полей (fieldGroupingSettings) из:
+ * 1) formData.fieldGroupingSettings (если она есть)
+ * 2) "временных" контролов вида field_formatting_field{N}_*
+ *
+ * Почему так:
+ * - Superset не вызывает `formDataOverrides` на каждый чих (например, при renderTrigger)
+ * - Значит, чтобы изменения влияли на отрисовку сразу, мы собираем настройки
+ *   прямо здесь, на каждый вызов transformProps.
+ *
+ * Важно: ключи в fieldGroupingSettings должны совпадать с getColumnLabel(...) и
+ * названиями метрик (label), потому что именно эти строки используются как row/col attrs
+ * в PivotTable.
+ */
+function buildEffectiveFieldGroupingSettings(
+  // ChartProps.formData в рантайме может быть просто PlainObject, поэтому принимаем
+  // максимально безопасный тип и работаем через проверки/приведение.
+  formData: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  // Достать "человекочитаемое" имя метрики из QueryFormMetric (который может быть строкой или объектом).
+  // Пишем максимально просто и безопасно, без сложных паттернов.
+  function getMetricLabel(metric: unknown): string | null {
+    if (typeof metric === 'string' && metric.length > 0) {
+      return metric;
+    }
+    if (!metric || typeof metric !== 'object') {
+      return null;
+    }
+    const m = metric as { label?: unknown; sqlExpression?: unknown };
+    if (typeof m.label === 'string' && m.label.length > 0) {
+      return m.label;
+    }
+    if (typeof m.sqlExpression === 'string' && m.sqlExpression.length > 0) {
+      return m.sqlExpression;
+    }
+    return null;
+  }
+
+
+  const baseSettingsRaw = formData.fieldGroupingSettings;
+  const baseSettings =
+    (typeof baseSettingsRaw === 'object' && baseSettingsRaw !== null
+      ? (baseSettingsRaw as Record<string, Record<string, unknown>>)
+      : {}) || {};
+
+  // Получаем список всех доступных полей из groupbyRows, groupbyColumns и metrics
+  // для фильтрации "висячих" записей в fieldGroupingSettings
+  const fd = formData;
+  const groupbyRows = Array.isArray(fd.groupbyRows) ? fd.groupbyRows : [];
+  const groupbyColumns = Array.isArray(fd.groupbyColumns) ? fd.groupbyColumns : [];
+  const metrics = Array.isArray(fd.metrics) ? fd.metrics : [];
+
+  // Создаём множество всех доступных полей
+  const availableFieldsSet = new Set<string>();
+
+  // Добавляем поля из rows и columns
+  for (const field of [...groupbyRows, ...groupbyColumns]) {
+    if (typeof field === 'string' && field.length > 0) {
+      availableFieldsSet.add(field);
+    } else if (field && typeof field === 'object') {
+      // Для объектов используем getColumnLabel
+      try {
+        const fieldLabel = getColumnLabel(field as QueryFormColumn);
+        if (typeof fieldLabel === 'string' && fieldLabel.length > 0) {
+          availableFieldsSet.add(fieldLabel);
+        }
+      } catch (e) {
+        // Игнорируем ошибки
+      }
+    }
+  }
+
+  // Добавляем метрики
+  for (const metric of metrics) {
+    const metricLabel = getMetricLabel(metric);
+    if (metricLabel && typeof metricLabel === 'string' && metricLabel.length > 0) {
+      availableFieldsSet.add(metricLabel);
+    }
+  }
+
+  // Множество полей, выбранных в хотя бы одном слоте Field 1..10.
+  // При очистке селектора (пусто) и Save настройки для этого поля не попадают в результат.
+  const selectedFieldsSet = new Set<string>();
+  for (let i = 0; i < 10; i += 1) {
+    const v = formData[`field_formatting_field${i}_selector`];
+    if (typeof v === 'string' && v.length > 0) {
+      selectedFieldsSet.add(v);
+    }
+  }
+
+  // Фильтруем baseSettings: оставляем только поля, которые есть в доступных полях
+  // и выбраны в селекторах (защита от "висячих" записей)
+  const cleanedBaseSettings: Record<string, Record<string, unknown>> = {};
+  for (const [fieldName, fieldSettings] of Object.entries(baseSettings)) {
+    if (
+      availableFieldsSet.has(fieldName) &&
+      selectedFieldsSet.has(fieldName) &&
+      fieldSettings &&
+      typeof fieldSettings === 'object'
+    ) {
+      cleanedBaseSettings[fieldName] = fieldSettings;
+    }
+  }
+
+  // Нормализуем настройки из сохраненного объекта fieldGroupingSettings
+  // (аналогично тому, как это делается для globalTableSettings).
+  // Используем уже очищенную версию cleanedBaseSettings (без "висячих" записей).
+  // Включаем только поля, выбранные в одном из слотов (2-1: при пустом слоте поле не входит).
+  const normalizedBaseSettings: Record<string, Record<string, unknown>> = {};
+  for (const [fieldName, fieldSettings] of Object.entries(cleanedBaseSettings)) {
+    if (!selectedFieldsSet.has(fieldName)) {
+      continue;
+    }
+    if (!fieldSettings || typeof fieldSettings !== 'object') {
+      continue;
+    }
+    const normalized: Record<string, unknown> = { ...fieldSettings };
+    
+    // Нормализуем fontSize (может быть строкой из NumberControl)
+    if (normalized.fontSize !== undefined) {
+      const fontSizeValue = normalized.fontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.fontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.fontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем metricHeaderFontSize
+    if (normalized.metricHeaderFontSize !== undefined) {
+      const fontSizeValue = normalized.metricHeaderFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.metricHeaderFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.metricHeaderFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем metricValueFontSize
+    if (normalized.metricValueFontSize !== undefined) {
+      const fontSizeValue = normalized.metricValueFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.metricValueFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.metricValueFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем fontColor и backgroundColor (преобразуем в CSS цвет)
+    if (normalized.fontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.fontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.fontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.backgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.backgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.backgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.metricHeaderFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.metricHeaderFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.metricHeaderFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.metricHeaderBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.metricHeaderBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.metricHeaderBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.metricValueFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.metricValueFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.metricValueFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.metricValueBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.metricValueBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.metricValueBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    // Нормализуем columnHeaderFontSize
+    if (normalized.columnHeaderFontSize !== undefined) {
+      const fontSizeValue = normalized.columnHeaderFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.columnHeaderFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.columnHeaderFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем columnValueFontSize
+    if (normalized.columnValueFontSize !== undefined) {
+      const fontSizeValue = normalized.columnValueFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.columnValueFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.columnValueFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем rowHeaderFontSize
+    if (normalized.rowHeaderFontSize !== undefined) {
+      const fontSizeValue = normalized.rowHeaderFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.rowHeaderFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.rowHeaderFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем rowValueFontSize
+    if (normalized.rowValueFontSize !== undefined) {
+      const fontSizeValue = normalized.rowValueFontSize;
+      if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+        const parsed = Number.parseFloat(fontSizeValue);
+        if (!Number.isNaN(parsed)) {
+          normalized.rowValueFontSize = parsed;
+        }
+      } else if (typeof fontSizeValue === 'number') {
+        normalized.rowValueFontSize = fontSizeValue;
+      }
+    }
+    
+    // Нормализуем цвета для колонок и строк
+    if (normalized.columnHeaderFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.columnHeaderFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.columnHeaderFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.columnHeaderBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.columnHeaderBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.columnHeaderBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.columnValueFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.columnValueFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.columnValueFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.columnValueBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.columnValueBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.columnValueBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.rowHeaderFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.rowHeaderFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.rowHeaderFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.rowHeaderBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.rowHeaderBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.rowHeaderBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    if (normalized.rowValueFontColor !== undefined) {
+      const fontColorCss = toCssColor(normalized.rowValueFontColor);
+      if (typeof fontColorCss === 'string') {
+        normalized.rowValueFontColor = fontColorCss;
+      }
+    }
+    
+    if (normalized.rowValueBackgroundColor !== undefined) {
+      const backgroundColorCss = toCssColor(normalized.rowValueBackgroundColor);
+      if (typeof backgroundColorCss === 'string') {
+        normalized.rowValueBackgroundColor = backgroundColorCss;
+      }
+    }
+    
+    // Обратная совместимость: преобразуем subtotalEnabled (boolean) в subtotalShow
+    if (normalized.subtotalShow === undefined && normalized.subtotalEnabled !== undefined) {
+      normalized.subtotalShow = normalized.subtotalEnabled === true ? 'show' : 'no_show';
+    }
+    // Если subtotalShow не задан и subtotalEnabled тоже не задан, используем 'general_setting' по умолчанию
+    if (normalized.subtotalShow === undefined) {
+      normalized.subtotalShow = 'general_setting';
+    }
+    
+    // Нормализуем subtotalValueFormat (если задан)
+    if (normalized.subtotalValueFormat !== undefined) {
+      const normalizedSubtotalValueFormat = normalizeValueCellFormatSettings(normalized.subtotalValueFormat);
+      if (normalizedSubtotalValueFormat !== undefined) {
+        normalized.subtotalValueFormat = normalizedSubtotalValueFormat;
+      }
+    }
+    
+    normalizedBaseSettings[fieldName] = normalized;
+  }
+
+  // Копируем нормализованные настройки
+  const merged: Record<string, Record<string, unknown>> = { ...normalizedBaseSettings };
+
+  // Собираем настройки из плоских ключей formData (перезаписывает значения из сохраненного объекта)
+  // Это нужно для того, чтобы настройки правильно применялись при загрузке чарта в дашборде
+  const allFields: string[] = [];
+  
+  // Добавляем поля из rows и columns
+  for (const field of [...groupbyRows, ...groupbyColumns]) {
+    if (typeof field === 'string' && field.length > 0) {
+      allFields.push(field);
+    }
+  }
+  
+  // Добавляем метрики
+  for (const metric of metrics) {
+    const metricLabel = getMetricLabel(metric);
+    if (metricLabel) {
+      allFields.push(metricLabel);
+    }
+  }
+  
+  // Собираем настройки из плоских ключей только для полей, выбранных в слотах (2-1).
+  for (const fieldName of allFields) {
+    if (!selectedFieldsSet.has(fieldName)) {
+      continue;
+    }
+    if (!merged[fieldName]) {
+      merged[fieldName] = {};
+    }
+    
+    // Собираем настройки из плоских ключей
+    const flatKeys = [
+      'maxWidth',
+      'truncate',
+      'headerSort',
+      'subtotalEnabled',
+      'subtotalShow',
+      'subtotalLabel',
+      'subtotalAggregation',
+      'cellValueType',
+      'percentageType',
+      'valueFormat',
+      'dateFormat',
+      'fontSize',
+      'fontColor',
+      'backgroundColor',
+      'columnHeaderFontSize',
+      'columnHeaderFontColor',
+      'columnHeaderBackgroundColor',
+      'columnValueFontSize',
+      'columnValueFontColor',
+      'columnValueBackgroundColor',
+      'rowHeaderFontSize',
+      'rowHeaderFontColor',
+      'rowHeaderBackgroundColor',
+      'rowValueFontSize',
+      'rowValueFontColor',
+      'rowValueBackgroundColor',
+      'metricHeaderFontSize',
+      'metricHeaderFontColor',
+      'metricHeaderBackgroundColor',
+      'metricValueFontSize',
+      'metricValueFontColor',
+      'metricValueBackgroundColor',
+      'metricAggregationFunction',
+    ];
+    
+    // Собираем subtotalValueFormat из плоских ключей (если заданы)
+    const subtotalValueFormat: Record<string, unknown> = {};
+    if (merged[fieldName]?.subtotalValueFormat && typeof merged[fieldName].subtotalValueFormat === 'object') {
+      Object.assign(subtotalValueFormat, merged[fieldName].subtotalValueFormat as Record<string, unknown>);
+    }
+    const formDataValueFormat = fd[`fieldGroupingSettings.${fieldName}.subtotalValueFormat.valueFormat`];
+    if (formDataValueFormat !== undefined) {
+      subtotalValueFormat.valueFormat = formDataValueFormat;
+    }
+    const formDataFontColor = fd[`fieldGroupingSettings.${fieldName}.subtotalValueFormat.fontColor`];
+    if (formDataFontColor !== undefined) {
+      subtotalValueFormat.fontColor = formDataFontColor;
+    }
+    const formDataBackgroundColor = fd[`fieldGroupingSettings.${fieldName}.subtotalValueFormat.backgroundColor`];
+    if (formDataBackgroundColor !== undefined) {
+      subtotalValueFormat.backgroundColor = formDataBackgroundColor;
+    }
+    if (Object.keys(subtotalValueFormat).length > 0) {
+      const normalizedSubtotalValueFormat = normalizeValueCellFormatSettings(subtotalValueFormat);
+      if (normalizedSubtotalValueFormat !== undefined) {
+        merged[fieldName].subtotalValueFormat = normalizedSubtotalValueFormat;
+      } else {
+        merged[fieldName].subtotalValueFormat = subtotalValueFormat;
+      }
+    }
+    
+    for (const key of flatKeys) {
+      const flatKey = `fieldGroupingSettings.${fieldName}.${key}`;
+      const value = fd[flatKey];
+      if (value !== undefined && value !== null) {
+        // Нормализуем fontSize (может быть строкой из NumberControl)
+        if (key === 'fontSize' || key === 'metricHeaderFontSize' || key === 'metricValueFontSize' ||
+            key === 'columnHeaderFontSize' || key === 'columnValueFontSize' ||
+            key === 'rowHeaderFontSize' || key === 'rowValueFontSize') {
+          if (typeof value === 'string' && value.length > 0) {
+            const parsed = Number.parseFloat(value);
+            if (!Number.isNaN(parsed)) {
+              merged[fieldName][key] = parsed;
+            }
+          } else if (typeof value === 'number') {
+            merged[fieldName][key] = value;
+          }
+        }
+        // Нормализуем цвета (преобразуем в CSS цвет)
+        else if (key === 'fontColor' || key === 'backgroundColor' || 
+                 key === 'metricHeaderFontColor' || key === 'metricHeaderBackgroundColor' ||
+                 key === 'metricValueFontColor' || key === 'metricValueBackgroundColor' ||
+                 key === 'columnHeaderFontColor' || key === 'columnHeaderBackgroundColor' ||
+                 key === 'columnValueFontColor' || key === 'columnValueBackgroundColor' ||
+                 key === 'rowHeaderFontColor' || key === 'rowHeaderBackgroundColor' ||
+                 key === 'rowValueFontColor' || key === 'rowValueBackgroundColor') {
+          const colorCss = toCssColor(value);
+          if (typeof colorCss === 'string') {
+            merged[fieldName][key] = colorCss;
+          }
+        }
+        // Обратная совместимость: преобразуем subtotalEnabled в subtotalShow
+        else if (key === 'subtotalEnabled' && typeof value === 'boolean') {
+          // Если subtotalShow уже задан, не перезаписываем его
+          if (merged[fieldName].subtotalShow === undefined) {
+            merged[fieldName].subtotalShow = value === true ? 'show' : 'no_show';
+          }
+        }
+        // Остальные настройки копируем как есть
+        else {
+          merged[fieldName][key] = value;
+        }
+      }
+    }
+    
+    // Обеспечиваем обратную совместимость: если subtotalShow не задан, устанавливаем 'general_setting'
+    if (merged[fieldName].subtotalShow === undefined) {
+      merged[fieldName].subtotalShow = 'general_setting';
+    }
+  }
+
+  // Достаём динамические значения из formData по строковым ключам.
+  // Здесь intentionally используем Record<string, unknown>, чтобы не плодить any,
+  // но при этом иметь доступ к динамическим полям.
+
+  function normalizeMetricAggregateToPivotAggregator(value: unknown): string | undefined {
+    if (typeof value !== 'string' || value.length === 0) {
+      return undefined;
+    }
+    // Keep pivot-specific options as-is.
+    if (value.includes(' as Fraction of ') || value.includes(' as Share of Parent ')) {
+      return value;
+    }
+    // Map common SQL aggregate names to pivot aggregators.
+    switch (value.toUpperCase()) {
+      case 'SUM':
+        return 'Sum';
+      case 'AVG':
+        return 'Average';
+      case 'MIN':
+        return 'Minimum';
+      case 'MAX':
+        return 'Maximum';
+      case 'COUNT':
+        return 'Count';
+      case 'COUNT_DISTINCT':
+        return 'Count Unique Values';
+      default:
+        break;
+    }
+    // Already in pivot naming?
+    return value;
+  }
+
+  for (let i = 0; i < 10; i += 1) {
+    const selectorKey = `field_formatting_field${i}_selector`;
+    const selectedField = fd[selectorKey];
+    if (typeof selectedField !== 'string' || selectedField.length === 0) {
+      continue;
+    }
+
+    const nextFieldSettings: Record<string, unknown> = {
+      ...(merged[selectedField] || {}),
+    };
+
+    const maxWidth = fd[`field_formatting_field${i}_maxWidth`];
+    if (typeof maxWidth === 'number') {
+      nextFieldSettings.maxWidth = maxWidth;
+    }
+
+    const truncate = fd[`field_formatting_field${i}_truncate`];
+    if (typeof truncate === 'boolean') {
+      nextFieldSettings.truncate = truncate;
+    }
+
+    const fontSize = fd[`field_formatting_field${i}_fontSize`];
+    if (typeof fontSize === 'number') {
+      nextFieldSettings.fontSize = fontSize;
+    }
+
+    const fontColor = fd[`field_formatting_field${i}_fontColor`];
+    const fontColorCss = toCssColor(fontColor);
+    if (typeof fontColorCss === 'string') {
+      nextFieldSettings.fontColor = fontColorCss;
+    }
+
+    const backgroundColor = fd[`field_formatting_field${i}_backgroundColor`];
+    const backgroundColorCss = toCssColor(backgroundColor);
+    if (typeof backgroundColorCss === 'string') {
+      nextFieldSettings.backgroundColor = backgroundColorCss;
+    }
+
+    // Формат значений (числа/даты) для выбранного поля.
+    // В UI это используется для:
+    // - row/col headers (когда значение числовое или temporal)
+    // - metric values (когда значение агрегируется)
+    const valueFormat = fd[`field_formatting_field${i}_valueFormat`];
+    if (typeof valueFormat === 'string' && valueFormat.length > 0) {
+      // Если формат совпадает с глобальным, не сохраняем как per-field override.
+      // Это снижает шум и делает per-field настройку "осознанной".
+      const globalValueFormat = fd.valueFormat;
+      const sameAsGlobal =
+        typeof globalValueFormat === 'string' && globalValueFormat === valueFormat;
+      if (!sameAsGlobal) {
+        nextFieldSettings.valueFormat = valueFormat;
+      }
+    }
+
+    const dateFormat = fd[`field_formatting_field${i}_dateFormat`];
+    if (typeof dateFormat === 'string' && dateFormat.length > 0) {
+      // Аналогично: если формат совпадает с глобальным, не сохраняем override.
+      const globalDateFormat = fd.dateFormat;
+      const sameAsGlobal =
+        typeof globalDateFormat === 'string' && globalDateFormat === dateFormat;
+      if (!sameAsGlobal) {
+        nextFieldSettings.dateFormat = dateFormat;
+      }
+    }
+
+    // Индивидуальная функция агрегации для метрики (если выбранное поле является метрикой).
+    const metricAggregationFunction =
+      fd[`field_formatting_field${i}_metricAggregationFunction`];
+    if (
+      typeof metricAggregationFunction === 'string' &&
+      metricAggregationFunction.length > 0
+    ) {
+      nextFieldSettings.metricAggregationFunction = metricAggregationFunction;
+    }
+
+    // Metric-specific formatting: header styles
+    const metricHeaderFontSize = fd[`field_formatting_field${i}_metricHeaderFontSize`];
+    if (typeof metricHeaderFontSize === 'number') {
+      nextFieldSettings.metricHeaderFontSize = metricHeaderFontSize;
+    }
+
+    const metricHeaderFontColor = fd[`field_formatting_field${i}_metricHeaderFontColor`];
+    const metricHeaderFontColorCss = toCssColor(metricHeaderFontColor);
+    if (typeof metricHeaderFontColorCss === 'string') {
+      nextFieldSettings.metricHeaderFontColor = metricHeaderFontColorCss;
+    }
+
+    const metricHeaderBackgroundColor =
+      fd[`field_formatting_field${i}_metricHeaderBackgroundColor`];
+    const metricHeaderBackgroundColorCss = toCssColor(metricHeaderBackgroundColor);
+    if (typeof metricHeaderBackgroundColorCss === 'string') {
+      nextFieldSettings.metricHeaderBackgroundColor = metricHeaderBackgroundColorCss;
+    }
+
+    // Metric-specific formatting: value styles
+    const metricValueFontSize = fd[`field_formatting_field${i}_metricValueFontSize`];
+    if (typeof metricValueFontSize === 'number') {
+      nextFieldSettings.metricValueFontSize = metricValueFontSize;
+    }
+
+    const metricValueFontColor = fd[`field_formatting_field${i}_metricValueFontColor`];
+    const metricValueFontColorCss = toCssColor(metricValueFontColor);
+    if (typeof metricValueFontColorCss === 'string') {
+      nextFieldSettings.metricValueFontColor = metricValueFontColorCss;
+    }
+
+    const metricValueBackgroundColor =
+      fd[`field_formatting_field${i}_metricValueBackgroundColor`];
+    const metricValueBackgroundColorCss = toCssColor(metricValueBackgroundColor);
+    if (typeof metricValueBackgroundColorCss === 'string') {
+      nextFieldSettings.metricValueBackgroundColor = metricValueBackgroundColorCss;
+    }
+
+    // Column-specific formatting: header styles
+    const columnHeaderFontSize = fd[`field_formatting_field${i}_columnHeaderFontSize`];
+    if (typeof columnHeaderFontSize === 'number') {
+      nextFieldSettings.columnHeaderFontSize = columnHeaderFontSize;
+    } else if (typeof columnHeaderFontSize === 'string' && columnHeaderFontSize.length > 0) {
+      const parsed = Number.parseFloat(columnHeaderFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.columnHeaderFontSize = parsed;
+      }
+    }
+
+    const columnHeaderFontColor = fd[`field_formatting_field${i}_columnHeaderFontColor`];
+    const columnHeaderFontColorCss = toCssColor(columnHeaderFontColor);
+    if (typeof columnHeaderFontColorCss === 'string') {
+      nextFieldSettings.columnHeaderFontColor = columnHeaderFontColorCss;
+    }
+
+    const columnHeaderBackgroundColor =
+      fd[`field_formatting_field${i}_columnHeaderBackgroundColor`];
+    const columnHeaderBackgroundColorCss = toCssColor(columnHeaderBackgroundColor);
+    if (typeof columnHeaderBackgroundColorCss === 'string') {
+      nextFieldSettings.columnHeaderBackgroundColor = columnHeaderBackgroundColorCss;
+    }
+
+    // Column-specific formatting: value styles
+    const columnValueFontSize = fd[`field_formatting_field${i}_columnValueFontSize`];
+    if (typeof columnValueFontSize === 'number') {
+      nextFieldSettings.columnValueFontSize = columnValueFontSize;
+    } else if (typeof columnValueFontSize === 'string' && columnValueFontSize.length > 0) {
+      const parsed = Number.parseFloat(columnValueFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.columnValueFontSize = parsed;
+      }
+    }
+
+    const columnValueFontColor = fd[`field_formatting_field${i}_columnValueFontColor`];
+    const columnValueFontColorCss = toCssColor(columnValueFontColor);
+    if (typeof columnValueFontColorCss === 'string') {
+      nextFieldSettings.columnValueFontColor = columnValueFontColorCss;
+    }
+
+    const columnValueBackgroundColor =
+      fd[`field_formatting_field${i}_columnValueBackgroundColor`];
+    const columnValueBackgroundColorCss = toCssColor(columnValueBackgroundColor);
+    if (typeof columnValueBackgroundColorCss === 'string') {
+      nextFieldSettings.columnValueBackgroundColor = columnValueBackgroundColorCss;
+    }
+
+    // Row-specific formatting: header styles
+    const rowHeaderFontSize = fd[`field_formatting_field${i}_rowHeaderFontSize`];
+    if (typeof rowHeaderFontSize === 'number') {
+      nextFieldSettings.rowHeaderFontSize = rowHeaderFontSize;
+    } else if (typeof rowHeaderFontSize === 'string' && rowHeaderFontSize.length > 0) {
+      const parsed = Number.parseFloat(rowHeaderFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.rowHeaderFontSize = parsed;
+      }
+    }
+
+    const rowHeaderFontColor = fd[`field_formatting_field${i}_rowHeaderFontColor`];
+    const rowHeaderFontColorCss = toCssColor(rowHeaderFontColor);
+    if (typeof rowHeaderFontColorCss === 'string') {
+      nextFieldSettings.rowHeaderFontColor = rowHeaderFontColorCss;
+    }
+
+    const rowHeaderBackgroundColor =
+      fd[`field_formatting_field${i}_rowHeaderBackgroundColor`];
+    const rowHeaderBackgroundColorCss = toCssColor(rowHeaderBackgroundColor);
+    if (typeof rowHeaderBackgroundColorCss === 'string') {
+      nextFieldSettings.rowHeaderBackgroundColor = rowHeaderBackgroundColorCss;
+    }
+
+    // Row-specific formatting: value styles
+    const rowValueFontSize = fd[`field_formatting_field${i}_rowValueFontSize`];
+    if (typeof rowValueFontSize === 'number') {
+      nextFieldSettings.rowValueFontSize = rowValueFontSize;
+    } else if (typeof rowValueFontSize === 'string' && rowValueFontSize.length > 0) {
+      const parsed = Number.parseFloat(rowValueFontSize);
+      if (!Number.isNaN(parsed)) {
+        nextFieldSettings.rowValueFontSize = parsed;
+      }
+    }
+
+    const rowValueFontColor = fd[`field_formatting_field${i}_rowValueFontColor`];
+    const rowValueFontColorCss = toCssColor(rowValueFontColor);
+    if (typeof rowValueFontColorCss === 'string') {
+      nextFieldSettings.rowValueFontColor = rowValueFontColorCss;
+    }
+
+    const rowValueBackgroundColor =
+      fd[`field_formatting_field${i}_rowValueBackgroundColor`];
+    const rowValueBackgroundColorCss = toCssColor(rowValueBackgroundColor);
+    if (typeof rowValueBackgroundColorCss === 'string') {
+      nextFieldSettings.rowValueBackgroundColor = rowValueBackgroundColorCss;
+    }
+
+    // Subtotal settings для поля
+    const subtotalShow = fd[`field_formatting_field${i}_subtotalShow`];
+    if (typeof subtotalShow === 'string' && subtotalShow.length > 0) {
+      nextFieldSettings.subtotalShow = subtotalShow;
+    }
+
+    const subtotalLabel = fd[`field_formatting_field${i}_subtotalLabel`];
+    if (typeof subtotalLabel === 'string' && subtotalLabel.length > 0) {
+      nextFieldSettings.subtotalLabel = subtotalLabel;
+    }
+
+    const subtotalAggregation = fd[`field_formatting_field${i}_subtotalAggregation`];
+    if (typeof subtotalAggregation === 'string' && subtotalAggregation.length > 0) {
+      nextFieldSettings.subtotalAggregation = subtotalAggregation;
+    }
+
+    // Собираем subtotalValueFormat из временных контролов
+    const subtotalValueFormat: Record<string, unknown> = {};
+    const subtotalValueFormatValue = fd[`field_formatting_field${i}_subtotalValueFormat`];
+    if (typeof subtotalValueFormatValue === 'string' && subtotalValueFormatValue.length > 0) {
+      subtotalValueFormat.valueFormat = subtotalValueFormatValue;
+    }
+    const subtotalFontColor = fd[`field_formatting_field${i}_subtotalFontColor`];
+    const subtotalFontColorCss = toCssColor(subtotalFontColor);
+    if (typeof subtotalFontColorCss === 'string') {
+      subtotalValueFormat.fontColor = subtotalFontColorCss;
+    }
+    const subtotalBackgroundColor = fd[`field_formatting_field${i}_subtotalBackgroundColor`];
+    const subtotalBackgroundColorCss = toCssColor(subtotalBackgroundColor);
+    if (typeof subtotalBackgroundColorCss === 'string') {
+      subtotalValueFormat.backgroundColor = subtotalBackgroundColorCss;
+    }
+    if (Object.keys(subtotalValueFormat).length > 0) {
+      const normalizedSubtotalValueFormat = normalizeValueCellFormatSettings(subtotalValueFormat);
+      if (normalizedSubtotalValueFormat !== undefined) {
+        nextFieldSettings.subtotalValueFormat = normalizedSubtotalValueFormat;
+      } else {
+        nextFieldSettings.subtotalValueFormat = subtotalValueFormat;
+      }
+    }
+
+    merged[selectedField] = nextFieldSettings;
+  }
+
+  // Per-metric aggregation uses Data -> Metrics -> Simple -> aggregate (metric.aggregate)
+  const metricsRaw = fd.metrics;
+  if (Array.isArray(metricsRaw)) {
+    for (let i = 0; i < metricsRaw.length; i += 1) {
+      const metric = metricsRaw[i];
+      const metricName = getMetricLabel(metric);
+      if (!metricName) {
+        continue;
+      }
+
+      const metricAggregate =
+        metric && typeof metric === 'object' && 'aggregate' in (metric as Record<string, unknown>)
+          ? (metric as Record<string, unknown>).aggregate
+          : undefined;
+      const pivotAgg = normalizeMetricAggregateToPivotAggregator(metricAggregate);
+      if (pivotAgg) {
+        const prev = merged[metricName] || {};
+        merged[metricName] = {
+          ...prev,
+          metricAggregationFunction: pivotAgg,
+        };
+      }
+    }
+  }
+
+  return merged;
+}
+
+export default function transformProps(chartProps: ChartProps<PivotTableV2QueryFormData>): PivotTableV2Props {
+  /**
+   * This function is called after a successful response has been
+   * received from the chart data endpoint, and is used to transform
+   * the incoming data prior to being sent to the Visualization.
+   *
+   * The transformProps function is also quite useful to return
+   * additional/modified props to your data viz component. The formData
+   * can also be accessed from your PivotTableChart.tsx file, but
+   * doing supplying custom props here is often handy for integrating third
+   * party libraries that rely on specific props.
+   *
+   * A description of properties in `chartProps`:
+   * - `height`, `width`: the height/width of the DOM element in which
+   *   the chart is located
+   * - `formData`: the chart data request payload that was sent to the
+   *   backend.
+   * - `queriesData`: the chart data response payload that was received
+   *   from the backend. Some notable properties of `queriesData`:
+   *   - `data`: an array with data, each row with an object mapping
+   *     the column/alias to its value. Example:
+   *     `[{ col1: 'abc', metric1: 10 }, { col1: 'xyz', metric1: 20 }]`
+   *   - `rowcount`: the number of rows in `data`
+   *   - `query`: the query that was issued.
+   *
+   * Please note: the transformProps function gets cached when the
+   * application loads. When making changes to the `transformProps`
+   * function during development with hot reloading, changes won't
+   * be seen until restarting the development server.
+   */
+
+  // Функция для извлечения sqlExpression из метрики
+  function getMetricSqlExpression(metric: unknown): string | null {
+    if (typeof metric === 'string') {
+      // Для строковых метрик (простые метрики из datasource) нет sqlExpression
+      return null;
+    }
+    if (!metric || typeof metric !== 'object') {
+      return null;
+    }
+    const m = metric as { sqlExpression?: unknown; expressionType?: unknown };
+    // Проверяем, что это SQL-выражение (expressionType === 'SQL')
+    if (m.expressionType === 'SQL' && typeof m.sqlExpression === 'string' && m.sqlExpression.length > 0) {
+      return m.sqlExpression;
+    }
+    return null;
+  }
+
+  // Функция для определения, является ли метрика формулой (содержит операции)
+  function isFormulaMetric(sqlExpression: string | null): boolean {
+    if (!sqlExpression || typeof sqlExpression !== 'string') {
+      return false;
+    }
+    // Проверяем наличие операций: /, *, +, -
+    // Исключаем случаи, когда операции используются только в именах функций (например, COUNT_DISTINCT)
+    const hasOperation = /[+\-*/]/.test(sqlExpression);
+    if (!hasOperation) {
+      return false;
+    }
+    // Проверяем, что это не просто имя функции с операцией внутри
+    // Формула должна содержать операции между выражениями, а не только внутри функций
+    // Простая проверка: если есть операции вне скобок функций, это формула
+    // Для упрощения считаем формулой, если есть операции и есть обратные кавычки (метрики)
+    const hasBackticks = /`[^`]+`/.test(sqlExpression);
+    return hasBackticks && hasOperation;
+  }
+
+  // Функция для получения метки метрики (используется для создания metricsSqlExpressions)
+  function getMetricLabel(metric: unknown): string | null {
+    if (typeof metric === 'string' && metric.length > 0) {
+      return metric;
+    }
+    if (!metric || typeof metric !== 'object') {
+      return null;
+    }
+    const m = metric as { label?: unknown; sqlExpression?: unknown };
+    if (typeof m.label === 'string' && m.label.length > 0) {
+      return m.label;
+    }
+    if (typeof m.sqlExpression === 'string' && m.sqlExpression.length > 0) {
+      return m.sqlExpression;
+    }
+    return null;
+  }
+  const {
+    width,
+    height,
+    queriesData,
+    rawFormData,
+    hooks: { setDataMask = () => {}, onContextMenu },
+    filterState,
+    datasource: { verboseMap = {}, columnFormats = {}, currencyFormats = {} },
+    emitCrossFilters,
+    theme,
+  } = chartProps;
+  const { data, colnames, coltypes } = queriesData[0];
+  // Важно: chartProps.formData типизирован, но в рантайме/в generic типах Superset
+  // это может быть PlainObject, поэтому работаем через "typedFormData".
+  const typedFormData = chartProps.formData as unknown as PivotTableV2QueryFormData;
+  const {
+    groupbyRows,
+    groupbyColumns,
+    metrics,
+    tableRenderer,
+    colOrder,
+    rowOrder,
+    rowSortingMetric,
+    colSortingMetric,
+    aggregateFunction,
+    transposePivot,
+    combineMetric,
+    rowSubtotalPosition,
+    colSubtotalPosition,
+    colTotals,
+    colSubTotals,
+    rowTotals,
+    rowSubTotals,
+    valueFormat,
+    dateFormat,
+    metricsLayout,
+    conditionalFormatting,
+    timeGrainSqla,
+    currencyFormat,
+    allowRenderHtml,
+    legacy_order_by,
+    order_desc,
+  } = typedFormData;
+  const { selectedFilters } = filterState;
+  const granularity = extractTimegrain(rawFormData);
+
+  // Итоговые настройки форматирования, которые реально будут применяться в рендерере.
+  //
+  // ВАЖНО: в Superset `chartProps.formData` часто является "нормализованной" формой
+  // и может НЕ включать UI-only контролы (например, динамические field_formatting_field{N}_*).
+  // При этом `rawFormData` содержит полную форму из Explore, включая эти контролы.
+  // Поэтому собираем настройки именно из `rawFormData`.
+  const effectiveFieldGroupingSettings =
+    buildEffectiveFieldGroupingSettings(
+      rawFormData as unknown as Record<string, unknown>,
+    );
+
+  // Очистка "висячих" настроек fieldGroupingSettings:
+  // оставляем только те поля, которые реально присутствуют
+  // в groupbyRows / groupbyColumns / metrics.
+  const fieldsInUse = new Set<string>();
+
+  const addFieldFromColumn = (col: QueryFormColumn) => {
+    try {
+      const label = getColumnLabel(col);
+      if (typeof label === 'string' && label.length > 0) {
+        fieldsInUse.add(label);
+      }
+    } catch {
+      // Игнорируем ошибки при получении label
+    }
+  };
+
+  (groupbyRows || []).forEach(addFieldFromColumn);
+  (groupbyColumns || []).forEach(addFieldFromColumn);
+
+  const addFieldFromMetric = (metric: unknown) => {
+    const label = getMetricLabel(metric);
+    if (label && label.length > 0) {
+      fieldsInUse.add(label);
+    }
+  };
+
+  (metrics || []).forEach(addFieldFromMetric);
+
+  const cleanedFieldGroupingSettings: Record<string, Record<string, unknown>> = {};
+  if (effectiveFieldGroupingSettings && typeof effectiveFieldGroupingSettings === 'object') {
+    Object.entries(effectiveFieldGroupingSettings).forEach(([fieldName, settings]) => {
+      if (fieldsInUse.has(fieldName) && settings && typeof settings === 'object') {
+        cleanedFieldGroupingSettings[fieldName] = settings;
+      }
+    });
+  }
+
+  const dateFormatters = colnames
+    .filter(
+      (colname: string, index: number) =>
+        coltypes[index] === GenericDataType.Temporal,
+    )
+    .reduce(
+      (
+        acc: Record<string, DateFormatter | undefined>,
+        temporalColname: string,
+      ) => {
+        let formatter: DateFormatter | undefined;
+        // Per-field override: если пользователь указал dateFormat для конкретного поля,
+        // то используем его вместо глобального dateFormat.
+        const perFieldDateFormat =
+          effectiveFieldGroupingSettings?.[temporalColname]?.dateFormat;
+        const effectiveDateFormat =
+          typeof perFieldDateFormat === 'string' && perFieldDateFormat.length > 0
+            ? perFieldDateFormat
+            : dateFormat;
+        if (effectiveDateFormat === SMART_DATE_ID) {
+          if (granularity) {
+            // time column use formats based on granularity
+            formatter = getTimeFormatterForGranularity(granularity);
+          } else if (isNumeric(temporalColname, data)) {
+            formatter = getTimeFormatter(DATABASE_DATETIME);
+          } else {
+            // if no column-specific format, print cell as is
+            formatter = String;
+          }
+        } else if (effectiveDateFormat === 'MONTH_YEAR_RU') {
+          formatter = createMonthYearRuFormatter();
+        } else if (effectiveDateFormat) {
+          formatter = getTimeFormatter(effectiveDateFormat);
+        }
+        if (formatter) {
+          acc[temporalColname] = formatter;
+        }
+        return acc;
+      },
+      {},
+    );
+  const metricColorFormatters = getColorFormatters(
+    conditionalFormatting,
+    data,
+    theme,
+  );
+  // Собираем globalTableSettings из rawFormData (как для fieldGroupingSettings),
+  // потому что Superset может не сохранять вложенные объекты правильно
+  const normalizedGlobalTableSettings = buildGlobalTableSettings(
+    rawFormData as unknown as Record<string, unknown>,
+  );
+
+  // Создаем объект с SQL-выражениями метрик для определения формул
+  const metricsSqlExpressions: Record<string, string | null> = {};
+  // Создаем маппинг между именами метрик из SQL-выражений и отображаемыми именами метрик
+  // Ключ: имя метрики из SQL-выражения (например, "Продажи: Сумма без НДС")
+  // Значение: отображаемое имя метрики (например, "Факт")
+  const metricNameMapping: Record<string, string> = {};
+  
+  if (Array.isArray(metrics)) {
+    for (const metric of metrics) {
+      const metricName = getMetricLabel(metric);
+      if (!metricName) {
+        continue;
+      }
+      const sqlExpression = getMetricSqlExpression(metric);
+      // Сохраняем sqlExpression только если это формула (содержит операции)
+      metricsSqlExpressions[metricName] = isFormulaMetric(sqlExpression) ? sqlExpression : null;
+      
+      // Если это не формула, но есть SQL-выражение, создаем маппинг
+      // для случаев, когда метрика используется в формуле другой метрики
+      if (sqlExpression && !isFormulaMetric(sqlExpression)) {
+        // Извлекаем имя метрики из SQL-выражения (например, из sum(`Продажи: Сумма без НДС`))
+        const metricNameRegex = /(?:sum|count|avg|min|max|count_distinct)\s*\(\s*`([^`]+)`\s*\)/gi;
+        let match;
+        while ((match = metricNameRegex.exec(sqlExpression)) !== null) {
+          const sqlMetricName = match[1].trim();
+          metricNameMapping[sqlMetricName] = metricName;
+        }
+      }
+    }
+  }
+
+  return {
+    width,
+    height,
+    margin: 0, // Default margin, можно сделать настраиваемым
+    data,
+    groupbyRows,
+    groupbyColumns,
+    metrics,
+    tableRenderer,
+    colOrder,
+    rowOrder,
+    rowSortingMetric,
+    colSortingMetric,
+    aggregateFunction,
+    transposePivot,
+    combineMetric,
+    rowSubtotalPosition,
+    colSubtotalPosition,
+    colTotals,
+    colSubTotals,
+    rowTotals,
+    rowSubTotals,
+    valueFormat,
+    currencyFormat,
+    emitCrossFilters,
+    setDataMask,
+    selectedFilters,
+    verboseMap,
+    columnFormats,
+    currencyFormats,
+    metricsLayout,
+    metricColorFormatters,
+    dateFormatters,
+    onContextMenu,
+    timeGrainSqla,
+    allowRenderHtml,
+    // Используем "очищенные" настройки (без висячих записей)
+    fieldGroupingSettings: cleanedFieldGroupingSettings,
+    globalTableSettings: normalizedGlobalTableSettings,
+    legacy_order_by: legacy_order_by || null,
+    order_desc: order_desc ?? true,
+    // SQL-выражения метрик для определения формул
+    metricsSqlExpressions,
+    // Маппинг между именами метрик из SQL-выражений и отображаемыми именами метрик
+    metricNameMapping,
+  };
+}

@@ -40,6 +40,7 @@ export type AdhocMetricPopoverTriggerProps = {
   savedMetric: savedMetricType;
   datasource: Datasource & ISaveableDatasource;
   children: ReactNode;
+  aggregateOptions?: string[];
   isControlledComponent?: boolean;
   visible?: boolean;
   togglePopover?: (visible: boolean) => void;
@@ -218,6 +219,7 @@ class AdhocMetricPopoverTrigger extends PureComponent<
           savedMetricsOptions={savedMetricsOptions}
           savedMetric={savedMetric}
           datasource={datasource}
+          aggregateOptions={this.props.aggregateOptions}
           handleDatasetModal={this.handleDatasetModal}
           onResize={this.onPopoverResize}
           onClose={closePopover}
