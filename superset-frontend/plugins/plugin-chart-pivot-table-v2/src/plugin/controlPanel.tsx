@@ -23,12 +23,6 @@ import {
   getStandardizedControls,
   sharedControls,
 } from '@superset-ui/chart-controls';
-
-// Расширенные опции формата даты с добавлением "month year" на русском
-const EXTENDED_D3_TIME_FORMAT_OPTIONS: [string, string][] = [
-  ...D3_TIME_FORMAT_OPTIONS,
-  ['MONTH_YEAR_RU', t('Month Year (Russian) | Декабрь 2025')],
-];
 import {
   ensureIsArray,
   getColumnLabel,
@@ -42,6 +36,12 @@ import {
   validateNonEmpty,
 } from '@superset-ui/core';
 import { ADAPTIVE_FORMATTING, MetricsLayoutEnum } from '../types';
+
+// Расширенные опции формата даты с добавлением "month year" на русском
+const EXTENDED_D3_TIME_FORMAT_OPTIONS: [string, string][] = [
+  ...D3_TIME_FORMAT_OPTIONS,
+  ['MONTH_YEAR_RU', t('Month Year (Russian) | Декабрь 2025')],
+];
 
 // Pivot Table V2 расширяет список агрегаторов в "Data -> Metrics -> Simple -> aggregate".
 // Часть значений является pivot-специфичной (client-side) и будет нормализована
@@ -72,6 +72,93 @@ const PIVOT_V2_METRIC_AGGREGATE_OPTIONS: string[] = [
   'Count as Share of Parent Column Group',
   'Count as Share of Parent Row Group',
 ];
+
+const MAX_FIELD_FORMATTING_SLOTS = 10;
+const ALL_FIELD_SELECTOR_CONTROL_NAMES = Array.from(
+  { length: MAX_FIELD_FORMATTING_SLOTS },
+  (_, index) => getSelectorControlName(index),
+);
+
+const ALL_FIELD_REMOVE_CONTROL_NAMES = Array.from(
+  { length: MAX_FIELD_FORMATTING_SLOTS },
+  (_, index) => `field_formatting_field${index}_remove`,
+);
+
+type FieldGroupingSettingsMap = Record<string, unknown>;
+
+function getSelectorControlName(index: number): string {
+  return `field_formatting_field${index}_selector`;
+}
+
+function getFieldSelectorValue(
+  formData: Record<string, unknown>,
+  index: number,
+): string | undefined {
+  const value = formData[getSelectorControlName(index)];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function getCompactSelectedFields(formData: Record<string, unknown>): string[] {
+  const compact: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < MAX_FIELD_FORMATTING_SLOTS; i += 1) {
+    const selectedField = getFieldSelectorValue(formData, i);
+    if (!selectedField || seen.has(selectedField)) {
+      continue;
+    }
+    seen.add(selectedField);
+    compact.push(selectedField);
+  }
+  return compact;
+}
+
+function sanitizeFieldGroupingSettings(
+  settingsRaw: unknown,
+  selectedFields: string[],
+): FieldGroupingSettingsMap {
+  const settings =
+    settingsRaw && typeof settingsRaw === 'object'
+      ? (settingsRaw as FieldGroupingSettingsMap)
+      : {};
+  const selectedSet = new Set(selectedFields);
+  const sanitized: FieldGroupingSettingsMap = {};
+
+  Object.entries(settings).forEach(([fieldName, fieldSettings]) => {
+    if (selectedSet.has(fieldName) && fieldSettings !== null) {
+      sanitized[fieldName] = fieldSettings;
+    }
+  });
+
+  return sanitized;
+}
+
+function compactFieldFormattingState(
+  formData: Record<string, unknown>,
+  changedIndex: number,
+  nextValue: unknown,
+): Record<string, unknown> {
+  const nextFormData: Record<string, unknown> = { ...formData };
+  const selectorName = getSelectorControlName(changedIndex);
+
+  if (typeof nextValue === 'string' && nextValue.length > 0) {
+    nextFormData[selectorName] = nextValue;
+  } else {
+    nextFormData[selectorName] = undefined;
+  }
+
+  const compactSelectedFields = getCompactSelectedFields(nextFormData);
+  for (let i = 0; i < MAX_FIELD_FORMATTING_SLOTS; i += 1) {
+    nextFormData[getSelectorControlName(i)] = compactSelectedFields[i];
+    nextFormData[`field_formatting_field${i}_remove`] = false;
+  }
+
+  nextFormData.fieldGroupingSettings = sanitizeFieldGroupingSettings(
+    nextFormData.fieldGroupingSettings,
+    compactSelectedFields,
+  );
+
+  return nextFormData;
+}
 
 // Функция для создания секции настроек конкретного поля группировки
 // TODO: будет использована для динамического создания секций
@@ -1219,49 +1306,23 @@ const config: ControlPanelConfig = {
                       'groupbyColumns',
                       'metrics',
                       'fieldGroupingSettings',
-                      ...Array.from({ length: fieldIndex }, (_, k) => `field_formatting_field${k}_selector`),
+                      ...ALL_FIELD_SELECTOR_CONTROL_NAMES,
+                      ...ALL_FIELD_REMOVE_CONTROL_NAMES,
                     ],
                     formDataOnChange: (
                       value: unknown,
-                      prevValue: unknown,
-                      formData: any,
+                      _prevValue: unknown,
+                      formData: unknown,
                     ) => {
-                      const isEmpty =
-                        value === null ||
-                        value === undefined ||
-                        (typeof value === 'string' && value.length === 0);
-                      const hasPrev =
-                        typeof prevValue === 'string' && prevValue.length > 0;
-
-                      // Очищаем fieldGroupingSettings только при переходе из непустого значения в пустое.
-                      if (!isEmpty || !hasPrev || !formData) {
+                      if (!formData || typeof formData !== 'object') {
                         return formData;
                       }
 
-                      const currentFieldGroupingSettings =
-                        formData.fieldGroupingSettings &&
-                        typeof formData.fieldGroupingSettings === 'object'
-                          ? (formData.fieldGroupingSettings as Record<
-                              string,
-                              unknown
-                            >)
-                          : {};
-
-                      const prevKey = String(prevValue);
-                      if (
-                        !currentFieldGroupingSettings ||
-                        !(prevKey in currentFieldGroupingSettings)
-                      ) {
-                        return formData;
-                      }
-
-                      const { [prevKey]: _removed, ...rest } =
-                        currentFieldGroupingSettings;
-
-                      return {
-                        ...formData,
-                        fieldGroupingSettings: rest,
-                      };
+                      return compactFieldFormattingState(
+                        formData as Record<string, unknown>,
+                        fieldIndex,
+                        value,
+                      );
                     },
                     mapStateToProps: (state: any, controlState?: any) => {
                       // Безопасная проверка входных параметров
@@ -1276,6 +1337,10 @@ const config: ControlPanelConfig = {
                       const controls = (state.controls && typeof state.controls === 'object') 
                         ? state.controls 
                         : {};
+                      const formData =
+                        state.form_data && typeof state.form_data === 'object'
+                          ? state.form_data
+                          : {};
                       const groupbyRows = ensureIsArray(controls?.groupbyRows?.value || []);
                       const groupbyColumns = ensureIsArray(controls?.groupbyColumns?.value || []);
                       const metrics = ensureIsArray(controls?.metrics?.value || []);
@@ -1361,8 +1426,9 @@ const config: ControlPanelConfig = {
                       // 2-2: поля, уже выбранные в предыдущих слотах Field 1..Field n-1, не показывать в списке
                       const previouslySelectedSet = new Set<string>();
                       for (let k = 0; k < fieldIndex; k += 1) {
-                        const prevCtrl = controls?.[`field_formatting_field${k}_selector`];
-                        const v = prevCtrl?.value;
+                        const selectorName = `field_formatting_field${k}_selector`;
+                        const formValue = formData?.[selectorName];
+                        const v = formValue;
                         if (typeof v === 'string' && v.length > 0) {
                           previouslySelectedSet.add(v);
                         }
@@ -1373,19 +1439,55 @@ const config: ControlPanelConfig = {
 
                       // Безопасно получаем выбранное поле для этого набора настроек
                       const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
-                      const selectorControl = (controls && typeof controls === 'object' && selectorControlName in controls)
-                        ? controls[selectorControlName]
-                        : undefined;
-                      const selectedField = (selectorControl && typeof selectorControl === 'object' && 'value' in selectorControl)
-                        ? selectorControl.value
-                        : undefined;
+                      const hasSelectedFieldInFormData =
+                        Object.prototype.hasOwnProperty.call(
+                          formData,
+                          selectorControlName,
+                        );
+                      const selectedFieldFromFormData = formData?.[selectorControlName];
+                      const selectedField = hasSelectedFieldInFormData
+                        ? selectedFieldFromFormData ?? null
+                        : null;
                       return {
                         choices: availableFields.map(field => [field.value, field.label]),
-                        value:
-                          selectedField !== null && selectedField !== undefined
-                            ? selectedField
-                            : undefined,
+                        value: selectedField,
                       };
+                    },
+                  },
+                },
+                {
+                  name: `field_formatting_field${fieldIndex}_remove`,
+                  config: {
+                    type: 'CheckboxControl',
+                    renderTrigger: true,
+                    label: t('Remove field'),
+                    default: false,
+                    description: t('Remove this field formatting block'),
+                    rerender: [
+                      ...ALL_FIELD_SELECTOR_CONTROL_NAMES,
+                      ...ALL_FIELD_REMOVE_CONTROL_NAMES,
+                      'fieldGroupingSettings',
+                    ],
+                    formDataOnChange: (
+                      value: unknown,
+                      _prevValue: unknown,
+                      formData: unknown,
+                    ) => {
+                      if (value !== true || !formData || typeof formData !== 'object') {
+                        return formData;
+                      }
+
+                      const nextFormData = compactFieldFormattingState(
+                        formData as Record<string, unknown>,
+                        fieldIndex,
+                        undefined,
+                      );
+
+                      nextFormData[
+                        `field_formatting_field${fieldIndex}_remove`
+                      ] = false;
+
+                      return nextFormData;
                     },
                   },
                 },
@@ -3760,7 +3862,26 @@ const config: ControlPanelConfig = {
       );
     
     // Синхронизируем значения временных контролов с fieldGroupingSettings
-    const fieldGroupingSettings = formData.fieldGroupingSettings || {};
+    const rawFieldGroupingSettings = formData.fieldGroupingSettings || {};
+    const selectedFields = new Set<string>();
+    for (let i = 0; i < MAX_FIELD_FORMATTING_SLOTS; i += 1) {
+      const selectorValue = formData[
+        `field_formatting_field${i}_selector` as keyof typeof formData
+      ] as unknown;
+      if (typeof selectorValue === 'string' && selectorValue.length > 0) {
+        selectedFields.add(selectorValue);
+      }
+    }
+
+    const fieldGroupingSettings = Object.entries(rawFieldGroupingSettings).reduce(
+      (acc, [fieldName, fieldSettings]) => {
+        if (selectedFields.has(fieldName) && fieldSettings !== null) {
+          acc[fieldName] = fieldSettings;
+        }
+        return acc;
+      },
+      {} as Record<string, any>,
+    );
     
     // Синхронизируем значения из временных контролов для каждого набора настроек (до 10)
     for (let i = 0; i < 10; i++) {
@@ -4119,6 +4240,8 @@ const config: ControlPanelConfig = {
       
       if (!selectedField) {
         // Если поле не выбрано, очищаем значения контролов
+        resultFormData[`field_formatting_field${i}_selector`] = null;
+        resultFormData[`field_formatting_field${i}_remove`] = false;
         resultFormData[`field_formatting_field${i}_maxWidth`] = undefined;
         resultFormData[`field_formatting_field${i}_truncate`] = false;
         resultFormData[`field_formatting_field${i}_valueFormat`] = undefined;

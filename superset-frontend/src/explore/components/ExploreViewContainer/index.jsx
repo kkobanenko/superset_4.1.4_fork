@@ -472,6 +472,14 @@ function ExploreViewContainer(props) {
           }
         : getFormDataFromControls(props.controls);
       props.actions.updateQueryFormData(newQueryFormData, props.chart.id);
+  
+            const PIVOT_FIELD_FORMATTING_CONTROL_REGEX = /^field_formatting_field\d+_(selector|remove)$/;
+  
+            const hasPivotFieldFormattingControlChange = controlNames =>
+              Array.isArray(controlNames) &&
+              controlNames.some(controlName =>
+                PIVOT_FIELD_FORMATTING_CONTROL_REGEX.test(controlName),
+              );
       props.actions.renderTriggered(new Date().getTime(), props.chart.id);
       addHistory();
     },

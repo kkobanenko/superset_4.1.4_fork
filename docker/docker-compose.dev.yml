@@ -92,7 +92,7 @@ services:
       - FLASK_ENV=development
       - SUPERSET_ENV=development
       - SUPERSET_LOAD_EXAMPLES=yes
-      - SUPERSET_VERSION=0.0.89
+      - SUPERSET_VERSION=0.0.107
     ports:
       - "18088:8088"  # Dev Superset accessible at http://localhost:18088
     volumes:

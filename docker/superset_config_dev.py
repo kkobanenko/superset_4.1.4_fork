@@ -20,6 +20,8 @@ Development configuration for Superset dev environment.
 This file is mounted into the dev container at /app/pythonpath/superset_config.py
 """
 
+import os
+
 # Enable proxy fix for running behind reverse proxy
 ENABLE_PROXY_FIX = True
 
@@ -37,11 +39,10 @@ FLASK_ENV = "development"
 LOG_LEVEL = "DEBUG"
 
 # Version shown in Settings -> About (overrides version_info.json / package.json)
-VERSION_STRING = os.environ.get("SUPERSET_VERSION", "0.0.89")
+VERSION_STRING = os.environ.get("SUPERSET_VERSION", "0.0.107")
 
 # Explicitly set database URI to PostgreSQL (override any defaults)
 # This ensures we use PostgreSQL instead of SQLite
-import os
 # Always use PostgreSQL - override any SQLite defaults
 SQLALCHEMY_DATABASE_URI = os.environ.get(
     "SQLALCHEMY_DATABASE_URI",
