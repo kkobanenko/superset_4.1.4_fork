@@ -89,27 +89,5 @@ const safeData = Array.isArray(data)
 
 ## 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-* **Статус**: 🟩 Готово (код уже применён)
-* **Изменено (фактически):**
-* `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/react-pivottable/utilities.js`
-  * [x] Внедрена фильтрация `null` и `typeof !== 'object'` в `forEachRecord` (строки 1400-1402).
-
-* `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/plugin/transformProps.ts`
-  * [x] Добавлен массив `safeData` для превентивной очистки перед рендерингом (строки 1234-1239).
-  * [x] `safeData` используется вместо `data` во всех точках передачи: `isNumeric()`, `getColorFormatters()`, возвращаемый объект props (`data: safeData`).
-
-* **Тестирование и проверки:**
-* [ ] Наличие `null` подтверждено в DevTools (Network).
-* [ ] Ошибка `Cannot read properties of null` полностью устранена.
-* [ ] Визуализация загружается и работает корректно.
-
-* **Сборка и Git-флоу (Шаг 5):**
-* [x] Сборка фронтенда (`superset-frontend` и плагинов) выполнена успешно (выполнен `npm run plugins:build`, а затем пересобран основной бандл `npm run build` за ~122s).
-* [x] Контейнеры запущены через `docker-compose.dev.yml` (superset_dev, postgres, redis — все Healthy).
-* [x] Версия `0.0.108` проверена (`printenv SUPERSET_VERSION` = `0.0.108`).
-* [x] Git-флоу: коммит `d04955852` в ветку `feature/bug_w_null_values`, fast-forward merge в `dev`, push выполнен.
-
-* **Замечания Исполнителя:**
-* Оба защитных слоя (Core Pivot Layer и Plugin Layer) уже реализованы в кодовой базе. Код соответствует диффу из плана Архитектора. Дополнительные правки кода не потребовались.
-* Первый push был отклонён GitHub Push Protection из-за Mapbox token в `llm_context.txt`. Файл исключён из коммита.
-* Дополнительно выполнен `npm run plugins:build` и повторный `npm run build`, чтобы гарантированно применить кэш и пересобрать все ассеты плагинов. Контейнеры переподняты.
+* **Статус**: 🟨 В процессе сборки
+* **Информация**: Проблема идентифицирована в коммите b8fa60b3e, связанном с `smart number formatter`. В текущую ветку `feature/bug_w_null_values_table` восстановлены превентивные меры (null-проверки в `getColorFormatters.ts` и `transformProps.ts`). Запущена сборка фронтенда (`npm run plugins:build && npm run build`). Версия обновлена до `0.0.112`.

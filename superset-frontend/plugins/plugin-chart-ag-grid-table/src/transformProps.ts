@@ -158,9 +158,9 @@ const getComparisonColFormatter = (
     const numberFormat = currentColNumberFormat || savedFormat;
     formatter = currency
       ? new CurrencyFormatter({
-          d3Format: numberFormat,
-          currency,
-        })
+        d3Format: numberFormat,
+        currency,
+      })
       : getNumberFormatter(numberFormat);
   }
   return formatter;
@@ -173,43 +173,45 @@ const processComparisonDataRecords = memoizeOne(
     comparisonSuffix: string,
   ) {
     // Transform data
-    return originalData?.map(originalItem => {
-      const transformedItem: DataRecord = {};
-      originalColumns.forEach(origCol => {
-        if (
-          (origCol.isMetric || origCol.isPercentMetric) &&
-          !origCol.key.includes(comparisonSuffix) &&
-          origCol.isNumeric
-        ) {
-          const originalValue = originalItem[origCol.key] || 0;
-          const comparisonValue = origCol.isMetric
-            ? originalItem?.[`${origCol.key}__${comparisonSuffix}`] || 0
-            : originalItem[`%${origCol.key.slice(1)}__${comparisonSuffix}`] ||
+    return (originalData || [])
+      .filter((r: any): r is DataRecord => r !== null && typeof r === 'object')
+      .map(originalItem => {
+        const transformedItem: DataRecord = {};
+        originalColumns.forEach(origCol => {
+          if (
+            (origCol.isMetric || origCol.isPercentMetric) &&
+            !origCol.key.includes(comparisonSuffix) &&
+            origCol.isNumeric
+          ) {
+            const originalValue = originalItem[origCol.key] || 0;
+            const comparisonValue = origCol.isMetric
+              ? originalItem?.[`${origCol.key}__${comparisonSuffix}`] || 0
+              : originalItem[`%${origCol.key.slice(1)}__${comparisonSuffix}`] ||
               0;
-          const { valueDifference, percentDifferenceNum } =
-            calculateDifferences(
-              originalValue as number,
-              comparisonValue as number,
-            );
+            const { valueDifference, percentDifferenceNum } =
+              calculateDifferences(
+                originalValue as number,
+                comparisonValue as number,
+              );
 
-          transformedItem[`Main ${origCol.key}`] = originalValue;
-          transformedItem[`# ${origCol.key}`] = comparisonValue;
-          transformedItem[`△ ${origCol.key}`] = valueDifference;
-          transformedItem[`% ${origCol.key}`] = percentDifferenceNum;
-        }
+            transformedItem[`Main ${origCol.key}`] = originalValue;
+            transformedItem[`# ${origCol.key}`] = comparisonValue;
+            transformedItem[`△ ${origCol.key}`] = valueDifference;
+            transformedItem[`% ${origCol.key}`] = percentDifferenceNum;
+          }
+        });
+
+        Object.keys(originalItem).forEach(key => {
+          const isMetricOrPercentMetric = originalColumns.some(
+            col => col.key === key && (col.isMetric || col.isPercentMetric),
+          );
+          if (!isMetricOrPercentMetric) {
+            transformedItem[key] = originalItem[key];
+          }
+        });
+
+        return transformedItem;
       });
-
-      Object.keys(originalItem).forEach(key => {
-        const isMetricOrPercentMetric = originalColumns.some(
-          col => col.key === key && (col.isMetric || col.isPercentMetric),
-        );
-        if (!isMetricOrPercentMetric) {
-          transformedItem[key] = originalItem[key];
-        }
-      });
-
-      return transformedItem;
-    });
   },
 );
 
@@ -417,9 +419,9 @@ const processColumns = memoizeOne(function processColumns(
       } else if (isMetric || (isNumber && (numberFormat || currency))) {
         formatter = currency?.symbol
           ? new CurrencyFormatter({
-              d3Format: numberFormat,
-              currency,
-            })
+            d3Format: numberFormat,
+            currency,
+          })
           : getNumberFormatter(numberFormat);
       }
       return {
@@ -460,8 +462,19 @@ const getPageSize = (
 };
 
 const transformProps = (
-  chartProps: TableChartProps,
+  originalChartProps: TableChartProps,
 ): AgGridTableChartTransformedProps => {
+  const chartProps = {
+    ...originalChartProps,
+    queriesData: (originalChartProps.queriesData || []).map(q => ({
+      ...q,
+      data: Array.isArray(q.data)
+        ? q.data.filter(
+          (r: any): r is DataRecord => r !== null && typeof r === 'object',
+        )
+        : q.data,
+    })),
+  };
   const {
     height,
     width,
@@ -469,7 +482,7 @@ const transformProps = (
     queriesData = [],
     ownState: serverPaginationData,
     filterState,
-    hooks: { setDataMask = () => {}, onChartStateChange },
+    hooks: { setDataMask = () => { }, onChartStateChange },
     emitCrossFilters,
     theme,
   } = chartProps;
@@ -561,63 +574,64 @@ const transformProps = (
     selectedColumns?: ConditionalFormattingConfig[],
   ) {
     // Transform data
-    const relevantColumns = selectedColumns
-      ? originalColumns.filter(col =>
-          selectedColumns.some(scol => scol?.column?.includes(col.key)),
-        )
-      : originalColumns;
-
-    return originalData?.map(originalItem => {
-      const item: { [key: string]: BasicColorFormatterType } = {};
-      relevantColumns.forEach(origCol => {
-        if (
-          (origCol.isMetric || origCol.isPercentMetric) &&
-          !origCol.key.includes(ensureIsArray(timeOffsets)[0]) &&
-          origCol.isNumeric
-        ) {
-          const originalValue = originalItem[origCol.key] || 0;
-          const comparisonValue = origCol.isMetric
-            ? originalItem?.[
-                `${origCol.key}__${ensureIsArray(timeOffsets)[0]}`
+    const relevantColumns = originalColumns.filter(origCol =>
+      selectedColumns
+        ? selectedColumns.some(col => col?.column?.includes(origCol.key))
+        : true,
+    );
+    return (originalData || [])
+      .filter((r: any): r is DataRecord => r !== null && typeof r === 'object')
+      .map(originalItem => {
+        const item: { [key: string]: BasicColorFormatterType } = {};
+        relevantColumns.forEach(origCol => {
+          if (
+            (origCol.isMetric || origCol.isPercentMetric) &&
+            !origCol.key.includes(ensureIsArray(timeOffsets)[0]) &&
+            origCol.isNumeric
+          ) {
+            const originalValue = originalItem[origCol.key] || 0;
+            const comparisonValue = origCol.isMetric
+              ? originalItem?.[
+              `${origCol.key}__${ensureIsArray(timeOffsets)[0]}`
               ] || 0
-            : originalItem[
-                `%${origCol.key.slice(1)}__${ensureIsArray(timeOffsets)[0]}`
+              : originalItem[
+              `%${origCol.key.slice(1)}__${ensureIsArray(timeOffsets)[0]}`
               ] || 0;
-          const { percentDifferenceNum } = calculateDifferences(
-            originalValue as number,
-            comparisonValue as number,
-          );
-
-          if (selectedColumns) {
-            selectedColumns.forEach(col => {
-              if (col?.column?.includes(origCol.key)) {
-                const { arrow, arrowColor, backgroundColor } =
-                  calculateBasicStyle(
-                    percentDifferenceNum,
-                    col.colorScheme || comparisonColorScheme,
-                  );
-                item[col.column] = {
-                  mainArrow: arrow,
-                  arrowColor,
-                  backgroundColor,
-                };
-              }
-            });
-          } else {
-            const { arrow, arrowColor, backgroundColor } = calculateBasicStyle(
-              percentDifferenceNum,
-              comparisonColorScheme,
+            const { percentDifferenceNum } = calculateDifferences(
+              originalValue as number,
+              comparisonValue as number,
             );
-            item[`${origCol.key}`] = {
-              mainArrow: arrow,
-              arrowColor,
-              backgroundColor,
-            };
+
+            if (selectedColumns) {
+              selectedColumns.forEach(col => {
+                if (col?.column?.includes(origCol.key)) {
+                  const { arrow, arrowColor, backgroundColor } =
+                    calculateBasicStyle(
+                      percentDifferenceNum,
+                      col.colorScheme || comparisonColorScheme,
+                    );
+                  item[col.column] = {
+                    mainArrow: arrow,
+                    arrowColor,
+                    backgroundColor,
+                  };
+                }
+              });
+            } else {
+              const { arrow, arrowColor, backgroundColor } = calculateBasicStyle(
+                percentDifferenceNum,
+                comparisonColorScheme,
+              );
+              item[`${origCol.key}`] = {
+                mainArrow: arrow,
+                arrowColor,
+                backgroundColor,
+              };
+            }
           }
-        }
+        });
+        return item;
       });
-      return item;
-    });
   });
 
   const getBasicColorFormatterForColumn = (

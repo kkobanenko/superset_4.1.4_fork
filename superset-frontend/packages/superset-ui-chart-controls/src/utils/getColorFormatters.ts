@@ -51,7 +51,7 @@ export const getOpacity = (
     round(
       Math.abs(
         ((maxOpacity - minOpacity) / (extremeValue - cutoffPoint)) *
-          (value - cutoffPoint),
+        (value - cutoffPoint),
       ) + minOpacity,
       2,
     ),
@@ -110,36 +110,36 @@ export const getColorFunction = (
       comparatorFunction = (value: number, allValues: number[]) =>
         typeof targetValue === 'number' && value > targetValue!
           ? {
-              cutoffValue: targetValue!,
-              extremeValue: Math.max(...allValues),
-            }
+            cutoffValue: targetValue!,
+            extremeValue: Math.max(...allValues),
+          }
           : false;
       break;
     case Comparator.LessThan:
       comparatorFunction = (value: number, allValues: number[]) =>
         typeof targetValue === 'number' && value < targetValue!
           ? {
-              cutoffValue: targetValue!,
-              extremeValue: Math.min(...allValues),
-            }
+            cutoffValue: targetValue!,
+            extremeValue: Math.min(...allValues),
+          }
           : false;
       break;
     case Comparator.GreaterOrEqual:
       comparatorFunction = (value: number, allValues: number[]) =>
         typeof targetValue === 'number' && value >= targetValue!
           ? {
-              cutoffValue: targetValue!,
-              extremeValue: Math.max(...allValues),
-            }
+            cutoffValue: targetValue!,
+            extremeValue: Math.max(...allValues),
+          }
           : false;
       break;
     case Comparator.LessOrEqual:
       comparatorFunction = (value: number, allValues: number[]) =>
         typeof targetValue === 'number' && value <= targetValue!
           ? {
-              cutoffValue: targetValue!,
-              extremeValue: Math.min(...allValues),
-            }
+            cutoffValue: targetValue!,
+            extremeValue: Math.min(...allValues),
+          }
           : false;
       break;
     case Comparator.Equal:
@@ -207,14 +207,14 @@ export const getColorFunction = (
     case Comparator.Containing:
       comparatorFunction = (value: string) =>
         isString(value) &&
-        value?.toLowerCase().includes((targetValue as string).toLowerCase())
+          value?.toLowerCase().includes((targetValue as string).toLowerCase())
           ? { cutoffValue: targetValue!, extremeValue: targetValue! }
           : false;
       break;
     case Comparator.NotContaining:
       comparatorFunction = (value: string) =>
         isString(value) &&
-        !value?.toLowerCase().includes((targetValue as string).toLowerCase())
+          !value?.toLowerCase().includes((targetValue as string).toLowerCase())
           ? { cutoffValue: targetValue!, extremeValue: targetValue! }
           : false;
       break;
@@ -262,7 +262,7 @@ export const getColorFormatters = memoizeOne(
             (config?.operator !== undefined &&
               (MultipleValueComparators.includes(config?.operator)
                 ? config?.targetValueLeft !== undefined &&
-                  config?.targetValueRight !== undefined
+                config?.targetValueRight !== undefined
                 : config?.targetValue !== undefined)))
         ) {
           acc.push({
@@ -271,7 +271,9 @@ export const getColorFormatters = memoizeOne(
             toTextColor: config?.toTextColor,
             getColorFromValue: getColorFunction(
               { ...config, colorScheme: resolvedColorScheme },
-              data.map(row => row[config.column!] as number),
+              (data || [])
+                .filter(row => row && typeof row === 'object')
+                .map(row => row[config.column!] as number),
               alpha,
             ),
           });
