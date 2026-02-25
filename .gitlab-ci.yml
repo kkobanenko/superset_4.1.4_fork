@@ -127,7 +127,7 @@ build-docker-lean:
           # Проверка доступности Docker daemon
           if docker info > /dev/null 2>&1; then
             echo "✅ Docker daemon is ready!"
-            docker info | head -20
+            docker info
             return 0
           fi
           
@@ -395,7 +395,7 @@ build-docker-dev:
           # Проверка доступности Docker daemon
           if docker info > /dev/null 2>&1; then
             echo "✅ Docker daemon is ready!"
-            docker info | head -20
+            docker info
             return 0
           fi
           
