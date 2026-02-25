@@ -1397,7 +1397,9 @@ class PivotData {
 PivotData.forEachRecord = function (input, processRecord) {
   if (Array.isArray(input)) {
     // array of objects
-    return input.map(record => processRecord(record));
+    return input
+      .filter(record => record && typeof record === 'object')
+      .map(record => processRecord(record));
   }
   throw new Error(t('Unknown input format'));
 };

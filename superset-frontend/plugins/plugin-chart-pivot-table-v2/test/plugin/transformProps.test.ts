@@ -97,4 +97,31 @@ describe('PivotTableChart transformProps', () => {
       currencyFormat: { symbol: 'USD', symbolPosition: 'prefix' },
     });
   });
+
+  it('should filter null and non-object records from data', () => {
+    const chartPropsWithInvalidRecords = new ChartProps<QueryFormData>({
+      formData,
+      width: 800,
+      height: 600,
+      queriesData: [
+        {
+          data: [
+            { name: 'Valid', sum__num: 2, __timestamp: 599616000000 },
+            null,
+            'invalid',
+          ],
+          colnames: ['name', 'sum__num', '__timestamp'],
+          coltypes: [1, 0, 2],
+        },
+      ],
+      hooks: { setDataMask },
+      filterState: { selectedFilters: {} },
+      datasource: { verboseMap: {}, columnFormats: {} },
+      theme: supersetTheme,
+    });
+
+    expect(transformProps(chartPropsWithInvalidRecords as any).data).toEqual([
+      { name: 'Valid', sum__num: 2, __timestamp: 599616000000 },
+    ]);
+  });
 });

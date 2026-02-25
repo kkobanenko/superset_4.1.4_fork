@@ -1231,6 +1231,12 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     theme,
   } = chartProps;
   const { data, colnames, coltypes } = queriesData[0];
+  const safeData = Array.isArray(data)
+    ? data.filter(
+        (record): record is DataRecord =>
+          record !== null && typeof record === 'object',
+      )
+    : [];
   // Важно: chartProps.formData типизирован, но в рантайме/в generic типах Superset
   // это может быть PlainObject, поэтому работаем через "typedFormData".
   const typedFormData = chartProps.formData as unknown as PivotTableV2QueryFormData;
@@ -1336,7 +1342,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
           if (granularity) {
             // time column use formats based on granularity
             formatter = getTimeFormatterForGranularity(granularity);
-          } else if (isNumeric(temporalColname, data)) {
+          } else if (isNumeric(temporalColname, safeData)) {
             formatter = getTimeFormatter(DATABASE_DATETIME);
           } else {
             // if no column-specific format, print cell as is
@@ -1356,7 +1362,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     );
   const metricColorFormatters = getColorFormatters(
     conditionalFormatting,
-    data,
+    safeData,
     theme,
   );
   // Собираем globalTableSettings из rawFormData (как для fieldGroupingSettings),
@@ -1400,7 +1406,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
     width,
     height,
     margin: 0, // Default margin, можно сделать настраиваемым
-    data,
+    data: safeData,
     groupbyRows,
     groupbyColumns,
     metrics,

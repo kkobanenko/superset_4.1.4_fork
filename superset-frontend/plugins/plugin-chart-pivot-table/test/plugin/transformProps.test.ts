@@ -96,4 +96,5 @@ describe('PivotTableChart transformProps', () => {
       currencyFormat: { symbol: 'USD', symbolPosition: 'prefix' },
     });
   });
+
 });
