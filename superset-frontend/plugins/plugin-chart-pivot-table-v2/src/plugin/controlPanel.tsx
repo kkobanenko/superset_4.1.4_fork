@@ -3268,7 +3268,28 @@ const config: ControlPanelConfig = {
                       const selectorControl =
                         controls?.[`field_formatting_field${fieldIndex}_selector`];
                       const selectedField = selectorControl?.value;
-                      return !!selectedField;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return !metricLabels.includes(String(selectedField));
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -3339,6 +3360,30 @@ const config: ControlPanelConfig = {
                       if (!selectedField) {
                         return false;
                       }
+
+                      // Hide subtotal settings for metrics
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      if (metricLabels.includes(String(selectedField))) {
+                        return false;
+                      }
+
                       const subtotalShowControl =
                         controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
                       const subtotalShow = subtotalShowControl?.value;
@@ -3427,6 +3472,30 @@ const config: ControlPanelConfig = {
                       if (!selectedField) {
                         return false;
                       }
+
+                      // Hide subtotal settings for metrics
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      if (metricLabels.includes(String(selectedField))) {
+                        return false;
+                      }
+
                       const subtotalShowControl =
                         controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
                       const subtotalShow = subtotalShowControl?.value;
@@ -3513,6 +3582,30 @@ const config: ControlPanelConfig = {
                       if (!selectedField) {
                         return false;
                       }
+
+                      // Hide subtotal settings for metrics
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      if (metricLabels.includes(String(selectedField))) {
+                        return false;
+                      }
+
                       const subtotalShowControl =
                         controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
                       const subtotalShow = subtotalShowControl?.value;
@@ -3597,6 +3690,30 @@ const config: ControlPanelConfig = {
                       if (!selectedField) {
                         return false;
                       }
+
+                      // Hide subtotal settings for metrics
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      if (metricLabels.includes(String(selectedField))) {
+                        return false;
+                      }
+
                       const subtotalShowControl =
                         controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
                       const subtotalShow = subtotalShowControl?.value;
@@ -3679,6 +3796,30 @@ const config: ControlPanelConfig = {
                       if (!selectedField) {
                         return false;
                       }
+
+                      // Hide subtotal settings for metrics
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      if (metricLabels.includes(String(selectedField))) {
+                        return false;
+                      }
+
                       const subtotalShowControl =
                         controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
                       const subtotalShow = subtotalShowControl?.value;

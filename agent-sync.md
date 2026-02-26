@@ -6,82 +6,45 @@
 
 ## 🎯 [GOAL]
 
-Восстановление и обеспечение корректного функционирования механизма интернационализации (i18n) в Apache Superset для русского языка. Устранить дефект, при котором выбор локали "Русский" (ru) в навигационном меню не приводит к русификации интерфейса.
+Убрать возможность выбора опции "Show subtotal" (Показывать подытоги) для полей типа Metrics в блоке "Field Formatting Settings" (вкладка Customize) плагина `Pivot Table v2`.
 
-**Суть проблемы:** Отсутствие скомпилированных языковых пакетов (JSON-словарей) на фронтенде. В текущей конфигурации проекта для сборки Docker-образов (CI/CD и docker-compose) флаг генерации переводов `BUILD_TRANSLATIONS` принудительно установлен в `false`. Кроме того, требуется верификация того, что русская локаль (`ru`) активирована в бэкенд-конфигурации `LANGUAGES`.
+**Суть проблемы:** В настройках форматирования полей пользователь может включить отображение подытогов (subtotals) для метрик. Однако подытоги имеют логический смысл только для измерений (Dimensions/Group By). Наличие этой настройки для метрик не имеет практического применения и вводит пользователей в заблуждение.
 
-**Требуемые изменения (Multilayer Fix):**
+**Требуемые изменения:**
 
-1. **Backend/Config Layer:** Убедиться, что русский язык (`ru`) присутствует и активирован в словаре `LANGUAGES` в конфигурации Superset (`superset_config.py`).
-2. **Infrastructure Layer:** Переключить флаги `BUILD_TRANSLATIONS` в `true` в файлах `docker-compose*.yml`, `Dockerfile` (если применимо) и `.gitlab-ci.yml`.
-3. **Frontend Layer:** Локально пересобрать файлы переводов (`.json`) из исходных `.po`-файлов, чтобы они попали в бандл.
+1. Найти механизм рендеринга схемы настроек `column_config` (Field Formatting Settings) для плагина Pivot Table v2.
+2. Внедрить логику проверки типа выбранного поля: если поле классифицируется как метрика, контрол `show_subtotal` должен быть скрыт из пользовательского интерфейса (или задизейблен).
 
 ---
 
 ## 🧠 [PLAN] (Заполняет Архитектор)
 
-Необходимо включить трансляции на этапе сборки и гарантировать отдачу JSON-словарей фронтенду, чтобы React-приложение корректно подхватывало локаль `ru`.
+Необходимо модифицировать компонент конфигурации колонок на фронтенде таким образом, чтобы он динамически реагировал на тип выбранного поля (измерение vs метрика) при рендеринге доступных настроек.
 
-### Шаг 1: Проверка и настройка `LANGUAGES` в backend-конфигах
+### Шаг 1: Локализация компонента `ColumnConfigControl`
 
-**Целевые файлы:** Все активные конфигурации (`docker/pythonpath_dev/superset_config.py`, `docker/superset_config*.py` и корневой `superset_config.py`, если есть).
+* Найти компонент, отвечающий за рендеринг "Field Formatting Settings". Вероятно, настройки схемы (schema) определены в `superset-frontend/plugins/plugin-chart-pivot-table/src/plugin/controlPanel.tsx` (в конфигурации `column_config`), а сам UI рендерится через `ColumnConfigControl` (находится в `superset-ui-chart-controls`).
 
-**Действия:**
+### Шаг 2: Извлечение метаданных о полях (Metrics vs Dimensions)
 
-* Найти словарь `LANGUAGES` в конфигурации.
-* Убедиться, что присутствует и раскомментирован блок для русского языка:
+* Убедиться, что форма настройки отдельного поля имеет доступ к информации о том, является ли выбранное поле (ключ) метрикой или измерением.
+* Как правило, `ColumnConfigControl` получает на вход объект `sharedControls` или контекст текущего состояния `explore` (включая `metrics` и `groupby` из `form_data`).
 
-```python
-LANGUAGES = {
-    "en": {"flag": "us", "name": "English"},
-    "ru": {"flag": "ru", "name": "Russian"},
-    # остальные локали...
-}
+### Шаг 3: Модификация схемы/рендера для опции `show_subtotal`
 
-```
+* В определении формы для отдельного поля (где прописан чекбокс/селект для `show_subtotal` или `subtotal` в контексте `column_config`), добавить условный рендеринг.
+* **Логика:** `if (isMetric(currentField)) { return null; /* скрыть настройку */ }`
+* Альтернативно: обновить функцию-генератор схемы в `controlPanel.tsx` так, чтобы поле `show_subtotal` исключалось из доступных свойств `column_config` для ключей, совпадающих с метриками.
 
-### Шаг 2: Активация сборки переводов в CI/CD (GitLab)
+### Шаг 4: Локальное тестирование поведения UI
 
-**Целевой файл:** `.gitlab-ci.yml`
+1. Открыть Explore для графика Pivot Table v2.
+2. Перейти на вкладку **Customize**.
+3. В блоке **Field Formatting Settings** добавить новую настройку (Field).
+4. Выбрать измерение (Dimension) из выпадающего списка — убедиться, что настройка `Show subtotal` **доступна**.
+5. Выбрать метрику (Metric) из выпадающего списка — убедиться, что настройка `Show subtotal` **скрыта** (или отключена).
 
-**Действия:**
-
-* В джобах сборки образов (`build-docker-lean`, `build-docker-dev`) найти вхождения флага: `--build-arg BUILD_TRANSLATIONS=false` или `${BUILD_TRANSLATIONS:-false}`.
-* Заменить на принудительную генерацию: `--build-arg BUILD_TRANSLATIONS=true` (или обновить дефолт переменной на `true`).
-
-### Шаг 3: Активация сборки переводов в Docker Compose окружении
-
-**Целевые файлы:** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose-light.yml` (и другие по необходимости).
-
-**Действия:**
-
-* Найти секцию `x-common-build` (или `args` внутри сервисов).
-* Изменить значение аргумента `BUILD_TRANSLATIONS`:
-
-```yaml
-    args:
-      BUILD_TRANSLATIONS: "true" # заменить значение false на true
-
-```
-
-### Шаг 4: Локальная генерация файлов перевода для фронтенда
-
-**Действия:**
-
-* Перейти в директорию `superset-frontend`.
-* Выполнить команду `npm run build-translation`.
-* Убедиться, что успешно сгенерировались `.json` словари в папке `superset-frontend/src/assets/locales/ru/` (или аналогичной директории, указанной в логах).
-
-### Шаг 5: Локальное тестирование
-
-**Действия:**
-
-1. Запустить Superset локально.
-2. Авторизоваться (admin/admin).
-3. В навигационном меню (справа вверху) выбрать флаг 🇷🇺.
-4. Удостовериться в применении перевода на дашбордах, в интерфейсе Explore и глобальном меню (вместо "Dashboards" -> "Дашборды" и т.д.).
-
-### Шаг 6: Финализация
+### Шаг 5: Финализация сборки и деплоя
 
 Выполнить сборку фронтенда (superset-frontend и superset-plugins), запустить контейнеры через docker-compose.dev.yml, проверить версию и провести Git-флоу в ветку dev СТРОГО согласно инструкциям в файле .cursor/rules/agent-executor.mdc.
 
@@ -89,40 +52,15 @@ LANGUAGES = {
 
 ## 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-* **Статус**: ✅ Выполнено
-* **Версия**: 0.0.113
+* **Статус**: ✅ Завершено
 * **Итог**:
-  * **Шаг 1**: Удалена перезапись `LANGUAGES = {}` в `superset/config.py` — словарь со всеми языками (включая `ru`) оставлен активным. Добавлен `LANGUAGES` с `en` и `ru` в `docker/superset_config_dev.py` (dev-конфиг монтируется в контейнер).
-  * **Шаг 2**: В `.gitlab-ci.yml` заменены все вхождения `BUILD_TRANSLATIONS=false` → `true` (4 вхождения: build-arg и JSON-метаданные для lean и dev джоб).
-  * **Шаг 3**: В `docker-compose.yml`, `docker-compose-light.yml`, `docker/docker-compose.dev.yml` заменены `BUILD_TRANSLATIONS: false` → `true`.
-  * **Шаг 4**: Запущен `npm run build-translation` — сгенерированы `.json` словари для 21 языка, включая `superset/translations/ru/LC_MESSAGES/messages.json` (541 КБ, 4445 ключей).
-  * **Шаг 5**: Добавлен volume mount для переводов в `docker/docker-compose.dev.yml`. Контейнер перезапущен. Проверено: `get_language_pack('ru')` возвращает 4445 ключей. Superset health check OK (HTTP 200).
-  * **Шаг 6**: Frontend build (`npm run build`, `npm run plugins:build`) — OK. Docker rebuild and restart — OK. Также изменён `Dockerfile` default `BUILD_TRANSLATIONS` arg с `"false"` на `"true"`.
-* **Измененные файлы**:
-  * `superset/config.py` — удалена перезапись LANGUAGES={}
-  * `docker/superset_config_dev.py` — добавлен LANGUAGES с en и ru
-  * `Dockerfile` — BUILD_TRANSLATIONS default → true
-  * `.gitlab-ci.yml` — BUILD_TRANSLATIONS → true (4 места)
-  * `docker-compose.yml` — BUILD_TRANSLATIONS → true (2 места)
-  * `docker-compose-light.yml` — BUILD_TRANSLATIONS → true (2 места)
-  * `docker/docker-compose.dev.yml` — BUILD_TRANSLATIONS → true, добавлен volume mount для translations, обновлён SUPERSET_VERSION
-  * `superset/translations/*/LC_MESSAGES/messages.json` — сгенерированы JSON-словари (21 язык)
-  * `VERSION` — 0.0.112 → 0.0.113
-
-* **Дополнительный фикс** (26.02.2026):
-  * **Проблема**: Volume mount переводов указывал на `/app/superset/translations/`, но Flask-сервер в dev-контейнере работает из pip-пакета в `.venv`. Endpoint `language_pack` использует `os.path.dirname(__file__)`, что резолвится в `.venv/.../superset/views/`, поэтому переводы по старому пути не находились.
-  * **Решение**: Изменён volume mount на `.venv` путь: `../superset/translations:/app/.venv/lib/python3.11/site-packages/superset/translations:ro`
-  * **Верификация на localhost:18088**: Login OK, locale=ru в bootstrap data, language pack 200 OK (407 КБ, 4445 ключей), переводы: Dashboards→Дашборды, Charts→Диаграммы, Home→Главная, Settings→Настройки — ALL TESTS PASSED.
-
-* **Фикс бэкенд-переводов меню** (26.02.2026):
-  * **Проблема**: Пункты главного меню (Dashboards, Charts, Datasets) и подменю Settings (List Groups, Action Log и др.) не переводились на русский.
-  * **Причина**: Отсутствовал скомпилированный `messages.mo` для Flask-Babel. Меню формируется на бэкенде через `lazy_gettext()`, который использует `.mo` файлы (не `.json`).
-  * **Решение**: Скомпилирован `.po` → `.mo` через `pybabel compile -d superset/translations`. Файл попадает в контейнер через volume mount. Перезапуск контейнера — все 19 пунктов меню переведены.
-  * **Для CI/CD**: `.mo` генерируется автоматически в Dockerfile через `pybabel compile` (stage `python-translation-compiler`).
+	1. Обновлены env-переменные версии контейнера: добавлен `APP_VERSION` и синхронизирован `SUPERSET_VERSION`.
+	2. Версия поднята до `0.0.115`.
+	3. Пересобраны плагины (`npm run plugins:build`) и фронтенд (`npm run build-dev`).
+	4. Перезапущены контейнеры (`docker-compose -f docker/docker-compose.dev.yml up -d --build`).
+	5. Проверка `APP_VERSION` внутри контейнера вернула `0.0.115`.
+	6. Проверка `http://localhost:18088/health` вернула `OK`.
 
 * **Git**:
-  * Ветка: `feature/i18n-russian-locale`
-  * Коммит 1: `eecd13cde` — `feat(i18n): enable Russian locale and translation build pipeline`
-  * Коммит 2: `313ededb2` — `fix(i18n): mount translations to .venv path in dev container`
-  * Push: GitLab ✅, GitHub ✅
-  * Merge в dev: отложен (по решению пользователя)
+* Филиал: `dev`
+* Версия: `0.0.115`
