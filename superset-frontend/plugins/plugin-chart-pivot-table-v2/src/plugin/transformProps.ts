@@ -1104,6 +1104,25 @@ function buildEffectiveFieldGroupingSettings(
       }
     }
 
+    // Собираем metricSubtotalSettings из временных контролов
+    const metricSubtotalSettings = fd[`field_formatting_field${i}_metricSubtotalSettings`];
+    if (metricSubtotalSettings && typeof metricSubtotalSettings === 'object') {
+       const normalizedMetricSettings: Record<string, unknown> = {};
+       Object.entries(metricSubtotalSettings as Record<string, any>).forEach(([metricKey, settings]) => {
+           const newSettings = { ...settings };
+           if (newSettings.subtotalValueFormat) {
+               // Используем normalizeValueCellFormatSettings для нормализации цветов и форматов
+               // Функция toCssColor внутри него обработает цвета
+               const normFormat = normalizeValueCellFormatSettings(newSettings.subtotalValueFormat);
+               if (normFormat) {
+                   newSettings.subtotalValueFormat = normFormat;
+               }
+           }
+           normalizedMetricSettings[metricKey] = newSettings;
+       });
+       nextFieldSettings.metricSubtotalSettings = normalizedMetricSettings;
+    }
+
     merged[selectedField] = nextFieldSettings;
   }
 

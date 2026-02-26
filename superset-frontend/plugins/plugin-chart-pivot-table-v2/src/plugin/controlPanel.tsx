@@ -36,6 +36,7 @@ import {
   validateNonEmpty,
 } from '@superset-ui/core';
 import { ADAPTIVE_FORMATTING, MetricsLayoutEnum } from '../types';
+import MetricSubtotalSettingsControl from './components/MetricSubtotalSettingsControl';
 
 // Расширенные опции формата даты с добавлением "month year" на русском
 const EXTENDED_D3_TIME_FORMAT_OPTIONS: [string, string][] = [
@@ -3340,6 +3341,123 @@ const config: ControlPanelConfig = {
               ],
               [
                 {
+                  name: `field_formatting_field${fieldIndex}_metricSubtotalSettings`,
+                  config: {
+                    type: MetricSubtotalSettingsControl,
+                    label: t('Per-Metric Subtotal Settings'),
+                    renderTrigger: true,
+                    default: {},
+                    description: t('Customize subtotal settings for each metric'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+
+                      // Hide subtotal settings for metrics (metrics cannot have subtotals of themselves in this context)
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      
+                      // If the selected field is a metric itself, don't show subtotal options (it doesn't make sense)
+                      if (metricLabels.includes(String(selectedField))) {
+                        return false;
+                      }
+
+                      // Check if Subtotal is enabled generic
+                      const subtotalShowControl =
+                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
+                      const subtotalShow = subtotalShowControl?.value;
+                      const fieldGroupingSettingsControl =
+                        controls?.fieldGroupingSettings;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl?.value || {};
+                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
+                      const subtotalEnabled = fieldSettings.subtotalEnabled;
+                      return (
+                        subtotalShow === 'show' ||
+                        (subtotalShow === undefined && subtotalEnabled === true)
+                      );
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      `field_formatting_field${fieldIndex}_subtotalShow`,
+                      'metrics', 
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: {} };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      
+                      // Get Metrics for the component to render the list
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: {}, metrics };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      
+                      return {
+                        value: fieldSettings?.metricSubtotalSettings || {},
+                        metrics,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
                   name: `field_formatting_field${fieldIndex}_subtotalLabel`,
                   config: {
                     type: 'TextControl',
@@ -4075,12 +4193,63 @@ const config: ControlPanelConfig = {
         `field_formatting_field${i}_rowValueFontColor` as keyof typeof formData;
       const rowValueBackgroundColorKey =
         `field_formatting_field${i}_rowValueBackgroundColor` as keyof typeof formData;
+      const subtotalShowKey = 
+        `field_formatting_field${i}_subtotalShow` as keyof typeof formData;
+      const subtotalLabelKey = 
+        `field_formatting_field${i}_subtotalLabel` as keyof typeof formData;
+      const subtotalAggregationKey = 
+        `field_formatting_field${i}_subtotalAggregation` as keyof typeof formData;
+      const subtotalValueFormatKey = 
+        `field_formatting_field${i}_subtotalValueFormat` as keyof typeof formData;
+      const subtotalFontColorKey = 
+        `field_formatting_field${i}_subtotalFontColor` as keyof typeof formData;
+      const subtotalBackgroundColorKey = 
+        `field_formatting_field${i}_subtotalBackgroundColor` as keyof typeof formData;
+      const metricSubtotalSettingsKey =
+        `field_formatting_field${i}_metricSubtotalSettings` as keyof typeof formData;
       
       if (formData[maxWidthKey] !== undefined) {
         fieldSettings.maxWidth = formData[maxWidthKey] as number;
       }
       if (formData[truncateKey] !== undefined) {
         fieldSettings.truncate = formData[truncateKey] as boolean;
+      }
+      if (formData[subtotalShowKey] !== undefined) {
+        fieldSettings.subtotalShow = formData[subtotalShowKey] as string;
+      }
+      // Очищаем legacy subtotalEnabled, так как он заменен на subtotalShow
+      if (fieldSettings.subtotalEnabled !== undefined) {
+        delete fieldSettings.subtotalEnabled;
+      }
+      if (formData[subtotalLabelKey] !== undefined) {
+        fieldSettings.subtotalLabel = formData[subtotalLabelKey] as string;
+      }
+      if (formData[subtotalAggregationKey] !== undefined) {
+        fieldSettings.subtotalAggregation = formData[subtotalAggregationKey] as string;
+      }
+      // Сохраняем формат и цвета сабтоталов как объект
+      if (
+        formData[subtotalValueFormatKey] !== undefined ||
+        formData[subtotalFontColorKey] !== undefined ||
+        formData[subtotalBackgroundColorKey] !== undefined
+      ) {
+        fieldSettings.subtotalValueFormat = {
+          ...(fieldSettings.subtotalValueFormat || {}),
+        };
+        if (formData[subtotalValueFormatKey] !== undefined) {
+          fieldSettings.subtotalValueFormat.valueFormat = formData[subtotalValueFormatKey] as string;
+        }
+        if (formData[subtotalFontColorKey] !== undefined) {
+          fieldSettings.subtotalValueFormat.fontColor = formData[subtotalFontColorKey] as string;
+        }
+        if (formData[subtotalBackgroundColorKey] !== undefined) {
+          fieldSettings.subtotalValueFormat.backgroundColor = formData[subtotalBackgroundColorKey] as string;
+        }
+      }
+      if (formData[metricSubtotalSettingsKey] !== undefined) {
+        fieldSettings.metricSubtotalSettings = formData[
+          metricSubtotalSettingsKey
+        ] as Record<string, any>;
       }
       if (formData[valueFormatKey] !== undefined) {
         fieldSettings.valueFormat = formData[valueFormatKey] as string;

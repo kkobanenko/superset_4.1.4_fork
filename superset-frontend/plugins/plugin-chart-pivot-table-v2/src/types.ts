@@ -31,6 +31,15 @@ import {
   Currency,
 } from '@superset-ui/core';
 import { ColorFormatters } from '@superset-ui/chart-controls';
+import type {
+  ValueCellFormatSettings,
+  MetricSubtotalSettingsType,
+} from './MetricSubtotalSettings';
+
+export type {
+  ValueCellFormatSettings,
+  MetricSubtotalSettingsType,
+} from './MetricSubtotalSettings';
 
 export interface PivotTableStylesProps {
   height: number;
@@ -140,16 +149,10 @@ export interface FieldGroupingSettings {
   metricValueFontSize?: number;
   metricValueFontColor?: string;
   metricValueBackgroundColor?: string;
-}
 
-// Настройки форматирования для value-ячейки (используется для total/subtotal строк/столбцов).
-// Специально делаем отдельным интерфейсом (без наследования), чтобы тип был максимально простым.
-export interface ValueCellFormatSettings {
-  valueFormat?: string; // D3 number format
-  dateFormat?: string; // D3 time format
-  fontSize?: number; // px
-  fontColor?: string; // css color
-  backgroundColor?: string; // css color
+  // Настройки subtotal для конкретных метрик (Metric-specific overrides)
+  // Ключ - имя метрики (label)
+  metricSubtotalSettings?: Record<string, MetricSubtotalSettingsType>;
 }
 
 // Глобальные настройки таблицы

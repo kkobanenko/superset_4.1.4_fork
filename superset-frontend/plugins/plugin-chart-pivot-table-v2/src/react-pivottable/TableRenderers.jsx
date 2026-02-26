@@ -22,7 +22,8 @@ import { getNumberFormatter, getTimeFormatter, SMART_DATE_ID, t, safeHtmlSpan, N
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
-import { ADAPTIVE_FORMATTING } from '../types';
+// import { ADAPTIVE_FORMATTING } from '../types';
+const ADAPTIVE_FORMATTING = 'ADAPTIVE_FORMATTING';
 
 // Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
 const isAdaptiveFormatting = (valueFormat) => {
@@ -55,11 +56,11 @@ function formatMonthYearRu(date) {
   } else {
     dateObj = date;
   }
-  
+
   if (isNaN(dateObj.getTime())) {
     return String(date);
   }
-  
+
   const month = dateObj.getMonth(); // 0-11
   const year = dateObj.getFullYear();
   return `${RUSSIAN_MONTHS[month]} ${year}`;
@@ -155,7 +156,7 @@ export class TableRenderer extends Component {
     // но конкретные subtotal строки/колонки будут скрыты в методах рендеринга через getFieldSubtotalSettings
     let colSubtotalEnabled = tableOptions.colSubTotals || false;
     let rowSubtotalEnabled = tableOptions.rowSubTotals || false;
-    
+
     // Проверяем per-field настройки для колонок
     if (colAttrs && colAttrs.length > 0) {
       const fieldGroupingSettings = tableOptions?.fieldGroupingSettings || {};
@@ -173,7 +174,7 @@ export class TableRenderer extends Component {
         colSubtotalEnabled = true;
       }
     }
-    
+
     // Проверяем per-field настройки для строк
     if (rowAttrs && rowAttrs.length > 0) {
       const fieldGroupingSettings = tableOptions?.fieldGroupingSettings || {};
@@ -286,7 +287,7 @@ export class TableRenderer extends Component {
     const { tableOptions } = this.props;
     const fieldGroupingSettings =
       tableOptions?.fieldGroupingSettings || {};
-    
+
     // Нормализация имени поля для сопоставления ключей, приходящих из UI.
     //
     // В UI поле может называться по-разному:
@@ -358,11 +359,11 @@ export class TableRenderer extends Component {
       }
       return false;
     });
-    
+
     if (matchingKey) {
       return fieldGroupingSettings[matchingKey];
     }
-    
+
     return {};
   }
 
@@ -391,7 +392,7 @@ export class TableRenderer extends Component {
   getFieldSubtotalSettings(attrName, isRow) {
     const fieldSettings = this.getFieldSettings(attrName);
     const globalTableSettings = this.getGlobalTableSettings();
-    
+
     // Обратная совместимость: если subtotalShow не задан, используем subtotalEnabled
     let subtotalShow = fieldSettings?.subtotalShow;
     if (subtotalShow === undefined && fieldSettings?.subtotalEnabled !== undefined) {
@@ -405,6 +406,37 @@ export class TableRenderer extends Component {
     // Если 'no_show', отключаем subtotal для этого поля
     if (subtotalShow === 'no_show') {
       return { enabled: false };
+    }
+
+    // Проверяем per-metric settings: если subtotal включен ('show'),
+    // но все метрики явно отключены, то скрываем subtotal целиком
+    if (subtotalShow === 'show' && fieldSettings?.metricSubtotalSettings) {
+      const metrics = this.props.tableOptions?.metrics || [];
+      const metricSubtotalSettings = fieldSettings.metricSubtotalSettings;
+
+      // Хелпер для получения label метрики (упрощенный вариант, так как getMetricLabel может быть недоступен или сложен)
+      const getMetricLabel = (m) => {
+        if (typeof m === 'string') return m;
+        if (m && typeof m === 'object') {
+          if (m.label) return m.label;
+          if (m.sqlExpression) return m.sqlExpression;
+        }
+        return null;
+      };
+
+      const hasEnabledMetric = metrics.some(metric => {
+        const label = getMetricLabel(metric);
+        if (!label) return true; // Если не удалось определить label, считаем включенным по умолчанию
+
+        const settings = metricSubtotalSettings[label];
+        // Если настроек нет -> enabled=true по умолчанию
+        // Если настройки есть, проверяем subtotalEnabled (default true)
+        return !settings || settings.subtotalEnabled !== false;
+      });
+
+      if (!hasEnabledMetric) {
+        return { enabled: false };
+      }
     }
 
     // Определяем общие настройки в зависимости от типа (row/col)
@@ -458,12 +490,12 @@ export class TableRenderer extends Component {
     // Поддерживаем основные агрегатные функции: SUM, COUNT, AVG, MIN, MAX, COUNT_DISTINCT
     // Учитываем регистронезависимость и возможные пробелы
     const aggregateFunctionPattern = /(?:sum|count|avg|min|max|count_distinct)\s*\(\s*`([^`]+)`\s*\)/gi;
-    
+
     // Извлекаем все метрики из формулы
     const baseMetrics = [];
     const metricMatches = [];
     let match;
-    
+
     while ((match = aggregateFunctionPattern.exec(sqlExpression)) !== null) {
       const sqlMetricName = match[1].trim();
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
@@ -472,15 +504,15 @@ export class TableRenderer extends Component {
       }
       // Пытаемся найти отображаемое имя метрики через маппинг
       // Если маппинг не найден, используем имя из SQL напрямую
-      const displayMetricName = metricNameMapping && metricNameMapping[sqlMetricName] 
-        ? metricNameMapping[sqlMetricName] 
+      const displayMetricName = metricNameMapping && metricNameMapping[sqlMetricName]
+        ? metricNameMapping[sqlMetricName]
         : sqlMetricName;
-      
+
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
         console.log('[parseSqlFormula] Mapped metric name:', sqlMetricName, '->', displayMetricName);
       }
-      
+
       baseMetrics.push(displayMetricName);
       metricMatches.push({
         metricName: displayMetricName,
@@ -499,7 +531,7 @@ export class TableRenderer extends Component {
     const operations = [];
     const operationPattern = /[+\-*/]/g;
     const operationMatches = [];
-    
+
     while ((match = operationPattern.exec(sqlExpression)) !== null) {
       operationMatches.push({
         operation: match[0],
@@ -511,17 +543,17 @@ export class TableRenderer extends Component {
     // Операция должна быть между двумя метриками
     // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
     if (typeof console !== 'undefined' && console.log) {
-      console.log('[parseSqlFormula] Processing operations:', { 
+      console.log('[parseSqlFormula] Processing operations:', {
         metricMatches: metricMatches.map(m => ({ ...m, match: sqlExpression.substring(m.startIndex, m.endIndex) })),
         operationMatches: operationMatches.map(op => ({ ...op, char: sqlExpression[op.index] })),
-        sqlExpression 
+        sqlExpression
       });
     }
-    
+
     for (let i = 0; i < metricMatches.length - 1; i += 1) {
       const currentMetricEnd = metricMatches[i].endIndex;
       const nextMetricStart = metricMatches[i + 1].startIndex;
-      
+
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
         console.log('[parseSqlFormula] Checking operations between metrics:', {
@@ -533,13 +565,13 @@ export class TableRenderer extends Component {
           substring: sqlExpression.substring(currentMetricEnd, nextMetricStart)
         });
       }
-      
+
       // Ищем операции между текущей и следующей метрикой
       // Операция может находиться сразу после конца первой метрики (>=) и до начала следующей (<)
       const operationsBetween = operationMatches.filter(
         op => op.index >= currentMetricEnd && op.index < nextMetricStart
       );
-      
+
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
         console.log('[parseSqlFormula] Operations found between metrics:', {
@@ -548,7 +580,7 @@ export class TableRenderer extends Component {
           operationsBetweenLength: operationsBetween.length
         });
       }
-      
+
       if (operationsBetween.length > 0) {
         // Берем первую операцию между метриками
         operations.push(operationsBetween[0].operation);
@@ -621,9 +653,9 @@ export class TableRenderer extends Component {
       if (baseMetricIndex === -1) {
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
         if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Base metric not found in metricsOrder:', { 
-            baseMetricName, 
-            metricsOrder, 
+          console.log('[getBaseMetricValue] Base metric not found in metricsOrder:', {
+            baseMetricName,
+            metricsOrder,
             metricsOrderLength: metricsOrder ? metricsOrder.length : 0,
             metricsOrderItems: metricsOrder ? metricsOrder.map((m, i) => `${i}: "${m}"`) : []
           });
@@ -635,13 +667,13 @@ export class TableRenderer extends Component {
       const metricKeyIndex = colAttrs.indexOf(metricKey);
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] colKey structure:', { 
-          colKey, 
+        console.log('[getBaseMetricValue] colKey structure:', {
+          colKey,
           colKeyLength: colKey ? colKey.length : 0,
           colKeyItems: colKey ? colKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
           colKeyValues: colKey ? colKey.map((item, i) => ({ index: i, value: item, type: typeof item })) : [],
-          metricKey, 
-          metricKeyIndex, 
+          metricKey,
+          metricKeyIndex,
           colAttrs,
           colAttrsLength: colAttrs ? colAttrs.length : 0,
           colAttrsItems: colAttrs ? colAttrs.map((item, i) => `${i}: "${item}"`) : []
@@ -669,7 +701,7 @@ export class TableRenderer extends Component {
             metricKeyIndex
           });
         }
-        
+
         // Получаем rowKeys и colKeys из props для поиска всех обычных ячеек
         const { rowKeys, colKeys } = this.props;
         if (!rowKeys || !colKeys || rowKeys.length === 0 || colKeys.length === 0) {
@@ -678,12 +710,12 @@ export class TableRenderer extends Component {
           }
           return null;
         }
-        
+
         // Для row subtotals rowKey имеет структуру [groupingLevel1]
         // Нужно найти все обычные ячейки с тем же rowKey[0] и colKey[0] (timestamp)
         const subtotalRowKeyPrefix = rowKey[0]; // Первый уровень группировки (например, "Москва и Центр")
         const timestamp = colKey && colKey.length > 0 ? colKey[0] : null;
-        
+
         if (!subtotalRowKeyPrefix || timestamp === null) {
           if (typeof console !== 'undefined' && console.log) {
             console.log('[getBaseMetricValue] Invalid subtotal rowKey or timestamp:', {
@@ -695,11 +727,11 @@ export class TableRenderer extends Component {
           }
           return null;
         }
-        
+
         // Суммируем значения базовых метрик из всех обычных ячеек
         let sum = 0;
         let foundAny = false;
-        
+
         for (let i = 0; i < rowKeys.length; i++) {
           const normalRowKey = rowKeys[i];
           // Проверяем, что обычная ячейка принадлежит этой подытоге строки
@@ -707,7 +739,7 @@ export class TableRenderer extends Component {
           if (!normalRowKey || normalRowKey.length === 0 || normalRowKey[0] !== subtotalRowKeyPrefix) {
             continue;
           }
-          
+
           // Для каждой обычной ячейки ищем colKey с тем же timestamp и базовой метрикой
           for (let j = 0; j < colKeys.length; j++) {
             const normalColKey = colKeys[j];
@@ -715,7 +747,7 @@ export class TableRenderer extends Component {
             if (!normalColKey || normalColKey.length === 0 || normalColKey[0] !== timestamp) {
               continue;
             }
-            
+
             // Создаем colKey для базовой метрики из этого colKey
             const baseMetricColKey = [...normalColKey];
             if (baseMetricColKey.length > metricKeyIndex) {
@@ -726,7 +758,7 @@ export class TableRenderer extends Component {
               }
               baseMetricColKey[metricKeyIndex] = baseMetricIndex;
             }
-            
+
             // Получаем агрегатор для обычной ячейки с базовой метрикой
             const normalAgg = pivotData.getAggregator(normalRowKey, baseMetricColKey);
             if (normalAgg) {
@@ -750,7 +782,7 @@ export class TableRenderer extends Component {
             }
           }
         }
-        
+
         if (!foundAny) {
           if (typeof console !== 'undefined' && console.log) {
             console.log('[getBaseMetricValue] No values found for row subtotal:', {
@@ -762,7 +794,7 @@ export class TableRenderer extends Component {
           }
           return null;
         }
-        
+
         if (typeof console !== 'undefined' && console.log) {
           console.log('[getBaseMetricValue] Row subtotal sum:', {
             baseMetricName,
@@ -772,7 +804,7 @@ export class TableRenderer extends Component {
             timestamp
           });
         }
-        
+
         return sum;
       } else if (isColSubtotal && !transposePivot) {
         // Для подытога колонки при transposePivot = false: метрики в колонках
@@ -930,9 +962,9 @@ export class TableRenderer extends Component {
     const parsed = this.parseSqlFormula(sqlExpression, metricsOrder || [], metricNameMapping || {});
     // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
     if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] Parsed formula:', { 
-        isValid: parsed.isValid, 
-        baseMetrics: parsed.baseMetrics, 
+      console.log('[computeFormulaValue] Parsed formula:', {
+        isValid: parsed.isValid,
+        baseMetrics: parsed.baseMetrics,
         operations: parsed.operations,
         baseMetricsLength: parsed.baseMetrics ? parsed.baseMetrics.length : 0
       });
@@ -941,10 +973,10 @@ export class TableRenderer extends Component {
       // Если формула не может быть распарсена, возвращаем null (будет использовано стандартное поведение)
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
-        console.log('[computeFormulaValue] Formula parsing failed:', { 
-          formulaMetricName, 
-          sqlExpression, 
-          isValid: parsed.isValid, 
+        console.log('[computeFormulaValue] Formula parsing failed:', {
+          formulaMetricName,
+          sqlExpression,
+          isValid: parsed.isValid,
           baseMetrics: parsed.baseMetrics,
           baseMetricsLength: parsed.baseMetrics ? parsed.baseMetrics.length : 0
         });
@@ -956,10 +988,10 @@ export class TableRenderer extends Component {
     const baseValues = [];
     // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
     if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] Starting to get base metric values:', { 
-        baseMetrics: parsed.baseMetrics, 
-        metricsOrder, 
-        metricNameMapping 
+      console.log('[computeFormulaValue] Starting to get base metric values:', {
+        baseMetrics: parsed.baseMetrics,
+        metricsOrder,
+        metricNameMapping
       });
     }
     for (const baseMetric of parsed.baseMetrics) {
@@ -978,12 +1010,12 @@ export class TableRenderer extends Component {
         colAttrs,
         metricKey
       );
-      
+
       // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
       if (typeof console !== 'undefined' && console.log) {
         console.log('[computeFormulaValue] Got value for base metric:', { baseMetric, value });
       }
-      
+
       if (value === null || value === undefined || Number.isNaN(value)) {
         // Если значение базовой метрики не найдено, возвращаем null
         // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
@@ -992,7 +1024,7 @@ export class TableRenderer extends Component {
         }
         return null;
       }
-      
+
       baseValues.push(value);
     }
 
@@ -1241,29 +1273,29 @@ export class TableRenderer extends Component {
     const settings = this.getFieldSettings(attrName);
     const colAttrs = this.props.cols || [];
     const rowAttrs = this.props.rows || [];
-    
+
     // Определяем тип поля (колонка или строка)
     const isColumn = colAttrs.indexOf(attrName) !== -1;
     const isRow = rowAttrs.indexOf(attrName) !== -1;
-    
+
     // Используем правильные настройки в зависимости от типа поля
     const normalized = {
       ...settings,
       fontSize: isColumn
         ? (settings.columnHeaderFontSize ?? settings.fontSize)
         : isRow
-        ? (settings.rowHeaderFontSize ?? settings.fontSize)
-        : settings.fontSize,
+          ? (settings.rowHeaderFontSize ?? settings.fontSize)
+          : settings.fontSize,
       fontColor: isColumn
         ? (settings.columnHeaderFontColor ?? settings.fontColor)
         : isRow
-        ? (settings.rowHeaderFontColor ?? settings.fontColor)
-        : settings.fontColor,
+          ? (settings.rowHeaderFontColor ?? settings.fontColor)
+          : settings.fontColor,
       backgroundColor: isColumn
         ? (settings.columnHeaderBackgroundColor ?? settings.backgroundColor)
         : isRow
-        ? (settings.rowHeaderBackgroundColor ?? settings.backgroundColor)
-        : settings.backgroundColor,
+          ? (settings.rowHeaderBackgroundColor ?? settings.backgroundColor)
+          : settings.backgroundColor,
     };
     return this.buildTextStyle(normalized, true);
   }
@@ -1273,29 +1305,29 @@ export class TableRenderer extends Component {
     const settings = this.getFieldSettings(attrName);
     const colAttrs = this.props.cols || [];
     const rowAttrs = this.props.rows || [];
-    
+
     // Определяем тип поля (колонка или строка)
     const isColumn = colAttrs.indexOf(attrName) !== -1;
     const isRow = rowAttrs.indexOf(attrName) !== -1;
-    
+
     // Используем правильные настройки в зависимости от типа поля
     const normalized = {
       ...settings,
       fontSize: isColumn
         ? (settings.columnValueFontSize ?? settings.fontSize)
         : isRow
-        ? (settings.rowValueFontSize ?? settings.fontSize)
-        : settings.fontSize,
+          ? (settings.rowValueFontSize ?? settings.fontSize)
+          : settings.fontSize,
       fontColor: isColumn
         ? (settings.columnValueFontColor ?? settings.fontColor)
         : isRow
-        ? (settings.rowValueFontColor ?? settings.fontColor)
-        : settings.fontColor,
+          ? (settings.rowValueFontColor ?? settings.fontColor)
+          : settings.fontColor,
       backgroundColor: isColumn
         ? (settings.columnValueBackgroundColor ?? settings.backgroundColor)
         : isRow
-        ? (settings.rowValueBackgroundColor ?? settings.backgroundColor)
-        : settings.backgroundColor,
+          ? (settings.rowValueBackgroundColor ?? settings.backgroundColor)
+          : settings.backgroundColor,
     };
     return this.buildTextStyle(normalized, false);
   }
@@ -1328,7 +1360,7 @@ export class TableRenderer extends Component {
   getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex = null) {
     const { tableOptions } = this.props;
     const { transposePivot, metricsOrder } = tableOptions || {};
-    
+
     const metricKey = this.getMetricKey();
     if (!metricKey) {
       return null;
@@ -1603,10 +1635,10 @@ export class TableRenderer extends Component {
     const isColumn = colAttrs.indexOf(attrName) !== -1;
     const headerFieldSettings = isColumn
       ? {
-          fontSize: fieldSettings.columnHeaderFontSize ?? fieldSettings.fontSize,
-          fontColor: fieldSettings.columnHeaderFontColor ?? fieldSettings.fontColor,
-          backgroundColor: fieldSettings.columnHeaderBackgroundColor ?? fieldSettings.backgroundColor,
-        }
+        fontSize: fieldSettings.columnHeaderFontSize ?? fieldSettings.fontSize,
+        fontColor: fieldSettings.columnHeaderFontColor ?? fieldSettings.fontColor,
+        backgroundColor: fieldSettings.columnHeaderBackgroundColor ?? fieldSettings.backgroundColor,
+      }
       : fieldSettings;
     // Создаем ref callback для применения стилей с !important
     const headerStyleRef = this.buildFieldStyleRef(headerFieldSettings, true);
@@ -1671,8 +1703,8 @@ export class TableRenderer extends Component {
         const rawHeaderValue = colKey[attrIdx];
         const valueHeaderStyle =
           metricKey &&
-          attrName === metricKey &&
-          (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
+            attrName === metricKey &&
+            (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
             ? this.getMetricHeaderStyle(String(rawHeaderValue))
             : this.getHeaderStyle(attrName);
         // Создаем ref callback для применения стилей с !important
@@ -1689,20 +1721,20 @@ export class TableRenderer extends Component {
           attrName === metricKey &&
           (typeof rawHeaderValue === 'string' || typeof rawHeaderValue === 'number')
           ? {
-              fontSize: valueHeaderFieldSettingsRaw.metricHeaderFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
-              fontColor: valueHeaderFieldSettingsRaw.metricHeaderFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
-              backgroundColor: valueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
-              maxWidth: valueHeaderFieldSettingsRaw.maxWidth,
-              truncate: valueHeaderFieldSettingsRaw.truncate,
-            }
+            fontSize: valueHeaderFieldSettingsRaw.metricHeaderFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
+            fontColor: valueHeaderFieldSettingsRaw.metricHeaderFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
+            backgroundColor: valueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
+            maxWidth: valueHeaderFieldSettingsRaw.maxWidth,
+            truncate: valueHeaderFieldSettingsRaw.truncate,
+          }
           : isColumnField
-          ? {
+            ? {
               ...valueHeaderFieldSettingsRaw,
               fontSize: valueHeaderFieldSettingsRaw.columnValueFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
               fontColor: valueHeaderFieldSettingsRaw.columnValueFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
               backgroundColor: valueHeaderFieldSettingsRaw.columnValueBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
             }
-          : valueHeaderFieldSettingsRaw;
+            : valueHeaderFieldSettingsRaw;
         const valueHeaderStyleRef = this.buildFieldStyleRef(valueHeaderFieldSettings, true);
         // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
         const valueHeaderStyleWithoutFormatting = {
@@ -1753,7 +1785,7 @@ export class TableRenderer extends Component {
         // (attrIdx === colKey.length). Следовательно, per-field `Show subtotal`
         // нужно проверять именно для этого attrName (например, "Дата").
         const subtotalSettings = this.getFieldSubtotalSettings(attrName, false);
-        
+
         // Если subtotal отключен для этого поля, пропускаем добавление th для subtotal
         // (но не прерываем весь метод, чтобы остальные заголовки рендерились)
         if (subtotalSettings.enabled) {
@@ -1867,11 +1899,11 @@ export class TableRenderer extends Component {
           const isRow = rowAttrsLocal.indexOf(r) !== -1;
           const normalizedRowHeaderFieldSettings = isRow
             ? {
-                ...rowHeaderFieldSettings,
-                fontSize: rowHeaderFieldSettings.rowHeaderFontSize ?? rowHeaderFieldSettings.fontSize,
-                fontColor: rowHeaderFieldSettings.rowHeaderFontColor ?? rowHeaderFieldSettings.fontColor,
-                backgroundColor: rowHeaderFieldSettings.rowHeaderBackgroundColor ?? rowHeaderFieldSettings.backgroundColor,
-              }
+              ...rowHeaderFieldSettings,
+              fontSize: rowHeaderFieldSettings.rowHeaderFontSize ?? rowHeaderFieldSettings.fontSize,
+              fontColor: rowHeaderFieldSettings.rowHeaderFontColor ?? rowHeaderFieldSettings.fontColor,
+              backgroundColor: rowHeaderFieldSettings.rowHeaderBackgroundColor ?? rowHeaderFieldSettings.backgroundColor,
+            }
             : rowHeaderFieldSettings;
           // Создаем ref callback для применения стилей с !important
           const rowHeaderStyleRef = this.buildFieldStyleRef(normalizedRowHeaderFieldSettings, true);
@@ -1902,27 +1934,27 @@ export class TableRenderer extends Component {
             ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
             : null;
           return (
-        <th
+            <th
               className="pvtTotalLabel pvtColTotalLabel"
-          key="padding"
-          role="columnheader button"
+              key="padding"
+              role="columnheader button"
               ref={rowTotalsLabelStyleRef}
-          onClick={this.clickHeaderHandler(
-            pivotData,
-            [],
-            this.props.rows,
-            0,
-            this.props.tableOptions.clickRowHeaderCallback,
-            false,
-            true,
-          )}
-        >
-          {colAttrs.length === 0
-            ? t('Total (%(aggregatorName)s)', {
-                aggregatorName: t(this.props.aggregatorName),
-              })
-            : null}
-        </th>
+              onClick={this.clickHeaderHandler(
+                pivotData,
+                [],
+                this.props.rows,
+                0,
+                this.props.tableOptions.clickRowHeaderCallback,
+                false,
+                true,
+              )}
+            >
+              {colAttrs.length === 0
+                ? t('Total (%(aggregatorName)s)', {
+                  aggregatorName: t(this.props.aggregatorName),
+                })
+                : null}
+            </th>
           );
         })()}
       </tr>
@@ -1968,7 +2000,7 @@ export class TableRenderer extends Component {
       const rowSubtotalSettings = rowSubtotalAttrName
         ? this.getFieldSubtotalSettings(rowSubtotalAttrName, true)
         : null;
-      
+
       if (rowSubtotalSettings && !rowSubtotalSettings.enabled) {
         return null;
       }
@@ -2013,8 +2045,8 @@ export class TableRenderer extends Component {
         const metricKey = this.getMetricKey();
         const rowValueHeaderStyle =
           metricKey &&
-          rowAttrs[i] === metricKey &&
-          (typeof r === 'string' || typeof r === 'number')
+            rowAttrs[i] === metricKey &&
+            (typeof r === 'string' || typeof r === 'number')
             ? this.getMetricHeaderStyle(String(r))
             : this.getHeaderStyle(rowAttrs[i]);
         // Создаем ref callback для применения стилей с !important
@@ -2031,20 +2063,20 @@ export class TableRenderer extends Component {
         // Для строк используем rowValueFontSize, rowValueFontColor, rowValueBackgroundColor (это значения строк, не заголовки)
         const rowValueHeaderFieldSettings = isMetricValue
           ? {
-              fontSize: rowValueHeaderFieldSettingsRaw.metricHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
-              fontColor: rowValueHeaderFieldSettingsRaw.metricHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
-              backgroundColor: rowValueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
-              maxWidth: rowValueHeaderFieldSettingsRaw.maxWidth,
-              truncate: rowValueHeaderFieldSettingsRaw.truncate,
-            }
+            fontSize: rowValueHeaderFieldSettingsRaw.metricHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
+            fontColor: rowValueHeaderFieldSettingsRaw.metricHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
+            backgroundColor: rowValueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
+            maxWidth: rowValueHeaderFieldSettingsRaw.maxWidth,
+            truncate: rowValueHeaderFieldSettingsRaw.truncate,
+          }
           : isRowField
-          ? {
+            ? {
               ...rowValueHeaderFieldSettingsRaw,
               fontSize: rowValueHeaderFieldSettingsRaw.rowValueFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
               fontColor: rowValueHeaderFieldSettingsRaw.rowValueFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
               backgroundColor: rowValueHeaderFieldSettingsRaw.rowValueBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
             }
-          : rowValueHeaderFieldSettingsRaw;
+            : rowValueHeaderFieldSettingsRaw;
         const rowValueHeaderStyleRef = this.buildFieldStyleRef(rowValueHeaderFieldSettings, true);
         // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
         const rowValueHeaderStyleWithoutFormatting = {
@@ -2095,7 +2127,7 @@ export class TableRenderer extends Component {
     const rowSubtotalSettings = rowSubtotalAttrName
       ? this.getFieldSubtotalSettings(rowSubtotalAttrName, true)
       : { enabled: true, label: globalTableSettings?.rowSubTotalsLabel || t('Subtotal'), valueFormat: globalTableSettings?.rowSubTotalsValueFormat };
-    
+
     // Если subtotal отключен для этого поля, не рендерим заголовок
     const rowSubtotalLabel = rowSubtotalSettings.enabled
       ? (rowSubtotalSettings.label || t('Subtotal'))
@@ -2130,11 +2162,11 @@ export class TableRenderer extends Component {
     const { tableOptions } = this.props;
     const { transposePivot, metricsSqlExpressions, metricsOrder, metricNameMapping } = tableOptions || {};
     const metricKey = this.getMetricKey();
-    
+
     const valueCells = visibleColKeys.map((colKey, colIndex) => {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator(rowKey, colKey);
-      
+
       // Для подытогов строк при transposePivot = false проверяем, является ли метрика формулой
       let aggValue = agg.value();
       if (isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
@@ -2161,7 +2193,7 @@ export class TableRenderer extends Component {
           // Если formulaValue равен null, используем стандартное значение aggValue
         }
       }
-      
+
       // Определяем, является ли текущая ячейка колонкой подытога.
       //
       // Ключевой принцип: per-field `No Show` должен влиять только на колонки,
@@ -2232,29 +2264,86 @@ export class TableRenderer extends Component {
       const metricValueStyle = metricName
         ? this.getMetricValueStyle(metricName)
         : {};
-      
+
       // Объединяем стили: сначала стили форматирования, затем цвет фона из formatter
       // Создаем ref callback для применения стилей с !important для totals/subtotals
       // Используем per-field настройки subtotal с учетом приоритета
       const rowSubtotalAttrName = isRowSubtotalRow && rowKey.length > 0 && rowKey.length <= rowAttrs.length
         ? rowAttrs[rowKey.length - 1]
         : null;
+      // Получаем настройки для поля
+      const rowSubtotalFieldSettings = rowSubtotalAttrName
+        ? this.getFieldSettings(rowSubtotalAttrName)
+        : null;
+      // Получаем настройки subtotal (из поля или дефолтные)
       const rowSubtotalSettings = rowSubtotalAttrName
         ? this.getFieldSubtotalSettings(rowSubtotalAttrName, true)
         : null;
+
+      // Получаем настройки для конкретной метрики в рамках этого subtotal поля
+      // Используем нормализованное имя метрики
+      const rowSubtotalMetricSettings =
+        rowSubtotalFieldSettings &&
+          rowSubtotalFieldSettings.metricSubtotalSettings &&
+          metricName
+          ? rowSubtotalFieldSettings.metricSubtotalSettings[metricName]
+          : null;
+
+      // Проверяем видимость subtotal для данной конкретной метрики
+      // Если для метрики явно выключено - скрываем (возвращаем пустую ячейку или null?)
+      // Важно: если мы вернем null, структура таблицы может поехать, если это не единственная ячейка.
+      // Но если мы просто оставим пустую ячейку, будет дырка.
+      // В контексте PivotTable, если мы скрываем значение, мы часто хотим скрыть и колонку/строку,
+      // но здесь мы внутри строки подытога. Если метрики идут по колонкам, то мы просто не рисуем значение.
+      if (isRowSubtotalRow && rowSubtotalMetricSettings && rowSubtotalMetricSettings.enabled === false) {
+        // Если пользователь явно отключил subtotal для ЭТОЙ метрики в ЭТОМ поле ->
+        // Рисуем пустую ячейку (или стилизуем как "скрытую").
+        // Но лучше просто не рисовать значение (aggValue = null), а стиль оставить базовым (или прозрачным).
+        // ИЛИ: Если это Row Subtotal, и метрики в Columns - то это просто одна ячейка.
+        // Если мы вернем <td />, она будет пустой.
+        aggValue = null;
+        // Также можно пометить, чтобы не рисовать стиль.
+      }
+
       const rowSubtotalStyleRef = isRowSubtotalRow && rowSubtotalSettings?.enabled && rowSubtotalSettings?.valueFormat
         ? this.buildValueCellStyleRef(rowSubtotalSettings.valueFormat)
         : isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat
-        ? this.buildValueCellStyleRef(globalTableSettings.rowSubTotalsValueFormat)
-        : null;
-      
+          ? this.buildValueCellStyleRef(globalTableSettings.rowSubTotalsValueFormat)
+          : null;
+
+      // Override style ref if metric specific settings exist
+      const rowSubtotalMetricStyleRef =
+        isRowSubtotalRow &&
+          rowSubtotalMetricSettings?.subtotalValueFormat
+          ? this.buildValueCellStyleRef(rowSubtotalMetricSettings.subtotalValueFormat)
+          : null;
+
       const colSubtotalStyleRef = isColSubtotalCol && colSubtotalSettings?.enabled && colSubtotalSettings?.valueFormat
         ? this.buildValueCellStyleRef(colSubtotalSettings.valueFormat)
         : isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat
-        ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
-        : null;
-      
+          ? this.buildValueCellStyleRef(globalTableSettings.colSubTotalsValueFormat)
+          : null;
+
+      // Logic for Col Subtotal Metric Settings
+      const colSubtotalMetricSettings =
+        colSubtotalSettings &&
+          this.getFieldSettings(colSubtotalAttrName)?.metricSubtotalSettings &&
+          metricName
+          ? this.getFieldSettings(colSubtotalAttrName).metricSubtotalSettings[metricName]
+          : null;
+
+      if (isColSubtotalCol && colSubtotalMetricSettings && colSubtotalMetricSettings.enabled === false) {
+        aggValue = null;
+      }
+
+      const colSubtotalMetricStyleRef =
+        isColSubtotalCol &&
+          colSubtotalMetricSettings?.subtotalValueFormat
+          ? this.buildValueCellStyleRef(colSubtotalMetricSettings.subtotalValueFormat)
+          : null;
+
       // Создаем ref callbacks для cellStyle и metricValueStyle
+
       // Используем правильные настройки для значений колонок/строк
       const cellFieldSettings = cellAttrName ? this.getFieldSettings(cellAttrName) : {};
       const colAttrsLocal = this.props.cols || [];
@@ -2263,17 +2352,17 @@ export class TableRenderer extends Component {
       const isRowField = cellAttrName && rowAttrsLocal.indexOf(cellAttrName) !== -1;
       const normalizedCellFieldSettings = cellAttrName
         ? (isColumnField
+          ? {
+            fontSize: cellFieldSettings.columnValueFontSize ?? cellFieldSettings.fontSize,
+            fontColor: cellFieldSettings.columnValueFontColor ?? cellFieldSettings.fontColor,
+            backgroundColor: cellFieldSettings.columnValueBackgroundColor ?? cellFieldSettings.backgroundColor,
+          }
+          : isRowField
             ? {
-                fontSize: cellFieldSettings.columnValueFontSize ?? cellFieldSettings.fontSize,
-                fontColor: cellFieldSettings.columnValueFontColor ?? cellFieldSettings.fontColor,
-                backgroundColor: cellFieldSettings.columnValueBackgroundColor ?? cellFieldSettings.backgroundColor,
-              }
-            : isRowField
-            ? {
-                fontSize: cellFieldSettings.rowValueFontSize ?? cellFieldSettings.fontSize,
-                fontColor: cellFieldSettings.rowValueFontColor ?? cellFieldSettings.fontColor,
-                backgroundColor: cellFieldSettings.rowValueBackgroundColor ?? cellFieldSettings.backgroundColor,
-              }
+              fontSize: cellFieldSettings.rowValueFontSize ?? cellFieldSettings.fontSize,
+              fontColor: cellFieldSettings.rowValueFontColor ?? cellFieldSettings.fontColor,
+              backgroundColor: cellFieldSettings.rowValueBackgroundColor ?? cellFieldSettings.backgroundColor,
+            }
             : cellFieldSettings)
         : null;
       const cellStyleRef = normalizedCellFieldSettings ? this.buildFieldStyleRef(normalizedCellFieldSettings, false) : null;
@@ -2283,13 +2372,13 @@ export class TableRenderer extends Component {
         fontColor: metricValueFieldSettings.metricValueFontColor ?? metricValueFieldSettings.fontColor,
         backgroundColor: metricValueFieldSettings.metricValueBackgroundColor ?? metricValueFieldSettings.backgroundColor,
       }, false) : null;
-      
+
       // Объединяем все ref callbacks
-      const allRefCallbacks = [rowSubtotalStyleRef, colSubtotalStyleRef, cellStyleRef, metricValueStyleRef].filter(Boolean);
+      const allRefCallbacks = [rowSubtotalStyleRef, colSubtotalStyleRef, rowSubtotalMetricStyleRef, colSubtotalMetricStyleRef, cellStyleRef, metricValueStyleRef].filter(Boolean);
       const combinedStyleRef = allRefCallbacks.length > 0
         ? (element) => {
-            allRefCallbacks.forEach(refCallback => refCallback(element));
-          }
+          allRefCallbacks.forEach(refCallback => refCallback(element));
+        }
         : null;
 
       // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
@@ -2303,14 +2392,27 @@ export class TableRenderer extends Component {
       // если у конкретной метрики задан valueFormat/dateFormat, применяем их к value-cell.
       // Важно: totals/subtotals форматы (globalTableSettings.*ValueFormat) имеют приоритет.
       const metricFormatSettings = metricName ? this.getFieldSettings(metricName) : undefined;
-      
+
       // Обработка форматирования для подытогов/итогов с учетом per-field настроек
       // Используем per-field настройки если они заданы, иначе глобальные настройки
+      // Также учитываем Per-Metric Subtotal Overrides
       let overrideFormatSettings = undefined;
-      
-      if (isRowSubtotalRow && rowSubtotalSettings?.enabled && rowSubtotalSettings?.valueFormat) {
+
+      if (isRowSubtotalRow && rowSubtotalMetricSettings?.subtotalValueFormat) {
+        // Высший приоритет: Per-Metric Subtotal settings для Row Subtotal
+        overrideFormatSettings = rowSubtotalMetricSettings.subtotalValueFormat;
+      } else if (isRowSubtotalRow && rowSubtotalSettings?.enabled && rowSubtotalSettings?.valueFormat) {
         // Используем per-field настройки для row subtotal
         overrideFormatSettings = rowSubtotalSettings.valueFormat;
+      } else if (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat) {
+        // Fallback на глобальные настройки
+        overrideFormatSettings = globalTableSettings.rowSubTotalsValueFormat;
+      } else if (isColSubtotalCol && colSubtotalMetricSettings?.subtotalValueFormat) {
+        // Высший приоритет: Per-Metric Subtotal settings для Col Subtotal
+        overrideFormatSettings = colSubtotalMetricSettings.subtotalValueFormat;
+      } else if (isColSubtotalCol && colSubtotalSettings?.enabled && colSubtotalSettings?.valueFormat) {
+        // Используем per-field настройки для col subtotal
+        overrideFormatSettings = colSubtotalSettings.valueFormat;
       } else if (isRowSubtotalRow && globalTableSettings?.rowSubTotalsValueFormat) {
         // Fallback на глобальные настройки
         overrideFormatSettings = globalTableSettings.rowSubTotalsValueFormat;
@@ -2324,7 +2426,7 @@ export class TableRenderer extends Component {
         // Используем настройки метрики для обычных ячеек
         overrideFormatSettings = metricFormatSettings;
       }
-      
+
       // Если используется адаптивное форматирование для подытогов строк
       if (isRowSubtotalRow && overrideFormatSettings && isAdaptiveFormatting(overrideFormatSettings?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
@@ -2336,7 +2438,7 @@ export class TableRenderer extends Component {
           overrideFormatSettings = undefined;
         }
       }
-      
+
       // Если используется адаптивное форматирование для подытогов колонок
       if (isColSubtotalCol && overrideFormatSettings && isAdaptiveFormatting(overrideFormatSettings?.valueFormat)) {
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
@@ -2348,7 +2450,7 @@ export class TableRenderer extends Component {
           overrideFormatSettings = undefined;
         }
       }
-      
+
       const formattedValue = this.formatAggValue(
         aggValue,
         formattedByAgg,
@@ -2377,7 +2479,7 @@ export class TableRenderer extends Component {
       const totalStyleRef = globalTableSettings?.rowTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.rowTotalsValueFormat)
         : null;
-      
+
       // Обработка адаптивного форматирования для итогов строк
       let totalFormatSettings = globalTableSettings?.rowTotalsValueFormat;
       if (isAdaptiveFormatting(totalFormatSettings?.valueFormat)) {
@@ -2391,7 +2493,7 @@ export class TableRenderer extends Component {
           totalFormatSettings = undefined;
         }
       }
-      
+
       const totalFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
@@ -2400,16 +2502,16 @@ export class TableRenderer extends Component {
       // Объединяем ref callback со стилями padding
       const totalCellRef = totalStyleRef
         ? (element) => {
-            if (element) {
-              element.style.padding = '5px';
-              totalStyleRef(element);
-            }
+          if (element) {
+            element.style.padding = '5px';
+            totalStyleRef(element);
           }
+        }
         : (element) => {
-            if (element) {
-              element.style.padding = '5px';
-            }
-          };
+          if (element) {
+            element.style.padding = '5px';
+          }
+        };
       totalCell = (
         <td
           role="gridcell"
@@ -2499,7 +2601,7 @@ export class TableRenderer extends Component {
     const totalValueCells = visibleColKeys.map(colKey => {
       const flatColKey = flatKey(colKey);
       const agg = pivotData.getAggregator([], colKey);
-      
+
       // Для итогов колонок при transposePivot = false проверяем, является ли метрика формулой
       let aggValue = agg.value();
       if (!transposePivot && metricsSqlExpressions && metricKey) {
@@ -2526,11 +2628,11 @@ export class TableRenderer extends Component {
           // Если formulaValue равен null, используем стандартное значение aggValue
         }
       }
-      
+
       const totalRowStyleRef = globalTableSettings?.columnTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
         : null;
-      
+
       // Обработка адаптивного форматирования для итогов колонок
       let totalRowFormatSettings = globalTableSettings?.columnTotalsValueFormat;
       if (isAdaptiveFormatting(totalRowFormatSettings?.valueFormat)) {
@@ -2544,7 +2646,7 @@ export class TableRenderer extends Component {
           totalRowFormatSettings = undefined;
         }
       }
-      
+
       const totalRowFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
@@ -2554,16 +2656,16 @@ export class TableRenderer extends Component {
       // Объединяем ref callback со стилями padding
       const combinedRef = totalRowStyleRef
         ? (element) => {
-            if (element) {
-              element.style.padding = '5px';
-              totalRowStyleRef(element);
-            }
+          if (element) {
+            element.style.padding = '5px';
+            totalRowStyleRef(element);
           }
+        }
         : (element) => {
-            if (element) {
-              element.style.padding = '5px';
-            }
-          };
+          if (element) {
+            element.style.padding = '5px';
+          }
+        };
 
       return (
         <td
@@ -2594,16 +2696,16 @@ export class TableRenderer extends Component {
       // Объединяем ref callback со стилями padding
       const grandTotalRef = grandTotalStyleRef
         ? (element) => {
-            if (element) {
-              element.style.padding = '5px';
-              grandTotalStyleRef(element);
-            }
+          if (element) {
+            element.style.padding = '5px';
+            grandTotalStyleRef(element);
           }
+        }
         : (element) => {
-            if (element) {
-              element.style.padding = '5px';
-            }
-          };
+          if (element) {
+            element.style.padding = '5px';
+          }
+        };
       grandTotalCell = (
         <td
           role="gridcell"
