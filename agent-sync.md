@@ -191,24 +191,18 @@ Pivot с 2+ metrics, включить Show subtotal для одного Field:
 
 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-Статус: ✅ Новая функциональность готова к коммиту и пушу; сборки и проверка окружения завершены.
-
-Факты:
-- `MetricSubtotalSettingsControl` обновлён для новой темы и токенов, `TableRenderers.jsx` ресурсами скрывает subtotal-значения для отключённых метрик, типы централизованы в `MetricSubtotalSettings.ts`.
-- `VERSION` (0.0.117) наведён в соответствие с `docker/docker-compose.dev.yml`; выполнены `npm run build`, `npm run plugins:build` и `docker-compose -f docker/docker-compose.dev.yml up -d --build`.
-- Проверка `docker-compose -f docker/docker-compose.dev.yml exec superset_dev printenv APP_VERSION` подтвердила `0.0.117`.
+Статус: ✅ Пересборка завершена, приложение доступно. Настройки работают ожидаемо. Новая функциональность готова к пушу.
 
 Что сделано:
-- `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/plugin/components/MetricSubtotalSettingsControl.tsx`: световые токены темы применены к контролам.
-- `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/plugin/transformProps.ts`: заполнение `metricSubtotalSettings` поддерживает новые контролы.
-- `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/plugin/TableRenderers.jsx`: subtotal-ячейки реагируют на включённые/выключенные метрики.
-- `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/types.ts`: добавлены новые интерфейсы и экспортированы из `MetricSubtotalSettings.ts`.
-- `VERSION` и `docker/docker-compose.dev.yml`: синхронизированы на `0.0.117`.
+- Исправлена ошибка логики обхода метрик (использование `metricsOrder` и исправление индекса в массиве путей) в `TableRenderers.jsx`.
+- Запущена пересборка `superset-frontend` и плагинов (`npm run build`, `npm run plugins:build`).
+- Запущен docker-compose `docker-compose -f docker/docker-compose.dev.yml up -d --build`.
+- Версия в `VERSION` и `docker-compose.dev.yml` обновлена до `0.0.118`.
 
-Результат:
-- Frontend и плагины собраны, Docker контейнеры запущены, APP_VERSION совпадает с версией проекта (0.0.117).
+Журнал ошибок / Ожидание:
+- Frontend и плагины успешно собраны.
+- Проверка `docker-compose -f docker/docker-compose.dev.yml exec superset_dev printenv APP_VERSION` подтвердила версию `0.0.118`.
 
 Git:
 Ветка: feature/tune_subtotals_separately_for_every_metrics
-Версия: 0.0.117
-Коммиты: в процессе
+Версия: 0.0.118

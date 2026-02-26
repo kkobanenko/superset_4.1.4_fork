@@ -411,24 +411,13 @@ export class TableRenderer extends Component {
     // Проверяем per-metric settings: если subtotal включен ('show'),
     // но все метрики явно отключены, то скрываем subtotal целиком
     if (subtotalShow === 'show' && fieldSettings?.metricSubtotalSettings) {
-      const metrics = this.props.tableOptions?.metrics || [];
+      const metrics = this.props.tableOptions?.metricsOrder || [];
       const metricSubtotalSettings = fieldSettings.metricSubtotalSettings;
 
-      // Хелпер для получения label метрики (упрощенный вариант, так как getMetricLabel может быть недоступен или сложен)
-      const getMetricLabel = (m) => {
-        if (typeof m === 'string') return m;
-        if (m && typeof m === 'object') {
-          if (m.label) return m.label;
-          if (m.sqlExpression) return m.sqlExpression;
-        }
-        return null;
-      };
+      const hasEnabledMetric = metrics.some(metricLabel => {
+        if (!metricLabel) return true; // Если не удалось определить label, считаем включенным по умолчанию
 
-      const hasEnabledMetric = metrics.some(metric => {
-        const label = getMetricLabel(metric);
-        if (!label) return true; // Если не удалось определить label, считаем включенным по умолчанию
-
-        const settings = metricSubtotalSettings[label];
+        const settings = metricSubtotalSettings[metricLabel];
         // Если настроек нет -> enabled=true по умолчанию
         // Если настройки есть, проверяем subtotalEnabled (default true)
         return !settings || settings.subtotalEnabled !== false;
@@ -751,7 +740,7 @@ export class TableRenderer extends Component {
             // Создаем colKey для базовой метрики из этого colKey
             const baseMetricColKey = [...normalColKey];
             if (baseMetricColKey.length > metricKeyIndex) {
-              baseMetricColKey[metricKeyIndex] = baseMetricIndex;
+              baseMetricColKey[metricKeyIndex] = baseMetricName;
             } else {
               while (baseMetricColKey.length <= metricKeyIndex) {
                 baseMetricColKey.push(null);
