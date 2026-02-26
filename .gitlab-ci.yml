@@ -196,7 +196,7 @@ build-docker-lean:
       echo "Starting Docker build..."
       if ! docker build \
         --target ${BUILD_TARGET} \
-        --build-arg BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS:-false} \
+        --build-arg BUILD_TRANSLATIONS=${BUILD_TRANSLATIONS:-true} \
         --build-arg LOAD_EXAMPLES_DUCKDB=${LOAD_EXAMPLES_DUCKDB:-false} \
         --build-arg INCLUDE_CHROMIUM=${INCLUDE_CHROMIUM:-false} \
         --tag ${IMAGE_TAG_BRANCH} \
@@ -228,7 +228,7 @@ build-docker-lean:
         "build_config": {
           "target": "${BUILD_TARGET}",
           "platform": "${BUILD_PLATFORM}",
-          "build_translations": "${BUILD_TRANSLATIONS:-false}",
+          "build_translations": "${BUILD_TRANSLATIONS:-true}",
           "load_examples_duckdb": "${LOAD_EXAMPLES_DUCKDB:-false}",
           "include_chromium": "${INCLUDE_CHROMIUM:-false}"
         },
@@ -461,7 +461,7 @@ build-docker-dev:
       echo "Starting Docker dev build..."
       if ! docker build \
         --target dev \
-        --build-arg BUILD_TRANSLATIONS=false \
+        --build-arg BUILD_TRANSLATIONS=true \
         --build-arg LOAD_EXAMPLES_DUCKDB=false \
         --build-arg INCLUDE_CHROMIUM=false \
         --tag ${IMAGE_TAG_DEV} \
@@ -492,7 +492,7 @@ build-docker-dev:
         "build_config": {
           "target": "dev",
           "platform": "linux/amd64",
-          "build_translations": "false",
+          "build_translations": "true",
           "load_examples_duckdb": "false",
           "include_chromium": "false"
         },

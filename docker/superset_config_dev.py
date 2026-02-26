@@ -58,3 +58,9 @@ SQLALCHEMY_DATABASE_URI = os.environ.get(
 #     "origins": ["*"],
 # }
 
+# Enable internationalization with Russian locale
+LANGUAGES = {
+    "en": {"flag": "us", "name": "English"},
+    "ru": {"flag": "ru", "name": "Russian"},
+}
+

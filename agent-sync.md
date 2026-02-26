@@ -6,82 +6,82 @@
 
 ## 🎯 [GOAL]
 
-Устранить критическое падение визуализации `Pivot Table V2` в Superset, сопровождающееся ошибкой фронтенда:
+Восстановление и обеспечение корректного функционирования механизма интернационализации (i18n) в Apache Superset для русского языка. Устранить дефект, при котором выбор локали "Русский" (ru) в навигационном меню не приводит к русификации интерфейса.
 
-`TypeError: Cannot read properties of null (reading 'last_name')`
+**Суть проблемы:** Отсутствие скомпилированных языковых пакетов (JSON-словарей) на фронтенде. В текущей конфигурации проекта для сборки Docker-образов (CI/CD и docker-compose) флаг генерации переводов `BUILD_TRANSLATIONS` принудительно установлен в `false`. Кроме того, требуется верификация того, что русская локаль (`ru`) активирована в бэкенд-конфигурации `LANGUAGES`.
 
-**Суть проблемы:** В массив данных, передаваемый в компонент `react-pivottable` (`PivotData`), проникают элементы со значением `null`. При попытке итерации и обращения к свойствам этих элементов (например, `record['last_name']`) происходит фатальная ошибка рендеринга.
+**Требуемые изменения (Multilayer Fix):**
 
-**Требуемые изменения (Двойная защита):**
-
-1. **Core Pivot Layer:** Добавить строгую фильтрацию в `react-pivottable/utilities.js`, чтобы исключить `null` и не-объекты на этапе обработки записей.
-2. **Plugin Layer:** Реализовать превентивную очистку данных в `transformProps.ts` перед их передачей в ядро сводной таблицы.
+1. **Backend/Config Layer:** Убедиться, что русский язык (`ru`) присутствует и активирован в словаре `LANGUAGES` в конфигурации Superset (`superset_config.py`).
+2. **Infrastructure Layer:** Переключить флаги `BUILD_TRANSLATIONS` в `true` в файлах `docker-compose*.yml`, `Dockerfile` (если применимо) и `.gitlab-ci.yml`.
+3. **Frontend Layer:** Локально пересобрать файлы переводов (`.json`) из исходных `.po`-файлов, чтобы они попали в бандл.
 
 ---
 
 ## 🧠 [PLAN] (Заполняет Архитектор)
 
-Необходимо реализовать отказоустойчивую обработку данных на фронтенде, гарантирующую стабильный рендеринг даже при получении некорректных payload'ов от бэкенда.
+Необходимо включить трансляции на этапе сборки и гарантировать отдачу JSON-словарей фронтенду, чтобы React-приложение корректно подхватывало локаль `ru`.
 
-### Шаг 1: Диагностика и подтверждение проблемы
+### Шаг 1: Проверка и настройка `LANGUAGES` в backend-конфигах
 
-1. Открыть проблемный дашборд или график (Explore).
-2. В DevTools браузера (вкладка **Network**) найти запрос `chart/data` (или аналогичный эндпоинт).
-3. Изучить структуру ответа (Response) и найти массив данных (обычно `result[0].data` или `queriesData[0].data`).
-4. Подтвердить наличие элементов `null` в массиве:
-* *Пример:* `data: [ {"last_name": "Smith"}, null, {"last_name": "Doe"} ]`
-
-
-
-> *Примечание: Защитный механизм должен быть реализован независимо от того, удастся ли локально поймать `null` в Network, так как мутация может происходить на этапе frontend-трансформаций.*
-
-### Шаг 2: Уровень ядра (Core Pivot) — Фильтрация в `utilities.js`
-
-**Целевой файл:** `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/react-pivottable/utilities.js`
+**Целевые файлы:** Все активные конфигурации (`docker/pythonpath_dev/superset_config.py`, `docker/superset_config*.py` и корневой `superset_config.py`, если есть).
 
 **Действия:**
 
-* Модифицировать функцию `PivotData.forEachRecord`.
-* Для ветвления `Array.isArray(input)` внедрить предварительную фильтрацию перед `map`:
+* Найти словарь `LANGUAGES` в конфигурации.
+* Убедиться, что присутствует и раскомментирован блок для русского языка:
 
-```diff
-PivotData.forEachRecord = function (input, processRecord) {
-  if (Array.isArray(input)) {
--   return input.map(record => processRecord(record));
-+   return input
-+     .filter(record => record && typeof record === 'object')
-+     .map(record => processRecord(record));
-  }
-  throw new Error(t('Unknown input format'));
-};
+```python
+LANGUAGES = {
+    "en": {"flag": "us", "name": "English"},
+    "ru": {"flag": "ru", "name": "Russian"},
+    # остальные локали...
+}
 
 ```
 
-### Шаг 3: Уровень плагина — Превентивная очистка в `transformProps.ts`
+### Шаг 2: Активация сборки переводов в CI/CD (GitLab)
 
-**Целевой файл:** `superset-frontend/plugins/plugin-chart-pivot-table-v2/src/plugin/transformProps.ts`
+**Целевой файл:** `.gitlab-ci.yml`
 
 **Действия:**
 
-* Внедрить валидацию свойства `data` перед формированием итоговых props.
-* Заменить прямую передачу на отфильтрованный `safeData`:
+* В джобах сборки образов (`build-docker-lean`, `build-docker-dev`) найти вхождения флага: `--build-arg BUILD_TRANSLATIONS=false` или `${BUILD_TRANSLATIONS:-false}`.
+* Заменить на принудительную генерацию: `--build-arg BUILD_TRANSLATIONS=true` (или обновить дефолт переменной на `true`).
 
-```typescript
-const safeData = Array.isArray(data)
-  ? data.filter(record => record && typeof record === 'object')
-  : [];
+### Шаг 3: Активация сборки переводов в Docker Compose окружении
+
+**Целевые файлы:** `docker-compose.yml`, `docker-compose.dev.yml`, `docker-compose-light.yml` (и другие по необходимости).
+
+**Действия:**
+
+* Найти секцию `x-common-build` (или `args` внутри сервисов).
+* Изменить значение аргумента `BUILD_TRANSLATIONS`:
+
+```yaml
+    args:
+      BUILD_TRANSLATIONS: "true" # заменить значение false на true
 
 ```
 
-* Использовать `safeData` при передаче пропсов в компонент сводной таблицы.
+### Шаг 4: Локальная генерация файлов перевода для фронтенда
 
-### Шаг 4: Локальное тестирование
+**Действия:**
 
-1. Открыть проблемный график с Pivot Table V2.
-2. Подтвердить успешный рендеринг без падений компонента.
-3. Проверить отсутствие ошибок `Cannot read properties of null` в консоли браузера.
+* Перейти в директорию `superset-frontend`.
+* Выполнить команду `npm run build-translation`.
+* Убедиться, что успешно сгенерировались `.json` словари в папке `superset-frontend/src/assets/locales/ru/` (или аналогичной директории, указанной в логах).
 
-### Шаг 5: Сборка, деплой и финализация
+### Шаг 5: Локальное тестирование
+
+**Действия:**
+
+1. Запустить Superset локально.
+2. Авторизоваться (admin/admin).
+3. В навигационном меню (справа вверху) выбрать флаг 🇷🇺.
+4. Удостовериться в применении перевода на дашбордах, в интерфейсе Explore и глобальном меню (вместо "Dashboards" -> "Дашборды" и т.д.).
+
+### Шаг 6: Финализация
 
 Выполнить сборку фронтенда (superset-frontend и superset-plugins), запустить контейнеры через docker-compose.dev.yml, проверить версию и провести Git-флоу в ветку dev СТРОГО согласно инструкциям в файле .cursor/rules/agent-executor.mdc.
 
@@ -89,16 +89,28 @@ const safeData = Array.isArray(data)
 
 ## 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-*   **Статус**: ✅ Завершено (Фикс внедрен, проверен и слит в dev)
-*   **Итог**:
-    *   Проблема `TypeError: cannot read properties of null (reading 'last_name')` устранена.
-    *   **Причина**: Входящие данные содержали элементы `null`, а конфигурация колонок `column_config` иногда приходила как `null` вместо ожидаемого объекта. Это приводило к падению в методах трансформации данных (`isNumeric`, `processColumns`, `getColorFormatters`).
-    *   **Реализовано**:
-        1. Внедрена фильтрация `null` записей на самом раннем этапе в `processColumns` (плагин `plugin-chart-table`).
-        2. Добавлены защитные проверки (null-guards) для `column_config` в `transformProps.ts`, так как дефолтные значения ES6 не срабатывают на `null`.
-        3. Добавлены проверки в вспомогательных функциях `isNumeric` и `processDataRecords`.
-        4. Релизована фильтрация в пакете `superset-ui-chart-controls/getColorFormatters.ts`.
-    *   **Проверка**: Дашборд «Монитор Superset» (ERO5NmxGB2m) загружается без ошибок, таблицы отображают данные. Бандл успешно пересобран (`9929.0376bffdf349841e7cc3.entry.js`).
-    *   **Git**: Изменения слиты в ветку `dev` и отправлены в репозитории GitLab и GitHub.
-    *   **CI/CD**: Исправлена ошибка `exit code 141` (SIGPIPE) в пайплайне GitLab. Проблема была вызвана использованием `head -20` в связке с `docker info` при активном `set -e`, что приводило к срыву пайпа.
-    *   **Вспомогательные файлы**: Все временные скрипты удалены, версии в `VERSION` и `docker-compose.dev.yml` возвращены к `0.0.112`.
+* **Статус**: ✅ Выполнено
+* **Версия**: 0.0.113
+* **Итог**:
+  * **Шаг 1**: Удалена перезапись `LANGUAGES = {}` в `superset/config.py` — словарь со всеми языками (включая `ru`) оставлен активным. Добавлен `LANGUAGES` с `en` и `ru` в `docker/superset_config_dev.py` (dev-конфиг монтируется в контейнер).
+  * **Шаг 2**: В `.gitlab-ci.yml` заменены все вхождения `BUILD_TRANSLATIONS=false` → `true` (4 вхождения: build-arg и JSON-метаданные для lean и dev джоб).
+  * **Шаг 3**: В `docker-compose.yml`, `docker-compose-light.yml`, `docker/docker-compose.dev.yml` заменены `BUILD_TRANSLATIONS: false` → `true`.
+  * **Шаг 4**: Запущен `npm run build-translation` — сгенерированы `.json` словари для 21 языка, включая `superset/translations/ru/LC_MESSAGES/messages.json` (541 КБ, 4445 ключей).
+  * **Шаг 5**: Добавлен volume mount для переводов в `docker/docker-compose.dev.yml`. Контейнер перезапущен. Проверено: `get_language_pack('ru')` возвращает 4445 ключей. Superset health check OK (HTTP 200).
+  * **Шаг 6**: Frontend build (`npm run build`, `npm run plugins:build`) — OK. Docker rebuild and restart — OK. Также изменён `Dockerfile` default `BUILD_TRANSLATIONS` arg с `"false"` на `"true"`.
+* **Измененные файлы**:
+  * `superset/config.py` — удалена перезапись LANGUAGES={}
+  * `docker/superset_config_dev.py` — добавлен LANGUAGES с en и ru
+  * `Dockerfile` — BUILD_TRANSLATIONS default → true
+  * `.gitlab-ci.yml` — BUILD_TRANSLATIONS → true (4 места)
+  * `docker-compose.yml` — BUILD_TRANSLATIONS → true (2 места)
+  * `docker-compose-light.yml` — BUILD_TRANSLATIONS → true (2 места)
+  * `docker/docker-compose.dev.yml` — BUILD_TRANSLATIONS → true, добавлен volume mount для translations, обновлён SUPERSET_VERSION
+  * `superset/translations/*/LC_MESSAGES/messages.json` — сгенерированы JSON-словари (21 язык)
+  * `VERSION` — 0.0.112 → 0.0.113
+
+* **Git**:
+  * Ветка: `feature/i18n-russian-locale`
+  * Коммит: `2d56ab4fd` — `feat(i18n): enable Russian locale and translation build pipeline`
+  * Push: GitLab ✅, GitHub ✅
+  * Merge в dev: отложен (по решению пользователя)

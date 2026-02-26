@@ -64,7 +64,7 @@ services:
       dockerfile: Dockerfile
       target: dev
       args:
-        BUILD_TRANSLATIONS: "false"
+        BUILD_TRANSLATIONS: "true"
         LOAD_EXAMPLES_DUCKDB: "false"
         INCLUDE_CHROMIUM: "false"
         INCLUDE_FIREFOX: "false"
@@ -92,7 +92,7 @@ services:
       - FLASK_ENV=development
       - SUPERSET_ENV=development
       - SUPERSET_LOAD_EXAMPLES=yes
-      - SUPERSET_VERSION=0.0.112
+      - SUPERSET_VERSION=0.0.113
     ports:
       - "18088:8088"  # Dev Superset accessible at http://localhost:18088
     volumes:
@@ -112,6 +112,8 @@ services:
       # Раскомментировать для hot-reload статики после локального npm run build:
       - ../superset/static/assets:/app/.venv/lib/python3.11/site-packages/superset/static/assets:ro
       - ../superset/static/assets:/app/superset/static/assets:ro
+      # Translations: mount host translation files so the backend can serve JSON language packs
+      - ../superset/translations:/app/superset/translations:ro
     networks:
       - superset_dev_net
       - clhs_sandbox_click_network  # Connect to production network to access ClickHouse

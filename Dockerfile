@@ -24,7 +24,7 @@ ARG PY_VER=3.11.13-slim-trixie
 ARG BUILDPLATFORM=${BUILDPLATFORM:-amd64}
 
 # Include translations in the final build
-ARG BUILD_TRANSLATIONS="false"
+ARG BUILD_TRANSLATIONS="true"
 
 # Build arg to pre-populate examples DuckDB file
 ARG LOAD_EXAMPLES_DUCKDB="false"
