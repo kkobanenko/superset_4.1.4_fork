@@ -240,12 +240,11 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
             visibility: ({ controls }: { controls?: any }) => {
               const fieldSettings = controls?.fieldGroupingSettings?.value || {};
               const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
-              // Показываем если subtotalShow задан и не равен 'general_setting'
+              // Показываем только при явном включении subtotalShow
               // Также поддерживаем обратную совместимость с subtotalEnabled
               const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
               return (
                 subtotalShow === 'show' ||
-                subtotalShow === 'no_show' ||
                 (subtotalShow === undefined && subtotalEnabled === true)
               );
             },
@@ -270,7 +269,6 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
               const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
               return (
                 subtotalShow === 'show' ||
-                subtotalShow === 'no_show' ||
                 (subtotalShow === undefined && subtotalEnabled === true)
               );
             },
@@ -295,7 +293,6 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
               const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
               return (
                 subtotalShow === 'show' ||
-                subtotalShow === 'no_show' ||
                 (subtotalShow === undefined && subtotalEnabled === true)
               );
             },
@@ -317,7 +314,6 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
               const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
               return (
                 subtotalShow === 'show' ||
-                subtotalShow === 'no_show' ||
                 (subtotalShow === undefined && subtotalEnabled === true)
               );
             },
@@ -337,7 +333,6 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
               const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
               return (
                 subtotalShow === 'show' ||
-                subtotalShow === 'no_show' ||
                 (subtotalShow === undefined && subtotalEnabled === true)
               );
             },
@@ -3387,7 +3382,7 @@ const config: ControlPanelConfig = {
                       const subtotalShowControl =
                         controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
                       const subtotalShow = subtotalShowControl?.value;
-                      // Показываем если subtotalShow задан и не равен 'general_setting'
+                      // Показываем только при явном включении subtotalShow
                       // Также поддерживаем обратную совместимость с subtotalEnabled
                       const fieldGroupingSettingsControl =
                         controls?.fieldGroupingSettings;
@@ -3397,7 +3392,6 @@ const config: ControlPanelConfig = {
                       const subtotalEnabled = fieldSettings.subtotalEnabled;
                       return (
                         subtotalShow === 'show' ||
-                        subtotalShow === 'no_show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
@@ -3507,7 +3501,6 @@ const config: ControlPanelConfig = {
                       const subtotalEnabled = fieldSettings.subtotalEnabled;
                       return (
                         subtotalShow === 'show' ||
-                        subtotalShow === 'no_show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
@@ -3617,7 +3610,6 @@ const config: ControlPanelConfig = {
                       const subtotalEnabled = fieldSettings.subtotalEnabled;
                       return (
                         subtotalShow === 'show' ||
-                        subtotalShow === 'no_show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
@@ -3725,7 +3717,6 @@ const config: ControlPanelConfig = {
                       const subtotalEnabled = fieldSettings.subtotalEnabled;
                       return (
                         subtotalShow === 'show' ||
-                        subtotalShow === 'no_show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
@@ -3831,7 +3822,6 @@ const config: ControlPanelConfig = {
                       const subtotalEnabled = fieldSettings.subtotalEnabled;
                       return (
                         subtotalShow === 'show' ||
-                        subtotalShow === 'no_show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
