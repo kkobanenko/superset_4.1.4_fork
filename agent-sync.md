@@ -109,8 +109,20 @@ LANGUAGES = {
   * `superset/translations/*/LC_MESSAGES/messages.json` — сгенерированы JSON-словари (21 язык)
   * `VERSION` — 0.0.112 → 0.0.113
 
+* **Дополнительный фикс** (26.02.2026):
+  * **Проблема**: Volume mount переводов указывал на `/app/superset/translations/`, но Flask-сервер в dev-контейнере работает из pip-пакета в `.venv`. Endpoint `language_pack` использует `os.path.dirname(__file__)`, что резолвится в `.venv/.../superset/views/`, поэтому переводы по старому пути не находились.
+  * **Решение**: Изменён volume mount на `.venv` путь: `../superset/translations:/app/.venv/lib/python3.11/site-packages/superset/translations:ro`
+  * **Верификация на localhost:18088**: Login OK, locale=ru в bootstrap data, language pack 200 OK (407 КБ, 4445 ключей), переводы: Dashboards→Дашборды, Charts→Диаграммы, Home→Главная, Settings→Настройки — ALL TESTS PASSED.
+
+* **Фикс бэкенд-переводов меню** (26.02.2026):
+  * **Проблема**: Пункты главного меню (Dashboards, Charts, Datasets) и подменю Settings (List Groups, Action Log и др.) не переводились на русский.
+  * **Причина**: Отсутствовал скомпилированный `messages.mo` для Flask-Babel. Меню формируется на бэкенде через `lazy_gettext()`, который использует `.mo` файлы (не `.json`).
+  * **Решение**: Скомпилирован `.po` → `.mo` через `pybabel compile -d superset/translations`. Файл попадает в контейнер через volume mount. Перезапуск контейнера — все 19 пунктов меню переведены.
+  * **Для CI/CD**: `.mo` генерируется автоматически в Dockerfile через `pybabel compile` (stage `python-translation-compiler`).
+
 * **Git**:
   * Ветка: `feature/i18n-russian-locale`
-  * Коммит: `2d56ab4fd` — `feat(i18n): enable Russian locale and translation build pipeline`
+  * Коммит 1: `eecd13cde` — `feat(i18n): enable Russian locale and translation build pipeline`
+  * Коммит 2: `313ededb2` — `fix(i18n): mount translations to .venv path in dev container`
   * Push: GitLab ✅, GitHub ✅
   * Merge в dev: отложен (по решению пользователя)
