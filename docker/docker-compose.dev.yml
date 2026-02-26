@@ -112,8 +112,9 @@ services:
       # Раскомментировать для hot-reload статики после локального npm run build:
       - ../superset/static/assets:/app/.venv/lib/python3.11/site-packages/superset/static/assets:ro
       - ../superset/static/assets:/app/superset/static/assets:ro
-      # Translations: mount host translation files so the backend can serve JSON language packs
-      - ../superset/translations:/app/superset/translations:ro
+      # Translations: mount host translation files so the backend can serve JSON language packs.
+      # The running server uses the pip-installed package from .venv, so mount there.
+      - ../superset/translations:/app/.venv/lib/python3.11/site-packages/superset/translations:ro
     networks:
       - superset_dev_net
       - clhs_sandbox_click_network  # Connect to production network to access ClickHouse
