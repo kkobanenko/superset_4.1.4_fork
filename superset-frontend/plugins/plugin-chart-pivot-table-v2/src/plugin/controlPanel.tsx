@@ -981,7 +981,7 @@ const config: ControlPanelConfig = {
             config: {
               type: 'CheckboxControl',
               label: t('Combine metrics'),
-              default: false,
+              default: true,
               description: t(
                 'Display metrics side by side within each column, as ' +
                   'opposed to each column being displayed side by side for each metric.',
@@ -4356,6 +4356,9 @@ const config: ControlPanelConfig = {
       metrics: getStandardizedControls().popAllMetrics(),
       groupbyColumns,
       fieldGroupingSettings,
+      // Ensure combineMetric defaults to true for enhanced pivot table
+      // so that metrics are shown side by side under each column value.
+      combineMetric: formData.combineMetric ?? true,
     };
     
     // Сначала восстанавливаем настройки для полей, которые уже выбраны в селекторах
