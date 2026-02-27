@@ -1,208 +1,58 @@
-🎯 [GOAL]
+# 🔄 Синхронизация Агентов
 
-Модифицировать Pivot Table v2 так, чтобы при наличии нескольких Metrics можно было настраивать параметры подытога (subtotal) отдельно для каждой метрики на уровне каждого поля группировки.
+**[STATE]** `EXECUTOR_TURN`
 
-Требование UI:
-В Customize → Field Formatting Settings → Field<n>:
+---
 
-Если Show subtotal для поля установлен в Show, то под ним должен появиться набор выпадающих блоков (по одному на каждую Metrics).
+## 🎯 [GOAL]
 
-В каждом блоке по метрике должны быть:
+Устранить регрессию в плагине `Pivot Table v2`, вызванную последними изменениями (внедрением гранулярных настроек подытогов). 
+Восстановить корректное отображение **всех** выбранных метрик из блока "Data -> Metrics" в заданном пользователем порядке. 
 
-чекбокс ShowSubtotal4Metrics (включить/выключить subtotal именно для этой метрики в рамках данного поля);
+**Суть проблемы:** На данный момент в сводной таблице рендерится только первая метрика из списка выбранных, остальные игнорируются или скрываются. Это критический баг базового функционала, который, вероятнее всего, возник из-за некорректной фильтрации массива метрик или случайного хардкода индекса при модификации пропсов/рендерера в рамках предыдущей задачи.
 
-если чекбокс включён: настройки
-Subtotal label, Subtotal aggregation, Subtotal number format, Subtotal font color, Subtotal background color для этой метрики.
+---
 
-Целевое поведение:
+## 🧠 [PLAN] (Заполняет Архитектор)
 
-При включенном subtotal на поле — subtotal можно включать/выключать по метрикам.
+Необходимо провести аудит изменений в связке `transformProps.ts` и `TableRenderers.jsx` (или `utilities.js`), чтобы отделить логику скрытия *подытогов* от логики рендеринга *основных колонок* метрик.
 
-Параметры subtotal (label/aggregation/format/colors) применяются к subtotal-ячейкам именно этой метрики.
+### Шаг 1: Аудит `transformProps.ts`
+* **Цель:** Проверить, как массив метрик из `formData` передается в ядро `react-pivottable`.
+* **Действия:**
+  1. Найти место, где формируется массив `vals` (или аналогичный пропс, отвечающий за список отображаемых значений/метрик в таблице).
+  2. Убедиться, что передается полный массив названий метрик в исходном порядке, например: `vals: metrics.map(m => m.label || m)`.
+  3. Если в последних коммитах массив метрик был случайно обрезан (например, `vals: [metrics[0]]` или некорректно отфильтрован по наличию конфигурации subtotal), восстановить маппинг всех элементов.
 
-Если для поля subtotal включён (Show), но все метрики отключены чекбоксами, итоговое поведение должно быть эквивалентно “subtotal не показывать для поля” (чтобы не было пустых строк/столбцов).
+### Шаг 2: Аудит `TableRenderers.jsx` (и `utilities.js`)
+* **Цель:** Найти некорректные условия рендеринга колонок.
+* **Действия:**
+  1. Проверить циклы отрисовки заголовков метрик (обычно итерация по `vals` или `metrics`).
+  2. Убедиться, что логика, добавленная для скрытия подытогов (`ShowSubtotal4Metrics`), применяется **только** к строкам/столбцам, которые классифицируются как `isSubtotal`.
+  3. Убрать любые условия, которые блокируют рендеринг *обычных* (не subtotal) ячеек данных или заголовков для метрик со второй и далее.
 
-🧠 [PLAN] (Заполняет Архитектор)
+### Шаг 3: Исправление и разделение логики
+* Внедрить четкое разделение: видимость колонки метрики зависит **исключительно** от наличия этой метрики в списке `Data -> Metrics`.
+* Видимость подытога для метрики зависит от настроек в `Customize -> Field Formatting Settings -> Field<n>`. Одно не должно блокировать другое.
 
-Нужно расширить модель FieldGroupingSettings и связку controlPanel.tsx → transformProps.ts → TableRenderers.jsx, добавив metric-specific subtotal overrides.
+### Шаг 4: Локальное тестирование
+1. Открыть дашборд / Explore с графиком Pivot Table v2.
+2. В блоке **Data -> Metrics** выбрать 3 разные метрики (например, `COUNT(*)`, `SUM(sales)`, `AVG(price)`).
+3. Проверить:
+   * Все 3 метрики отображаются в таблице.
+   * Порядок колонок метрик строго соответствует порядку в блоке настройки (Data -> Metrics).
+   * При изменении порядка (drag-and-drop) в панели настроек, столбцы в таблице мгновенно перестраиваются.
+4. Убедиться, что индивидуальные настройки подытогов (subtotals), сделанные в предыдущем таске, продолжают работать корректно для отображаемых метрик.
 
-Шаг 1: Зафиксировать текущую реализацию subtotal на поле (baseline)
+### Шаг 5: Финализация
+Выполнить сборку фронтенда (superset-frontend и superset-plugins), запустить контейнеры через docker-compose.dev.yml, проверить версию и провести Git-флоу в ветку dev СТРОГО согласно инструкциям в файле .cursor/rules/agent-executor.mdc.
 
-Найти текущие ключи формы, связанные с subtotal на поле:
+---
 
-field_formatting_field{i}_subtotalShow
+## 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-field_formatting_field{i}_subtotalLabel
-
-field_formatting_field{i}_subtotalAggregation
-
-field_formatting_field{i}_subtotalValueFormat (+ font/bg)
-
-Найти места применения в рантайме:
-
-superset-frontend/plugins/plugin-chart-pivot-table-v2/src/plugin/transformProps.ts — сборка fieldGroupingSettings
-
-superset-frontend/plugins/plugin-chart-pivot-table-v2/src/react-pivottable/TableRenderers.jsx — логика рендера subtotal
-
-Выход: понимание: где именно читаются настройки subtotal и как они применяются к “значению метрики” в subtotal-ячейках.
-
-Шаг 2: Спроектировать структуру хранения metric-specific subtotal настроек
-
-В types.ts (интерфейс FieldGroupingSettings) добавить новое поле, например:
-
-metricSubtotalSettings?: Record<string, MetricSubtotalSettings>
-
-Ввести новый интерфейс:
-
-export interface MetricSubtotalSettings {
-  enabled?: boolean; // ShowSubtotal4Metrics
-  subtotalLabel?: string;
-  subtotalAggregation?: 'sum' | 'max' | 'min';
-  subtotalValueFormat?: ValueCellFormatSettings; // number format + font/bg
-}
-
-Ключ Record<string, ...> должен быть стабильным идентификатором метрики, совпадающим с тем, что используете в UI/рендере:
-
-предпочтительно getMetricLabel(metric) / metric.label (если такой helper уже используется в плагине для metric-specific formatting)
-
-при необходимости: sanitize (замена пробелов/спецсимволов) только для ключей контролов, но не для отображаемого label.
-
-Шаг 3: Доработать controlPanel (динамическая генерация контролов под каждую метрику)
-
-В controlPanel.tsx в генерации Field Formatting Settings (внутри generateFieldControls):
-
-Добавить для Field<n> блоки “Subtotal per metric” только если:
-
-field_formatting_field{i}_subtotalShow === 'show'
-
-Для каждой метрики создать collapsible/expandable block (по аналогии с уже существующими metric-specific блоками форматирования, если они есть):
-
-Заголовок блока: имя метрики (verbose label).
-
-Внутри блока добавить контролы с уникальными ключами вида:
-
-field_formatting_field{i}_metric_{metricKey}_subtotalEnabled
-
-field_formatting_field{i}_metric_{metricKey}_subtotalLabel
-
-field_formatting_field{i}_metric_{metricKey}_subtotalAggregation
-
-field_formatting_field{i}_metric_{metricKey}_subtotalValueFormat
-
-field_formatting_field{i}_metric_{metricKey}_subtotalFontColor
-
-field_formatting_field{i}_metric_{metricKey}_subtotalBackgroundColor
-
-Реализовать зависимость видимости:
-
-Label/Aggregation/Format/Colors показываются только если subtotalEnabled === true для данной метрики.
-
-В formDataOverrides:
-
-при загрузке чарта: распаковать fieldGroupingSettings[i].metricSubtotalSettings в временные ключи формы;
-
-при сохранении/очистке слотов: корректно очищать временные ключи для удалённых Field-слотов (и, важно, для метрик).
-
-Шаг 4: Обновить transformProps: сборка metricSubtotalSettings из временных контролов
-
-В transformProps.ts:
-
-При сборке fieldGroupingSettings для каждого Field<n>:
-
-собрать metricSubtotalSettings из временных ключей по всем formData.metrics.
-
-Нормализовать значения:
-
-enabled по умолчанию: true (или undefined → трактовать как “включено”/“general”, выбрать стратегию и зафиксировать)
-
-если чекбокс выключен — enabled=false, остальные поля можно не писать/обнулять.
-
-Добавить защиту:
-
-если subtotalShow !== 'show' → metricSubtotalSettings можно игнорировать (не отправлять в renderer), чтобы не плодить шум.
-
-Шаг 5: Доработать TableRenderers.jsx: применение per-metric subtotal на рендере
-
-В TableRenderers.jsx (или ближайшей утилите, где формируются subtotal values):
-
-В точке, где решается:
-
-показывать ли subtotal для поля
-
-как форматировать значение subtotal
-
-какую агрегацию использовать (sum/max/min)
-
-Добавить ветвление по текущей метрике:
-
-найти текущий metric key/label для ячейки
-
-прочитать fieldSettings.metricSubtotalSettings[metricKey]
-
-Логика показа:
-
-если subtotalShow === 'show' и metricSubtotalSettings[metricKey].enabled === false → не показывать subtotal значение для этой метрики (и/или не учитывать эту метрику при отрисовке subtotal-строки/столбца).
-
-если для поля все метрики enabled === false → subtotal для поля не отображать целиком (эквивалент no_show), чтобы избежать пустых subtotal-строк/столбцов.
-
-Логика агрегации/формата/цветов:
-
-если для метрики задан override — использовать его
-
-иначе fallback:
-
-сначала текущие field-level subtotal настройки (если они остаются как общий дефолт)
-
-затем global table settings (как сейчас)
-
-Subtotal label per metric:
-
-найти текущее место, где применяется subtotalLabel
-
-сделать его metric-aware: если метрика имеет subtotalLabel, использовать её в соответствующем месте отображения (там, где сейчас применяется общий field subtotal label).
-
-Шаг 6: Тест-кейсы (ручные, обязательные)
-
-Pivot с 2+ metrics, включить Show subtotal для одного Field:
-
-метрика A: enabled=true, aggregation=sum, формат 0.0a, цвет/фон задать
-
-метрика B: enabled=false
-
-Проверка: subtotal появляется, для A — формат/цвет применён, для B — subtotal отсутствует (и нет мусора).
-
-Для того же Field выключить enabled у всех метрик:
-
-Проверка: subtotal строка/столбец исчезает полностью.
-
-Проверить, что настройки сохраняются при:
-
-сохранении чарта
-
-открытии Explore заново (restored via formDataOverrides)
-
-Проверить, что старые слайсы без metricSubtotalSettings продолжают работать (backward compatibility).
-
-Шаг 7: Финализация
-
-Выполнить сборку фронтенда (superset-frontend и superset-plugins), запустить контейнеры через docker-compose.dev.yml, проверить версию и провести Git-флоу в ветку dev СТРОГО согласно инструкциям в файле .cursor/rules/agent-executor.mdc 
-
-Архитектор-для-командной-работы…
-
-👷 [EXECUTION_LOG] (Заполняет Исполнитель)
-
-Статус: ✅ Пересборка завершена, приложение доступно. Настройки работают ожидаемо. Новая функциональность готова к пушу.
-
-Что сделано:
-- Исправлена ошибка логики обхода метрик (использование `metricsOrder` и исправление индекса в массиве путей) в `TableRenderers.jsx`.
-- Запущена пересборка `superset-frontend` и плагинов (`npm run build`, `npm run plugins:build`).
-- Запущен docker-compose `docker-compose -f docker/docker-compose.dev.yml up -d --build`.
-- Версия в `VERSION` и `docker-compose.dev.yml` обновлена до `0.0.118`.
-
-Журнал ошибок / Ожидание:
-- Frontend и плагины успешно собраны.
-- Проверка `docker-compose -f docker/docker-compose.dev.yml exec superset_dev printenv APP_VERSION` подтвердила версию `0.0.118`.
-
-Git:
-Ветка: feature/tune_subtotals_separately_for_every_metrics
-Версия: 0.0.118
+* **Статус**: ⏳ В ожидании (Ожидает действий Исполнителя)
+* **Итог**:
+    * (Заполняется по мере выполнения Исполнителем)
+* **Git**:
+    * (Заполняется после коммита/пуша)
