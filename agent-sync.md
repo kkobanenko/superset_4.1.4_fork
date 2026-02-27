@@ -51,8 +51,23 @@
 
 ## 👷 [EXECUTION_LOG] (Заполняет Исполнитель)
 
-* **Статус**: ⏳ В ожидании (Ожидает действий Исполнителя)
+* **Статус**: ✅ Выполнено
 * **Итог**:
-    * (Заполняется по мере выполнения Исполнителем)
+    * **Шаг 1 (Аудит transformProps.ts):** Проверен полностью. Массив метрик (`metricNames`) формируется из `props.formData.metrics` корректно, передаётся как `vals` в PivotData без обрезки или фильтрации. Никаких изменений, ограничивающих количество метрик, в diff dev..HEAD не обнаружено.
+    * **Шаг 2 (Аудит TableRenderers.jsx):** Проверен полностью. Логика подытогов (`isRowSubtotalRow`, `isColSubtotalCol`) применяется только к строкам/столбцам подытогов, не затрагивает обычные ячейки данных. Однако обнаружены 3 бага:
+        1. **Несоответствие имён свойств (критический):** UI и типы используют `subtotalEnabled`, но рендерер проверял `enabled` — подытог per-metric on/off не работал.
+        2. **Захардкоженный импорт ADAPTIVE_FORMATTING:** Вместо `import { ADAPTIVE_FORMATTING } from '../types'` стоял закомментированный import + локальная константа `const ADAPTIVE_FORMATTING = 'ADAPTIVE_FORMATTING'`.
+        3. **231+ строк debug-логирования:** 70+ вызовов `console.log` с обёртками `if (typeof console !== 'undefined')` и комментариями `// ВРЕМЕННОЕ ЛОГИРОВАНИЕ`, а также debug-блок в `getBaseMetricValue`.
+    * **Шаг 3 (Исправление):**
+        1. Исправлено `rowSubtotalMetricSettings.enabled` → `rowSubtotalMetricSettings.subtotalEnabled` (строка ~2013).
+        2. Исправлено `colSubtotalMetricSettings.enabled` → `colSubtotalMetricSettings.subtotalEnabled` (строка ~2046).
+        3. Восстановлен корректный `import { ADAPTIVE_FORMATTING } from '../types'` (строка ~25).
+        4. Удалены все 231+ строк debug-логирования (файл уменьшился с ~2872 до ~2593 строк).
+    * **Шаг 4 (Тестирование):** Требуется ручная проверка пользователем (3 метрики, порядок, drag-and-drop, per-metric subtotal).
+    * **Шаг 5 (Финализация):**
+        * VERSION: 0.0.118 → 0.0.119
+        * `npm run build` — webpack скомпилирован (2 warnings, 126s)
+        * `npm run plugins:build` — все 24 пакета скомпилированы (pivot-table-v2 за 4.895s)
+        * Docker: контейнер пересобран и запущен, APP_VERSION=0.0.119 подтверждён
 * **Git**:
-    * (Заполняется после коммита/пуша)
+    * (Ожидает коммита и пуша)

@@ -22,8 +22,7 @@ import { getNumberFormatter, getTimeFormatter, SMART_DATE_ID, t, safeHtmlSpan, N
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
-// import { ADAPTIVE_FORMATTING } from '../types';
-const ADAPTIVE_FORMATTING = 'ADAPTIVE_FORMATTING';
+import { ADAPTIVE_FORMATTING } from '../types';
 
 // Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
 const isAdaptiveFormatting = (valueFormat) => {
@@ -487,20 +486,12 @@ export class TableRenderer extends Component {
 
     while ((match = aggregateFunctionPattern.exec(sqlExpression)) !== null) {
       const sqlMetricName = match[1].trim();
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[parseSqlFormula] Found metric in SQL:', sqlMetricName, 'Available metrics:', metricNames, 'metricNameMapping:', metricNameMapping);
-      }
       // Пытаемся найти отображаемое имя метрики через маппинг
       // Если маппинг не найден, используем имя из SQL напрямую
       const displayMetricName = metricNameMapping && metricNameMapping[sqlMetricName]
         ? metricNameMapping[sqlMetricName]
         : sqlMetricName;
 
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[parseSqlFormula] Mapped metric name:', sqlMetricName, '->', displayMetricName);
-      }
 
       baseMetrics.push(displayMetricName);
       metricMatches.push({
@@ -530,30 +521,11 @@ export class TableRenderer extends Component {
 
     // Определяем операции между метриками
     // Операция должна быть между двумя метриками
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[parseSqlFormula] Processing operations:', {
-        metricMatches: metricMatches.map(m => ({ ...m, match: sqlExpression.substring(m.startIndex, m.endIndex) })),
-        operationMatches: operationMatches.map(op => ({ ...op, char: sqlExpression[op.index] })),
-        sqlExpression
-      });
-    }
 
     for (let i = 0; i < metricMatches.length - 1; i += 1) {
       const currentMetricEnd = metricMatches[i].endIndex;
       const nextMetricStart = metricMatches[i + 1].startIndex;
 
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[parseSqlFormula] Checking operations between metrics:', {
-          i,
-          currentMetricEnd,
-          nextMetricStart,
-          currentMetric: metricMatches[i].metricName,
-          nextMetric: metricMatches[i + 1].metricName,
-          substring: sqlExpression.substring(currentMetricEnd, nextMetricStart)
-        });
-      }
 
       // Ищем операции между текущей и следующей метрикой
       // Операция может находиться сразу после конца первой метрики (>=) и до начала следующей (<)
@@ -561,29 +533,12 @@ export class TableRenderer extends Component {
         op => op.index >= currentMetricEnd && op.index < nextMetricStart
       );
 
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[parseSqlFormula] Operations found between metrics:', {
-          i,
-          operationsBetween,
-          operationsBetweenLength: operationsBetween.length
-        });
-      }
 
       if (operationsBetween.length > 0) {
         // Берем первую операцию между метриками
         operations.push(operationsBetween[0].operation);
       } else {
         // Если операция не найдена, формула невалидна
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[parseSqlFormula] No operation found between metrics:', {
-            i,
-            currentMetricEnd,
-            nextMetricStart,
-            substring: sqlExpression.substring(currentMetricEnd, nextMetricStart)
-          });
-        }
         return { baseMetrics: [], operations: [], isValid: false };
       }
     }
@@ -605,10 +560,6 @@ export class TableRenderer extends Component {
   // Для итога колонки: создаем rowKey или colKey с базовой метрикой (в зависимости от transposePivot)
   getBaseMetricValue(baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey) {
     if (!baseMetricName || !pivotData || !metricKey) {
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Invalid parameters:', { baseMetricName, pivotData: !!pivotData, metricKey });
-      }
       return null;
     }
 
@@ -619,17 +570,9 @@ export class TableRenderer extends Component {
       let targetRowKey = [...rowKey];
       let targetColKey = [...colKey];
 
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Start:', { baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, transposePivot, rowAttrs, colAttrs, metricKey, metricsOrder });
-      }
 
       // Находим индекс базовой метрики в metricsOrder
       // Используем trim() для сравнения, так как metricsOrder может содержать пробелы в конце
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Searching for baseMetricName:', baseMetricName, 'in metricsOrder:', metricsOrder, 'type:', typeof metricsOrder, 'isArray:', Array.isArray(metricsOrder));
-      }
       let baseMetricIndex = -1;
       if (metricsOrder && Array.isArray(metricsOrder)) {
         for (let i = 0; i < metricsOrder.length; i++) {
@@ -640,39 +583,12 @@ export class TableRenderer extends Component {
         }
       }
       if (baseMetricIndex === -1) {
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Base metric not found in metricsOrder:', {
-            baseMetricName,
-            metricsOrder,
-            metricsOrderLength: metricsOrder ? metricsOrder.length : 0,
-            metricsOrderItems: metricsOrder ? metricsOrder.map((m, i) => `${i}: "${m}"`) : []
-          });
-        }
         return null;
       }
 
       // Находим позицию metricKey в colAttrs
       const metricKeyIndex = colAttrs.indexOf(metricKey);
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] colKey structure:', {
-          colKey,
-          colKeyLength: colKey ? colKey.length : 0,
-          colKeyItems: colKey ? colKey.map((item, i) => `${i}: ${item} (${typeof item})`) : [],
-          colKeyValues: colKey ? colKey.map((item, i) => ({ index: i, value: item, type: typeof item })) : [],
-          metricKey,
-          metricKeyIndex,
-          colAttrs,
-          colAttrsLength: colAttrs ? colAttrs.length : 0,
-          colAttrsItems: colAttrs ? colAttrs.map((item, i) => `${i}: "${item}"`) : []
-        });
-      }
       if (metricKeyIndex === -1) {
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] metricKey not found in colAttrs:', { metricKey, colAttrs });
-        }
         return null;
       }
 
@@ -680,23 +596,10 @@ export class TableRenderer extends Component {
         // Для подытога строки при transposePivot = false: метрики в колонках
         // Для row subtotals нужно суммировать значения базовых метрик из всех обычных ячеек,
         // которые принадлежат этой подытоге строки (имеют тот же rowKey[0] и colKey[0])
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Row subtotal - summing from normal cells:', {
-            rowKey,
-            colKey,
-            baseMetricName,
-            baseMetricIndex,
-            metricKeyIndex
-          });
-        }
 
         // Получаем rowKeys и colKeys из props для поиска всех обычных ячеек
         const { rowKeys, colKeys } = this.props;
         if (!rowKeys || !colKeys || rowKeys.length === 0 || colKeys.length === 0) {
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[getBaseMetricValue] No rowKeys or colKeys available for row subtotal');
-          }
           return null;
         }
 
@@ -706,14 +609,6 @@ export class TableRenderer extends Component {
         const timestamp = colKey && colKey.length > 0 ? colKey[0] : null;
 
         if (!subtotalRowKeyPrefix || timestamp === null) {
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[getBaseMetricValue] Invalid subtotal rowKey or timestamp:', {
-              subtotalRowKeyPrefix,
-              timestamp,
-              rowKey,
-              colKey
-            });
-          }
           return null;
         }
 
@@ -757,15 +652,6 @@ export class TableRenderer extends Component {
                 if (!Number.isNaN(numValue)) {
                   sum += numValue;
                   foundAny = true;
-                  if (typeof console !== 'undefined' && console.log) {
-                    console.log('[getBaseMetricValue] Added value from normal cell:', {
-                      normalRowKey,
-                      baseMetricColKey,
-                      normalValue,
-                      numValue,
-                      sum
-                    });
-                  }
                 }
               }
             }
@@ -773,26 +659,9 @@ export class TableRenderer extends Component {
         }
 
         if (!foundAny) {
-          if (typeof console !== 'undefined' && console.log) {
-            console.log('[getBaseMetricValue] No values found for row subtotal:', {
-              subtotalRowKeyPrefix,
-              timestamp,
-              baseMetricName,
-              baseMetricIndex
-            });
-          }
           return null;
         }
 
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Row subtotal sum:', {
-            baseMetricName,
-            baseMetricIndex,
-            sum,
-            subtotalRowKeyPrefix,
-            timestamp
-          });
-        }
 
         return sum;
       } else if (isColSubtotal && !transposePivot) {
@@ -819,107 +688,19 @@ export class TableRenderer extends Component {
         return null;
       }
 
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Before getAggregator:', { baseMetricName, baseMetricIndex, targetRowKey, targetColKey, metricKeyIndex });
-      }
-
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ - проверяем, какие ключи есть в pivotData
-      if (typeof console !== 'undefined' && console.log && isRowSubtotal && !transposePivot) {
-        // Пытаемся найти пример обычной ячейки для той же строки, чтобы сравнить структуру colKey
-        // Для этого ищем первую обычную ячейку с той же строкой
-        const { colKeys } = this.props;
-        if (colKeys && colKeys.length > 0) {
-          // Ищем colKey для базовой метрики "Факт" (baseMetricIndex = 2)
-          // Для этого создаем colKey с индексом базовой метрики вместо имени
-          const exampleColKeyForBaseMetric = [...colKey];
-          // Заменяем имя метрики на индекс базовой метрики
-          if (exampleColKeyForBaseMetric.length > metricKeyIndex) {
-            exampleColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
-          } else {
-            while (exampleColKeyForBaseMetric.length <= metricKeyIndex) {
-              exampleColKeyForBaseMetric.push(null);
-            }
-            exampleColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
-          }
-          const exampleAgg = pivotData.getAggregator(rowKey, exampleColKeyForBaseMetric);
-          console.log('[getBaseMetricValue] Example normal cell for base metric:', {
-            rowKey,
-            originalColKey: colKey,
-            exampleColKeyForBaseMetric,
-            exampleColKeyLength: exampleColKeyForBaseMetric ? exampleColKeyForBaseMetric.length : 0,
-            exampleColKeyItems: exampleColKeyForBaseMetric ? exampleColKeyForBaseMetric.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
-            exampleAgg: exampleAgg ? exampleAgg.value() : null,
-            colAttrs,
-            colAttrsLength: colAttrs ? colAttrs.length : 0,
-            metricKeyIndex,
-            baseMetricIndex
-          });
-          // Также пробуем найти colKey для обычной ячейки с той же строкой и базовой метрикой
-          // Пробуем разные варианты colKey
-          for (let i = 0; i < Math.min(5, colKeys.length); i++) {
-            const testColKey = colKeys[i];
-            const testAgg = pivotData.getAggregator(rowKey, testColKey);
-            if (testAgg && testAgg.value() !== null) {
-              console.log('[getBaseMetricValue] Found working colKey for row:', {
-                rowKey,
-                testColKey,
-                testColKeyItems: testColKey ? testColKey.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
-                testAggValue: testAgg.value()
-              });
-              // Пробуем заменить метрику в этом colKey на базовую метрику
-              const testColKeyForBaseMetric = [...testColKey];
-              if (testColKeyForBaseMetric.length > metricKeyIndex) {
-                testColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
-              } else {
-                while (testColKeyForBaseMetric.length <= metricKeyIndex) {
-                  testColKeyForBaseMetric.push(null);
-                }
-                testColKeyForBaseMetric[metricKeyIndex] = baseMetricIndex;
-              }
-              const testAggForBaseMetric = pivotData.getAggregator(rowKey, testColKeyForBaseMetric);
-              console.log('[getBaseMetricValue] Test colKey for base metric:', {
-                rowKey,
-                originalTestColKey: testColKey,
-                testColKeyForBaseMetric,
-                testColKeyForBaseMetricItems: testColKeyForBaseMetric ? testColKeyForBaseMetric.map((item, i) => `[${i}]: ${JSON.stringify(item)} (${typeof item})`) : [],
-                testAggForBaseMetric: testAggForBaseMetric ? testAggForBaseMetric.value() : null
-              });
-              break;
-            }
-          }
-        }
-      }
-
       // Получаем агрегатор для базовой метрики
       const agg = pivotData.getAggregator(targetRowKey, targetColKey);
       if (!agg) {
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Aggregator not found:', { baseMetricName, baseMetricIndex, targetRowKey, targetColKey });
-        }
         return null;
       }
 
       const value = agg.value();
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Aggregator value:', { baseMetricName, baseMetricIndex, value, targetRowKey, targetColKey });
-      }
       // Проверяем, что значение валидно (не null, не undefined, не NaN)
       if (value === null || value === undefined || (typeof value === 'number' && Number.isNaN(value))) {
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[getBaseMetricValue] Invalid value:', { baseMetricName, baseMetricIndex, value });
-        }
         return null;
       }
 
       const result = typeof value === 'number' ? value : Number.parseFloat(value);
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[getBaseMetricValue] Final result:', { baseMetricName, baseMetricIndex, result });
-      }
       return result;
     } catch (error) {
       // В случае ошибки возвращаем null
@@ -942,52 +723,17 @@ export class TableRenderer extends Component {
       return null;
     }
 
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] formulaMetricName:', formulaMetricName, 'sqlExpression:', sqlExpression, 'metricsOrder:', metricsOrder, 'metricNameMapping:', metricNameMapping);
-    }
 
     // Парсим формулу
     const parsed = this.parseSqlFormula(sqlExpression, metricsOrder || [], metricNameMapping || {});
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] Parsed formula:', {
-        isValid: parsed.isValid,
-        baseMetrics: parsed.baseMetrics,
-        operations: parsed.operations,
-        baseMetricsLength: parsed.baseMetrics ? parsed.baseMetrics.length : 0
-      });
-    }
     if (!parsed.isValid || parsed.baseMetrics.length === 0) {
       // Если формула не может быть распарсена, возвращаем null (будет использовано стандартное поведение)
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[computeFormulaValue] Formula parsing failed:', {
-          formulaMetricName,
-          sqlExpression,
-          isValid: parsed.isValid,
-          baseMetrics: parsed.baseMetrics,
-          baseMetricsLength: parsed.baseMetrics ? parsed.baseMetrics.length : 0
-        });
-      }
       return null;
     }
 
     // Получаем значения базовых метрик
     const baseValues = [];
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] Starting to get base metric values:', {
-        baseMetrics: parsed.baseMetrics,
-        metricsOrder,
-        metricNameMapping
-      });
-    }
     for (const baseMetric of parsed.baseMetrics) {
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[computeFormulaValue] Getting value for base metric:', baseMetric, 'from metricsOrder:', metricsOrder);
-      }
       const value = this.getBaseMetricValue(
         baseMetric,
         rowKey,
@@ -1000,27 +746,15 @@ export class TableRenderer extends Component {
         metricKey
       );
 
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[computeFormulaValue] Got value for base metric:', { baseMetric, value });
-      }
 
       if (value === null || value === undefined || Number.isNaN(value)) {
         // Если значение базовой метрики не найдено, возвращаем null
-        // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-        if (typeof console !== 'undefined' && console.log) {
-          console.log('[computeFormulaValue] Base metric value not found:', { baseMetric, value, rowKey, colKey });
-        }
         return null;
       }
 
       baseValues.push(value);
     }
 
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] Base values:', { baseMetrics: parsed.baseMetrics, baseValues, operations: parsed.operations });
-    }
 
     // Применяем операции к значениям базовых метрик
     let result = baseValues[0];
@@ -1055,17 +789,9 @@ export class TableRenderer extends Component {
       }
     }
 
-    // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-    if (typeof console !== 'undefined' && console.log) {
-      console.log('[computeFormulaValue] Result:', { formulaMetricName, result, baseValues, operations: parsed.operations });
-    }
 
     // Проверяем результат на валидность
     if (result === null || result === undefined || Number.isNaN(result) || !Number.isFinite(result)) {
-      // ВРЕМЕННОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-      if (typeof console !== 'undefined' && console.log) {
-        console.log('[computeFormulaValue] Invalid result:', { formulaMetricName, result });
-      }
       return null;
     }
 
@@ -2284,14 +2010,10 @@ export class TableRenderer extends Component {
       // Но если мы просто оставим пустую ячейку, будет дырка.
       // В контексте PivotTable, если мы скрываем значение, мы часто хотим скрыть и колонку/строку,
       // но здесь мы внутри строки подытога. Если метрики идут по колонкам, то мы просто не рисуем значение.
-      if (isRowSubtotalRow && rowSubtotalMetricSettings && rowSubtotalMetricSettings.enabled === false) {
-        // Если пользователь явно отключил subtotal для ЭТОЙ метрики в ЭТОМ поле ->
-        // Рисуем пустую ячейку (или стилизуем как "скрытую").
-        // Но лучше просто не рисовать значение (aggValue = null), а стиль оставить базовым (или прозрачным).
-        // ИЛИ: Если это Row Subtotal, и метрики в Columns - то это просто одна ячейка.
-        // Если мы вернем <td />, она будет пустой.
+      if (isRowSubtotalRow && rowSubtotalMetricSettings && rowSubtotalMetricSettings.subtotalEnabled === false) {
+        // Пользователь явно отключил subtotal для ЭТОЙ метрики в ЭТОМ поле —
+        // обнуляем значение, но оставляем ячейку (чтобы таблица не поехала).
         aggValue = null;
-        // Также можно пометить, чтобы не рисовать стиль.
       }
 
       const rowSubtotalStyleRef = isRowSubtotalRow && rowSubtotalSettings?.enabled && rowSubtotalSettings?.valueFormat
@@ -2321,7 +2043,7 @@ export class TableRenderer extends Component {
           ? this.getFieldSettings(colSubtotalAttrName).metricSubtotalSettings[metricName]
           : null;
 
-      if (isColSubtotalCol && colSubtotalMetricSettings && colSubtotalMetricSettings.enabled === false) {
+      if (isColSubtotalCol && colSubtotalMetricSettings && colSubtotalMetricSettings.subtotalEnabled === false) {
         aggValue = null;
       }
 
