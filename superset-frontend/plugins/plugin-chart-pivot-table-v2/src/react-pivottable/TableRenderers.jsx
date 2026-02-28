@@ -1521,15 +1521,15 @@ export class TableRenderer extends Component {
       } else if (attrIdx === colKey.length) {
         // Подытог по колонкам.
         //
-        // В PivotData колонки подытогов представлены как prefix-key меньшей длины
-        // (colKey.length < colAttrs.length). Такой prefix-key агрегирует значения
-        // по "дочерним" атрибутам, а значит относится к *родительскому* атрибуту
-        // (последнему элементу prefix-key).
+        // prefix-key длины L обозначает подытог, группирующий данные по первым L
+        // атрибутам. «Владелец» подытога — последний элемент prefix: colAttrs[L-1].
+        // (Аналогично rowAttrs[rowKey.length - 1] для строковых подытогов.)
         //
-        // Важно: заголовок "Subtotal" рендерится на строке текущего атрибута
-        // (attrIdx === colKey.length). Следовательно, per-field `Show subtotal`
-        // нужно проверять именно для этого attrName (например, "Дата").
-        const subtotalSettings = this.getFieldSubtotalSettings(attrName, false);
+        // Заголовок "Subtotal" рендерится на строке текущего атрибута
+        // (attrIdx === colKey.length), но per-field `Show subtotal` проверяется
+        // для владельца подытога — colAttrs[colKey.length - 1].
+        const subtotalOwnerField = colKey.length > 0 ? colAttrs[colKey.length - 1] : attrName;
+        const subtotalSettings = this.getFieldSubtotalSettings(subtotalOwnerField, false);
 
         // Если subtotal отключен для этого поля, пропускаем добавление th для subtotal
         // (но не прерываем весь метод, чтобы остальные заголовки рендерились)
@@ -1977,10 +1977,11 @@ export class TableRenderer extends Component {
         colKey.length < colAttrs.length;
 
       // К какому полю относится subtotal колонка:
-      // prefix-key длины L относится к subtotal для атрибута на позиции L.
-      // Пример: colAttrs=[Metric, Дата, Тип, Величина], colKey.length=1 => subtotal для "Дата".
+      // prefix-key длины L группирует данные по атрибутам 0..L-1; «владелец» — colAttrs[L-1].
+      // (Аналогично rowAttrs[rowKey.length - 1] для строковых подытогов.)
+      // Пример: colAttrs=[Дата, Статус1, Metric], colKey.length=1 => subtotal для "Дата".
       const colSubtotalAttrName =
-        isColSubtotalCol && colKey.length < colAttrs.length ? colAttrs[colKey.length] : null;
+        isColSubtotalCol && colKey.length > 0 && colKey.length < colAttrs.length ? colAttrs[colKey.length - 1] : null;
 
       const colSubtotalSettings = colSubtotalAttrName
         ? this.getFieldSubtotalSettings(colSubtotalAttrName, false)
@@ -2622,10 +2623,10 @@ export class TableRenderer extends Component {
           return true;
         }
 
-        // prefix-key длины L (< colAttrs.length) соответствует subtotal для атрибута
-        // на позиции L (строка заголовка, где рисуется "Subtotal").
-        // Пример: colAttrs=[Metric, Дата, Тип]; colKey.length=2 => subtotal для "Metric".
-        const subtotalAttrNameRaw = colAttrs[colKey.length];
+        // prefix-key длины L группирует по первым L атрибутам; «владелец» — colAttrs[L-1].
+        // (Аналогично rowAttrs[rowKey.length - 1] для строковых подытогов.)
+        // Пример: colAttrs=[Дата, Статус1, Metric]; colKey.length=1 => subtotal для "Дата".
+        const subtotalAttrNameRaw = colAttrs[colKey.length - 1];
         const subtotalAttrName = normalizeAttrName(subtotalAttrNameRaw);
         return !disabledSubtotalAttrs.has(subtotalAttrName);
       });
@@ -2662,8 +2663,8 @@ export class TableRenderer extends Component {
         }
 
         // Определяем, к какому полю относится этот subtotal
-        // colAttrs[colKey.length] — первое свёрнутое измерение
-        const subtotalFieldAttr = colAttrs[colKey.length];
+        // prefix-key длины L группирует по colAttrs[0..L-1]; владелец — colAttrs[L-1].
+        const subtotalFieldAttr = colKey.length > 0 ? colAttrs[colKey.length - 1] : null;
         const fieldSettings = this.getFieldSettings(subtotalFieldAttr);
         const metricSubtotalSettings = fieldSettings?.metricSubtotalSettings;
 
