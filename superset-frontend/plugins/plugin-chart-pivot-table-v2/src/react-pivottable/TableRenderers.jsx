@@ -375,6 +375,54 @@ export class TableRenderer extends Component {
     return this.props.tableOptions?.metricKey;
   }
 
+  /**
+   * Получить информацию о per-metric subtotal для виртуального ключа.
+   *
+   * Виртуальный ключ формируется при per-metric expansion:
+   *   [prefix_val_0, …, prefix_val_{L-1}, MARKER|metricName, …]
+   * где L — длина оригинального prefix-key.
+   *
+   * Метод определяет:
+   *  - ownerFieldName  — поле-«владелец» подытога (colAttrs[L-1])
+   *  - metricName       — имя метрики из virtualKey[metricKeyIdx]
+   *  - metricSettings   — MetricSubtotalSettingsType из fieldGroupingSettings
+   *  - prefixLength     — длина оригинального prefix (L)
+   *
+   * @param {Array} colKey  — виртуальный colKey (полной длины)
+   * @param {Array} colAttrs — массив атрибутов колонок
+   * @returns {Object|null} — { ownerFieldName, metricName, metricSettings, prefixLength }
+   */
+  getPerMetricSubtotalInfo(colKey, colAttrs) {
+    if (!colKey || colKey.length === 0) return null;
+
+    const metricKeyStr = this.getMetricKey();
+    if (!metricKeyStr) return null;
+    const metricKeyIdx = colAttrs.indexOf(metricKeyStr);
+    if (metricKeyIdx === -1 || metricKeyIdx >= colKey.length) return null;
+
+    // Определяем длину оригинального prefix — первый MARKER показывает,
+    // где заканчивается prefix.
+    let prefixLength = -1;
+    for (let p = 0; p < colKey.length; p++) {
+      if (colKey[p] === METRIC_SUBTOTAL_MARKER) {
+        prefixLength = p;
+        break;
+      }
+    }
+    // Если метрика идёт раньше первого MARKER, prefix — всё до метрики
+    if (prefixLength === -1) return null;
+
+    const ownerFieldName = prefixLength > 0 ? colAttrs[prefixLength - 1] : null;
+    const metricName = String(colKey[metricKeyIdx]);
+
+    // Достаём per-metric settings из fieldGroupingSettings владельца
+    const fieldSettings = ownerFieldName ? this.getFieldSettings(ownerFieldName) : {};
+    const metricSubtotalSettings = fieldSettings?.metricSubtotalSettings || {};
+    const metricSettings = metricSubtotalSettings[metricName] || null;
+
+    return { ownerFieldName, metricName, metricSettings, prefixLength };
+  }
+
   getGlobalTableSettings() {
     return this.props.tableOptions?.globalTableSettings || {};
   }
@@ -1318,6 +1366,7 @@ export class TableRenderer extends Component {
       pivotData,
       namesMapping,
       allowRenderHtml,
+      perMetricSubtotalKeySet,
     } = pivotSettings;
     const {
       highlightHeaderCellsOnHover,
@@ -1392,14 +1441,20 @@ export class TableRenderer extends Component {
       const colSpan = attrIdx < colKey.length ? colAttrSpans[i][attrIdx] : 1;
       let colLabelClass = 'pvtColLabel';
       if (attrIdx < colKey.length) {
-        // ── Per-metric subtotal header: заменяем MARKER на метку «Subtotal» ──
+        // ── Per-metric subtotal header ──
+        // Виртуальный ключ содержит MARKER на позициях свёрнутых измерений
+        // и имя метрики на позиции metricKeyIdx.
+        // Для MARKER-ячеек показываем «Subtotal», для метрики — пользовательский
+        // лейбл (по умолчанию «Subtotal: {metricName}»).
+        const isPerMetricVirtKey = perMetricSubtotalKeySet && perMetricSubtotalKeySet.has(flatKey(colKey));
+
         if (colKey[attrIdx] === METRIC_SUBTOTAL_MARKER) {
-          // Эта ячейка принадлежит виртуальному per-metric subtotal ключу.
-          // Показываем метку подытога вместо MARKER.
-          // Определяем field-level subtotal label через соседнее поле.
-          const subtotalFieldAttr = colAttrs[attrIdx];
-          const subtotalSettings = this.getFieldSubtotalSettings(subtotalFieldAttr, false);
-          const subtotalLabel = subtotalSettings.label || t('Subtotal');
+          // ── MARKER-позиция: показываем метку «Subtotal» ──
+          // Владелец подытога — поле группировки, чьи настройки содержат subtotalLabel.
+          const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
+          const ownerField = pmInfo?.ownerFieldName || colAttrs[attrIdx];
+          const ownerSubtotalSettings = this.getFieldSubtotalSettings(ownerField, false);
+          const subtotalLabel = ownerSubtotalSettings.label || t('Subtotal');
           const rowSpan = 1 + (attrIdx === colAttrs.length - 1 ? rowIncrSpan : 0);
 
           attrValueCells.push(
@@ -1416,6 +1471,41 @@ export class TableRenderer extends Component {
           );
           i += colSpan;
           continue;
+        }
+
+        // ── Metric-позиция в виртуальном ключе: показываем пользовательский лейбл ──
+        // Если это per-metric subtotal ключ и текущий attrIdx — метрика,
+        // отображаем subtotalLabel из MetricSubtotalSettings
+        // (по умолчанию «Subtotal: {metricName}»).
+        if (isPerMetricVirtKey && colKey[attrIdx] !== METRIC_SUBTOTAL_MARKER) {
+          const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
+          if (pmInfo) {
+            // Пользовательский лейбл: MetricSubtotalSettings.subtotalLabel → «Subtotal: метрика»
+            const customLabel = pmInfo.metricSettings?.subtotalLabel
+              || `${t('Subtotal')}: ${pmInfo.metricName}`;
+
+            // Стили из subtotalValueFormat (fontColor, backgroundColor)
+            const fmt = pmInfo.metricSettings?.subtotalValueFormat;
+            const headerStyle = { fontWeight: 'bold' };
+            const headerRef = fmt ? this.buildValueCellStyleRef(fmt) : null;
+            const rowSpan = 1 + (attrIdx === colAttrs.length - 1 ? rowIncrSpan : 0);
+
+            attrValueCells.push(
+              <th
+                className={`${colLabelClass} pvtSubtotalLabel`}
+                key={`colKey-perMetricLabel-${flatKey(colKey)}`}
+                colSpan={colSpan}
+                rowSpan={rowSpan}
+                role="columnheader button"
+                style={headerStyle}
+                ref={headerRef}
+              >
+                {customLabel}
+              </th>,
+            );
+            i += colSpan;
+            continue;
+          }
         }
         if (!omittedHighlightHeaderGroups.includes(colAttrs[attrIdx])) {
           if (highlightHeaderCellsOnHover) {
@@ -1923,20 +2013,34 @@ export class TableRenderer extends Component {
       // Для подытогов строк при transposePivot = false проверяем, является ли метрика формулой
       let aggValue = isPerMetricSubtotal ? null : agg.value();
 
-      // Вычисляем значение per-metric subtotal суммированием leaf-ячеек
+      // ── Вычисляем значение per-metric subtotal с учётом агрегации ──
+      // По умолчанию используется SUM. Если в MetricSubtotalSettings
+      // задан subtotalAggregation ('min' | 'max'), применяем его.
       if (isPerMetricSubtotal && perMetricLeafKeysMap) {
+        const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
+        const aggType = pmInfo?.metricSettings?.subtotalAggregation || 'sum';
         const leafKeys = perMetricLeafKeysMap.get(flatColKey) || [];
-        let sum = 0;
+        let result = null;
         let hasValue = false;
         for (const leafKey of leafKeys) {
           const leafAgg = pivotData.getAggregator(rowKey, leafKey);
           const val = leafAgg.value();
           if (val !== null && val !== undefined && !Number.isNaN(val)) {
-            sum += typeof val === 'number' ? val : Number.parseFloat(val);
-            hasValue = true;
+            const num = typeof val === 'number' ? val : Number.parseFloat(val);
+            if (!hasValue) {
+              result = num;
+              hasValue = true;
+            } else if (aggType === 'min') {
+              result = Math.min(result, num);
+            } else if (aggType === 'max') {
+              result = Math.max(result, num);
+            } else {
+              // sum (по умолчанию)
+              result += num;
+            }
           }
         }
-        aggValue = hasValue ? sum : null;
+        aggValue = hasValue ? result : null;
       }
 
       if (!isPerMetricSubtotal && isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
@@ -2137,8 +2241,21 @@ export class TableRenderer extends Component {
         backgroundColor: metricValueFieldSettings.metricValueBackgroundColor ?? metricValueFieldSettings.backgroundColor,
       }, false) : null;
 
+      // ── Per-metric subtotal: применяем стили и формат из MetricSubtotalSettings ──
+      let perMetricSubtotalStyleRef = null;
+      let perMetricOverrideFormat = null;
+      if (isPerMetricSubtotal) {
+        const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
+        if (pmInfo?.metricSettings?.subtotalValueFormat) {
+          const fmt = pmInfo.metricSettings.subtotalValueFormat;
+          perMetricSubtotalStyleRef = this.buildValueCellStyleRef(fmt);
+          // Передаём формат для числового форматирования ниже
+          perMetricOverrideFormat = fmt;
+        }
+      }
+
       // Объединяем все ref callbacks
-      const allRefCallbacks = [rowSubtotalStyleRef, colSubtotalStyleRef, rowSubtotalMetricStyleRef, colSubtotalMetricStyleRef, cellStyleRef, metricValueStyleRef].filter(Boolean);
+      const allRefCallbacks = [rowSubtotalStyleRef, colSubtotalStyleRef, rowSubtotalMetricStyleRef, colSubtotalMetricStyleRef, perMetricSubtotalStyleRef, cellStyleRef, metricValueStyleRef].filter(Boolean);
       const combinedStyleRef = allRefCallbacks.length > 0
         ? (element) => {
           allRefCallbacks.forEach(refCallback => refCallback(element));
@@ -2186,6 +2303,9 @@ export class TableRenderer extends Component {
       } else if (isColSubtotalCol && globalTableSettings?.colSubTotalsValueFormat) {
         // Fallback на глобальные настройки
         overrideFormatSettings = globalTableSettings.colSubTotalsValueFormat;
+      } else if (isPerMetricSubtotal && perMetricOverrideFormat) {
+        // Per-metric subtotal: используем subtotalValueFormat из MetricSubtotalSettings
+        overrideFormatSettings = perMetricOverrideFormat;
       } else if (metricFormatSettings) {
         // Используем настройки метрики для обычных ячеек
         overrideFormatSettings = metricFormatSettings;
@@ -2378,20 +2498,31 @@ export class TableRenderer extends Component {
       // Для итогов колонок при transposePivot = false проверяем, является ли метрика формулой
       let aggValue = isPerMetricSubtotal ? null : agg.value();
 
-      // Вычисляем per-metric subtotal для grand total row (rowKey = [])
+      // ── Per-metric subtotal для grand total row: учитываем агрегацию ──
       if (isPerMetricSubtotal && perMetricLeafKeysMap) {
+        const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
+        const aggType = pmInfo?.metricSettings?.subtotalAggregation || 'sum';
         const leafKeys = perMetricLeafKeysMap.get(flatColKey) || [];
-        let sum = 0;
+        let result = null;
         let hasValue = false;
         for (const leafKey of leafKeys) {
           const leafAgg = pivotData.getAggregator([], leafKey);
           const val = leafAgg.value();
           if (val !== null && val !== undefined && !Number.isNaN(val)) {
-            sum += typeof val === 'number' ? val : Number.parseFloat(val);
-            hasValue = true;
+            const num = typeof val === 'number' ? val : Number.parseFloat(val);
+            if (!hasValue) {
+              result = num;
+              hasValue = true;
+            } else if (aggType === 'min') {
+              result = Math.min(result, num);
+            } else if (aggType === 'max') {
+              result = Math.max(result, num);
+            } else {
+              result += num;
+            }
           }
         }
-        aggValue = hasValue ? sum : null;
+        aggValue = hasValue ? result : null;
       }
 
       if (!isPerMetricSubtotal && !transposePivot && metricsSqlExpressions && metricKey) {
@@ -2419,6 +2550,18 @@ export class TableRenderer extends Component {
         }
       }
 
+      // ── Per-metric subtotal: стили и формат для total row ──
+      let perMetricTotalStyleRef = null;
+      let perMetricTotalFormatOverride = null;
+      if (isPerMetricSubtotal) {
+        const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
+        if (pmInfo?.metricSettings?.subtotalValueFormat) {
+          const fmt = pmInfo.metricSettings.subtotalValueFormat;
+          perMetricTotalStyleRef = this.buildValueCellStyleRef(fmt);
+          perMetricTotalFormatOverride = fmt;
+        }
+      }
+
       const totalRowStyleRef = globalTableSettings?.columnTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
         : null;
@@ -2437,18 +2580,24 @@ export class TableRenderer extends Component {
         }
       }
 
+      // Для per-metric subtotals используем формат из MetricSubtotalSettings
+      const effectiveTotalFormat = isPerMetricSubtotal && perMetricTotalFormatOverride
+        ? perMetricTotalFormatOverride
+        : totalRowFormatSettings;
+
       const totalRowFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
-        totalRowFormatSettings,
+        effectiveTotalFormat,
       );
 
-      // Объединяем ref callback со стилями padding
-      const combinedRef = totalRowStyleRef
+      // Объединяем ref callbacks: per-metric стили + глобальные total стили + padding
+      const allTotalRefs = [perMetricTotalStyleRef, totalRowStyleRef].filter(Boolean);
+      const combinedRef = allTotalRefs.length > 0
         ? (element) => {
           if (element) {
             element.style.padding = '5px';
-            totalRowStyleRef(element);
+            allTotalRefs.forEach(refCb => refCb(element));
           }
         }
         : (element) => {
