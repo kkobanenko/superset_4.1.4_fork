@@ -1474,10 +1474,12 @@ export class TableRenderer extends Component {
         }
 
         // ── Metric-позиция в виртуальном ключе: показываем пользовательский лейбл ──
-        // Если это per-metric subtotal ключ и текущий attrIdx — метрика,
-        // отображаем subtotalLabel из MetricSubtotalSettings
-        // (по умолчанию «Subtotal: {metricName}»).
-        if (isPerMetricVirtKey && colKey[attrIdx] !== METRIC_SUBTOTAL_MARKER) {
+        // Применяем ТОЛЬКО к позиции метрики (metricKeyIdx), а НЕ ко всем
+        // не-MARKER позициям. Позиции с реальными данными (например, значения Дата)
+        // должны отображаться как обычно.
+        const metricKeyStr = this.getMetricKey();
+        const metricKeyIdx = metricKeyStr ? colAttrs.indexOf(metricKeyStr) : -1;
+        if (isPerMetricVirtKey && metricKeyIdx >= 0 && attrIdx === metricKeyIdx) {
           const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
           if (pmInfo) {
             // Пользовательский лейбл: MetricSubtotalSettings.subtotalLabel → «Subtotal: метрика»
