@@ -24,6 +24,11 @@ import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
 import { ADAPTIVE_FORMATTING } from '../types';
 
+// Sentinel marker for per-metric subtotal virtual column keys.
+// Replaces "collapsed dimension" levels in virtual colKeys so that
+// header rendering can identify them and display a subtotal label.
+const METRIC_SUBTOTAL_MARKER = '\u200B__METRIC_SUBTOTAL__';
+
 // Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
 const isAdaptiveFormatting = (valueFormat) => {
   return valueFormat === ADAPTIVE_FORMATTING || valueFormat === NumberFormats.SMART_NUMBER;
@@ -1387,6 +1392,31 @@ export class TableRenderer extends Component {
       const colSpan = attrIdx < colKey.length ? colAttrSpans[i][attrIdx] : 1;
       let colLabelClass = 'pvtColLabel';
       if (attrIdx < colKey.length) {
+        // ── Per-metric subtotal header: заменяем MARKER на метку «Subtotal» ──
+        if (colKey[attrIdx] === METRIC_SUBTOTAL_MARKER) {
+          // Эта ячейка принадлежит виртуальному per-metric subtotal ключу.
+          // Показываем метку подытога вместо MARKER.
+          // Определяем field-level subtotal label через соседнее поле.
+          const subtotalFieldAttr = colAttrs[attrIdx];
+          const subtotalSettings = this.getFieldSubtotalSettings(subtotalFieldAttr, false);
+          const subtotalLabel = subtotalSettings.label || t('Subtotal');
+          const rowSpan = 1 + (attrIdx === colAttrs.length - 1 ? rowIncrSpan : 0);
+
+          attrValueCells.push(
+            <th
+              className={`${colLabelClass} pvtSubtotalLabel`}
+              key={`colKey-perMetricSub-${flatKey(colKey.slice(0, attrIdx + 1))}`}
+              colSpan={colSpan}
+              rowSpan={rowSpan}
+              role="columnheader button"
+              style={{ fontWeight: 'bold' }}
+            >
+              {subtotalLabel}
+            </th>,
+          );
+          i += colSpan;
+          continue;
+        }
         if (!omittedHighlightHeaderGroups.includes(colAttrs[attrIdx])) {
           if (highlightHeaderCellsOnHover) {
             colLabelClass += ' hoverable';
@@ -1693,6 +1723,8 @@ export class TableRenderer extends Component {
       rowTotalCallbacks,
       namesMapping,
       allowRenderHtml,
+      perMetricSubtotalKeySet,
+      perMetricLeafKeysMap,
     } = pivotSettings;
 
     const {
@@ -1880,11 +1912,34 @@ export class TableRenderer extends Component {
 
     const valueCells = visibleColKeys.map((colKey, colIndex) => {
       const flatColKey = flatKey(colKey);
-      const agg = pivotData.getAggregator(rowKey, colKey);
+
+      // ── Per-metric subtotal: вычисляем значение суммированием leaf-ключей ──
+      const isPerMetricSubtotal = perMetricSubtotalKeySet && perMetricSubtotalKeySet.has(flatColKey);
+
+      const agg = isPerMetricSubtotal
+        ? pivotData.getAggregator(rowKey, []) // stub — значение перезапишется ниже
+        : pivotData.getAggregator(rowKey, colKey);
 
       // Для подытогов строк при transposePivot = false проверяем, является ли метрика формулой
-      let aggValue = agg.value();
-      if (isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
+      let aggValue = isPerMetricSubtotal ? null : agg.value();
+
+      // Вычисляем значение per-metric subtotal суммированием leaf-ячеек
+      if (isPerMetricSubtotal && perMetricLeafKeysMap) {
+        const leafKeys = perMetricLeafKeysMap.get(flatColKey) || [];
+        let sum = 0;
+        let hasValue = false;
+        for (const leafKey of leafKeys) {
+          const leafAgg = pivotData.getAggregator(rowKey, leafKey);
+          const val = leafAgg.value();
+          if (val !== null && val !== undefined && !Number.isNaN(val)) {
+            sum += typeof val === 'number' ? val : Number.parseFloat(val);
+            hasValue = true;
+          }
+        }
+        aggValue = hasValue ? sum : null;
+      }
+
+      if (!isPerMetricSubtotal && isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
         const metricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
         if (metricName && metricsSqlExpressions[metricName]) {
           // Метрика является формулой, вычисляем значение по формуле
@@ -1915,12 +1970,9 @@ export class TableRenderer extends Component {
       // которые реально появляются из-за `Data → Show columns subtotal`, то есть
       // на prefix-ключи PivotData (colKey.length < colAttrs.length) с флагом
       // `agg.isColSubtotal === true`.
-      // В PivotData флаги subtotal хранятся по-разному:
-      // - для обычных ячеек в tree выставляется `isColSubtotal`
-      // - для totals по колонкам (rowKey = []) выставляется только `isSubtotal`
-      // Поэтому используем оба флага, но дополнительно ограничиваемся prefix-key (length < colAttrs.length),
-      // чтобы не затронуть leaf-колонки.
+      // Per-metric subtotals имеют полную длину ключа и обрабатываются отдельно.
       const isColSubtotalCol =
+        !isPerMetricSubtotal &&
         Boolean(agg && (agg.isColSubtotal || agg.isSubtotal)) &&
         colKey.length < colAttrs.length;
 
@@ -2094,7 +2146,7 @@ export class TableRenderer extends Component {
 
       // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
       const finalStyle = {
-        ...(agg.isSubtotal ? { fontWeight: 'bold' } : {}),
+        ...((agg.isSubtotal || isPerMetricSubtotal) ? { fontWeight: 'bold' } : {}),
         ...(backgroundColor ? { backgroundColor } : {}),
       };
 
@@ -2258,6 +2310,9 @@ export class TableRenderer extends Component {
       pivotData,
       colTotalCallbacks,
       grandTotalCallback,
+      colKeys,
+      perMetricSubtotalKeySet,
+      perMetricLeafKeysMap,
     } = pivotSettings;
 
     // Итог по колонкам (Total строка): используем columnTotalsLabel.
@@ -2311,11 +2366,34 @@ export class TableRenderer extends Component {
 
     const totalValueCells = visibleColKeys.map(colKey => {
       const flatColKey = flatKey(colKey);
-      const agg = pivotData.getAggregator([], colKey);
+
+      // ── Per-metric subtotal: вычисляем значение для строки итогов ──
+      const isPerMetricSubtotal = perMetricSubtotalKeySet && perMetricSubtotalKeySet.has(flatColKey);
+
+      const agg = isPerMetricSubtotal
+        ? pivotData.getAggregator([], [])
+        : pivotData.getAggregator([], colKey);
 
       // Для итогов колонок при transposePivot = false проверяем, является ли метрика формулой
-      let aggValue = agg.value();
-      if (!transposePivot && metricsSqlExpressions && metricKey) {
+      let aggValue = isPerMetricSubtotal ? null : agg.value();
+
+      // Вычисляем per-metric subtotal для grand total row (rowKey = [])
+      if (isPerMetricSubtotal && perMetricLeafKeysMap) {
+        const leafKeys = perMetricLeafKeysMap.get(flatColKey) || [];
+        let sum = 0;
+        let hasValue = false;
+        for (const leafKey of leafKeys) {
+          const leafAgg = pivotData.getAggregator([], leafKey);
+          const val = leafAgg.value();
+          if (val !== null && val !== undefined && !Number.isNaN(val)) {
+            sum += typeof val === 'number' ? val : Number.parseFloat(val);
+            hasValue = true;
+          }
+        }
+        aggValue = hasValue ? sum : null;
+      }
+
+      if (!isPerMetricSubtotal && !transposePivot && metricsSqlExpressions && metricKey) {
         const metricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
         if (metricName && metricsSqlExpressions[metricName]) {
           // Метрика является формулой, вычисляем значение по формуле
@@ -2553,6 +2631,99 @@ export class TableRenderer extends Component {
       });
     }
 
+    // ────────── Per-metric subtotal expansion ──────────
+    //
+    // Если поле имеет `subtotalShow === 'show'` и задан `metricSubtotalSettings`,
+    // заменяем один колонку-подытог (prefix-key) на N виртуальных full-length ключей
+    // (по одному на каждую включённую метрику). Это позволяет:
+    //   - `calcAttrSpans` корректно посчитать colSpan-ы,
+    //   - заголовки рендерить как «Subtotal» + имя метрики,
+    //   - ячейки значений вычислять суммированием leaf-ключей для конкретной метрики.
+    //
+    const metricKeyForSubtotals = this.getMetricKey();
+    const metricsOrderForSubtotals = this.props.tableOptions?.metricsOrder || [];
+    const metricKeyIdxInCols = metricKeyForSubtotals ? colAttrs.indexOf(metricKeyForSubtotals) : -1;
+    const perMetricSubtotalKeySet = new Set(); // flatKey values of virtual keys
+    const perMetricLeafKeysMap = new Map();    // flatKey(virtualKey) → [leafColKey, …]
+
+    if (metricKeyIdxInCols !== -1 && metricsOrderForSubtotals.length > 0) {
+      const expandedVisibleColKeys = [];
+
+      for (const colKey of visibleColKeys) {
+        // Расширяем только subtotal prefix-ключи (length < colAttrs.length и > 0)
+        if (colKey.length === 0 || colKey.length >= colAttrs.length) {
+          expandedVisibleColKeys.push(colKey);
+          continue;
+        }
+        // Metric dimension must be among the collapsed levels
+        if (metricKeyIdxInCols < colKey.length) {
+          expandedVisibleColKeys.push(colKey);
+          continue;
+        }
+
+        // Определяем, к какому полю относится этот subtotal
+        // colAttrs[colKey.length] — первое свёрнутое измерение
+        const subtotalFieldAttr = colAttrs[colKey.length];
+        const fieldSettings = this.getFieldSettings(subtotalFieldAttr);
+        const metricSubtotalSettings = fieldSettings?.metricSubtotalSettings;
+
+        if (!metricSubtotalSettings || Object.keys(metricSubtotalSettings).length === 0) {
+          // Нет per-metric настроек — оставляем исходный subtotal
+          expandedVisibleColKeys.push(colKey);
+          continue;
+        }
+
+        // Расширяем: создаём один виртуальный ключ на каждую включённую метрику
+        let anyExpanded = false;
+        for (const metricName of metricsOrderForSubtotals) {
+          const metricSettings = metricSubtotalSettings[metricName];
+          // По умолчанию метрика включена, если не выключена явно
+          if (metricSettings && metricSettings.subtotalEnabled === false) {
+            continue;
+          }
+          // Строим виртуальный full-length colKey:
+          //   [originalPrefix..., MARKER(collapsed dims...), metricName at metricKeyIdx, MARKER(rest...)]
+          const virtualKey = [];
+          for (let pos = 0; pos < colAttrs.length; pos++) {
+            if (pos < colKey.length) {
+              virtualKey.push(colKey[pos]); // оригинальный prefix
+            } else if (pos === metricKeyIdxInCols) {
+              virtualKey.push(metricName);
+            } else {
+              virtualKey.push(METRIC_SUBTOTAL_MARKER);
+            }
+          }
+          perMetricSubtotalKeySet.add(flatKey(virtualKey));
+          expandedVisibleColKeys.push(virtualKey);
+          anyExpanded = true;
+        }
+
+        // Если все метрики выключены, оставляем оригинальный subtotal (пустой по значению)
+        if (!anyExpanded) {
+          expandedVisibleColKeys.push(colKey);
+        }
+      }
+      visibleColKeys = expandedVisibleColKeys;
+    }
+
+    // Предвычисляем leaf-ключи, вносящие вклад в каждый per-metric subtotal
+    if (perMetricSubtotalKeySet.size > 0) {
+      for (const vk of visibleColKeys) {
+        const fk = flatKey(vk);
+        if (!perMetricSubtotalKeySet.has(fk)) continue;
+
+        const matchingLeafs = colKeys.filter(leafKey => {
+          if (leafKey.length !== colAttrs.length) return false;
+          for (let i = 0; i < colAttrs.length; i++) {
+            if (vk[i] === METRIC_SUBTOTAL_MARKER) continue; // wildcard
+            if (vk[i] !== leafKey[i]) return false;
+          }
+          return true;
+        });
+        perMetricLeafKeysMap.set(fk, matchingLeafs);
+      }
+    }
+
     const pivotSettings = {
       visibleRowKeys,
       maxRowVisible: Math.max(...visibleRowKeys.map(k => k.length)),
@@ -2561,6 +2732,8 @@ export class TableRenderer extends Component {
       rowAttrSpans: this.calcAttrSpans(visibleRowKeys, rowAttrs.length),
       colAttrSpans: this.calcAttrSpans(visibleColKeys, colAttrs.length),
       allowRenderHtml,
+      perMetricSubtotalKeySet,
+      perMetricLeafKeysMap,
       ...this.cachedBasePivotSettings,
     };
 
