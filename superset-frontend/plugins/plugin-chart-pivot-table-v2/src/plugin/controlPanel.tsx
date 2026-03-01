@@ -16,6 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import React from 'react';
 import {
   ControlPanelConfig,
   D3_TIME_FORMAT_OPTIONS,
@@ -38,6 +39,7 @@ import {
 import { ADAPTIVE_FORMATTING, MetricsLayoutEnum } from '../types';
 import MetricSubtotalSettingsControl from './components/MetricSubtotalSettingsControl';
 import FieldSettingsCollapseControl from './components/FieldSettingsCollapseControl';
+import RemoveFieldInlineCheckbox from './components/RemoveFieldInlineCheckbox';
 
 // Расширенные опции формата даты с добавлением "month year" на русском
 const EXTENDED_D3_TIME_FORMAT_OPTIONS: [string, string][] = [
@@ -1448,44 +1450,31 @@ const config: ControlPanelConfig = {
                       return {
                         choices: availableFields.map(field => [field.value, field.label]),
                         value: selectedField,
+                        // Инлайн-кнопка «✕ Remove» справа от лейбла «Field N»
+                        // для компактности — вместо отдельного чекбокса
+                        rightNode: selectedField
+                          ? React.createElement(RemoveFieldInlineCheckbox, { fieldIndex })
+                          : undefined,
                       };
                     },
                   },
                 },
                 {
+                  // Скрытый контрол для хранения состояния remove и rerender
+                  // (визуально заменён на rightNode в _selector)
                   name: `field_formatting_field${fieldIndex}_remove`,
                   config: {
-                    type: 'CheckboxControl',
+                    type: 'HiddenControl',
                     renderTrigger: true,
-                    label: t('Remove field'),
                     default: false,
-                    description: t('Remove this field formatting block'),
                     rerender: [
                       ...ALL_FIELD_SELECTOR_CONTROL_NAMES,
                       ...ALL_FIELD_REMOVE_CONTROL_NAMES,
                       'fieldGroupingSettings',
                     ],
-                    formDataOnChange: (
-                      value: unknown,
-                      _prevValue: unknown,
-                      formData: unknown,
-                    ) => {
-                      if (value !== true || !formData || typeof formData !== 'object') {
-                        return formData;
-                      }
-
-                      const nextFormData = compactFieldFormattingState(
-                        formData as Record<string, unknown>,
-                        fieldIndex,
-                        undefined,
-                      );
-
-                      nextFormData[
-                        `field_formatting_field${fieldIndex}_remove`
-                      ] = false;
-
-                      return nextFormData;
-                    },
+                    // formDataOnChange не нужен: exploreReducer обрабатывает
+                    // _remove-контролы напрямую через FIELD_REMOVE_REGEX
+                    // (isPivotFieldControl === true → formDataOnChange пропускается)
                   },
                 },
               ],
