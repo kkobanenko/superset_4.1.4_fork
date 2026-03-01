@@ -400,8 +400,12 @@ export class TableRenderer extends Component {
     const metricKeyIdx = colAttrs.indexOf(metricKeyStr);
     if (metricKeyIdx === -1 || metricKeyIdx >= colKey.length) return null;
 
-    // Определяем длину оригинального prefix — первый MARKER показывает,
-    // где заканчивается prefix.
+    // ── Проверяем, содержит ли ключ хотя бы один MARKER ──
+    // MARKER может быть:
+    //   1) Чистый MARKER (= METRIC_SUBTOTAL_MARKER) — свёрнутая размерность
+    //   2) Тегированный MARKER+metricName на позиции метрики
+    // Ищем первый чистый MARKER для определения prefixLength.
+    // Если чистых MARKER нет, проверяем тегированное значение на позиции метрики.
     let prefixLength = -1;
     for (let p = 0; p < colKey.length; p++) {
       if (colKey[p] === METRIC_SUBTOTAL_MARKER) {
@@ -409,11 +413,28 @@ export class TableRenderer extends Component {
         break;
       }
     }
-    // Если метрика идёт раньше первого MARKER, prefix — всё до метрики
-    if (prefixLength === -1) return null;
+
+    // Если чистых MARKER нет, проверяем, есть ли тегированное значение
+    // на позиции метрики (MARKER + metricName). Это случай, когда
+    // единственная свёрнутая размерность — сама метрика.
+    // В этом случае prefixLength = metricKeyIdx (весь ключ до метрики — prefix).
+    if (prefixLength === -1) {
+      const metricVal = String(colKey[metricKeyIdx]);
+      if (metricVal.startsWith(METRIC_SUBTOTAL_MARKER)) {
+        prefixLength = metricKeyIdx;
+      } else {
+        return null; // Не per-metric subtotal ключ
+      }
+    }
 
     const ownerFieldName = prefixLength > 0 ? colAttrs[prefixLength - 1] : null;
-    const metricName = String(colKey[metricKeyIdx]);
+
+    // Извлекаем чистое имя метрики, убирая MARKER-префикс если он есть.
+    // На позиции metricKeyIdx всегда стоит MARKER+metricName.
+    const rawMetricVal = String(colKey[metricKeyIdx]);
+    const metricName = rawMetricVal.startsWith(METRIC_SUBTOTAL_MARKER)
+      ? rawMetricVal.slice(METRIC_SUBTOTAL_MARKER.length)
+      : rawMetricVal;
 
     // Достаём per-metric settings из fieldGroupingSettings владельца
     const fieldSettings = ownerFieldName ? this.getFieldSettings(ownerFieldName) : {};
@@ -1448,7 +1469,14 @@ export class TableRenderer extends Component {
         // лейбл (по умолчанию «Subtotal: {metricName}»).
         const isPerMetricVirtKey = perMetricSubtotalKeySet && perMetricSubtotalKeySet.has(flatKey(colKey));
 
-        if (colKey[attrIdx] === METRIC_SUBTOTAL_MARKER) {
+        // Проверяем: чистый MARKER или тегированный MARKER+metricName
+        const cellVal = colKey[attrIdx];
+        const isCellMarker = cellVal === METRIC_SUBTOTAL_MARKER;
+        const isCellTaggedMetric = !isCellMarker
+          && typeof cellVal === 'string'
+          && cellVal.startsWith(METRIC_SUBTOTAL_MARKER);
+
+        if (isCellMarker) {
           // ── MARKER-позиция: показываем метку «Subtotal» ──
           // Владелец подытога — поле группировки, чьи настройки содержат subtotalLabel.
           const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
@@ -1473,13 +1501,12 @@ export class TableRenderer extends Component {
           continue;
         }
 
-        // ── Metric-позиция в виртуальном ключе: показываем пользовательский лейбл ──
-        // Применяем ТОЛЬКО к позиции метрики (metricKeyIdx), а НЕ ко всем
-        // не-MARKER позициям. Позиции с реальными данными (например, значения Дата)
-        // должны отображаться как обычно.
-        const metricKeyStr = this.getMetricKey();
-        const metricKeyIdx = metricKeyStr ? colAttrs.indexOf(metricKeyStr) : -1;
-        if (isPerMetricVirtKey && metricKeyIdx >= 0 && attrIdx === metricKeyIdx) {
+        // ── Тегированная метрика (MARKER+metricName): показываем пользовательский лейбл ──
+        // Это позиция метрики в виртуальном per-metric subtotal ключе.
+        // Тегированное значение ВСЕГДА стоит на позиции metricKeyIdx
+        // и однозначно идентифицирует per-metric subtotal (не нужна
+        // дополнительная проверка perMetricSubtotalKeySet).
+        if (isCellTaggedMetric) {
           const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
           if (pmInfo) {
             // Пользовательский лейбл: MetricSubtotalSettings.subtotalLabel → «Subtotal: метрика»
@@ -2825,7 +2852,24 @@ export class TableRenderer extends Component {
           continue;
         }
 
-        // Расширяем: создаём один виртуальный ключ на каждую включённую метрику
+        // Расширяем: создаём один виртуальный ключ на каждую включённую метрику.
+        //
+        // ВАЖНО: на позиции метрики (metricKeyIdxInCols) помещаем
+        //   METRIC_SUBTOTAL_MARKER + metricName   (а НЕ чистый metricName).
+        //
+        // Зачем? Когда единственная свёрнутая размерность — сама метрика
+        // (например, Статус1 subtotal: prefix=["2024-01","active"], length=2,
+        // colAttrs.length=3), виртуальный ключ НЕ содержит ни одного обычного
+        // MARKER. Если поставить чистый metricName, ключ
+        //   ["2024-01", "active", "Сумма"]
+        // совпадёт с обычным leaf-ключом → дублирование колонок, смещения.
+        //
+        // С тегированным значением:
+        //   Статус1: ["2024-01", "active", MARKER+"Сумма"] — уникален ✓
+        //   Дата:    ["2024-01", MARKER,   MARKER+"Сумма"] — уникален ✓
+        //
+        // getPerMetricSubtotalInfo() и leaf-matching извлекают чистое имя
+        // метрики, убирая MARKER-префикс.
         let anyExpanded = false;
         for (const metricName of metricsOrderForSubtotals) {
           const metricSettings = metricSubtotalSettings[metricName];
@@ -2834,13 +2878,14 @@ export class TableRenderer extends Component {
             continue;
           }
           // Строим виртуальный full-length colKey:
-          //   [originalPrefix..., MARKER(collapsed dims...), metricName at metricKeyIdx, MARKER(rest...)]
+          //   [originalPrefix..., MARKER(collapsed dims...), MARKER+metricName at metricKeyIdx, MARKER(rest...)]
           const virtualKey = [];
           for (let pos = 0; pos < colAttrs.length; pos++) {
             if (pos < colKey.length) {
               virtualKey.push(colKey[pos]); // оригинальный prefix
             } else if (pos === metricKeyIdxInCols) {
-              virtualKey.push(metricName);
+              // Тегируем имя метрики MARKER-префиксом для уникальности
+              virtualKey.push(METRIC_SUBTOTAL_MARKER + metricName);
             } else {
               virtualKey.push(METRIC_SUBTOTAL_MARKER);
             }
@@ -2867,7 +2912,14 @@ export class TableRenderer extends Component {
         const matchingLeafs = colKeys.filter(leafKey => {
           if (leafKey.length !== colAttrs.length) return false;
           for (let i = 0; i < colAttrs.length; i++) {
-            if (vk[i] === METRIC_SUBTOTAL_MARKER) continue; // wildcard
+            if (vk[i] === METRIC_SUBTOTAL_MARKER) continue; // wildcard — любое значение
+            // Тегированное значение MARKER+metricName на позиции метрики:
+            // сравниваем с чистым именем метрики из leaf-ключа.
+            if (typeof vk[i] === 'string' && vk[i].startsWith(METRIC_SUBTOTAL_MARKER)) {
+              const cleanMetric = vk[i].slice(METRIC_SUBTOTAL_MARKER.length);
+              if (leafKey[i] !== cleanMetric) return false;
+              continue;
+            }
             if (vk[i] !== leafKey[i]) return false;
           }
           return true;
