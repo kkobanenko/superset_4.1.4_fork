@@ -19,7 +19,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { t, ensureIsArray, QueryFormMetric } from '@superset-ui/core';
 import { useTheme, SupersetTheme } from '@apache-superset/core/ui';
-import { ControlHeader } from '@superset-ui/chart-controls';
+import { ControlHeader, D3_FORMAT_OPTIONS } from '@superset-ui/chart-controls';
 import { Collapse, Checkbox, Input, Select, Typography } from 'antd';
 import { MetricSubtotalSettingsType } from '../../types';
 
@@ -144,11 +144,22 @@ const MetricSubtotalSettingsControl: React.FC<MetricSubtotalSettingsControlProps
                     </div>
                     <div>
                       <div className="control-label">{t('Number Format (D3)')}</div>
-                      <Input
+                      <Select
                         size="small"
-                        value={settings.subtotalValueFormat?.valueFormat || ''}
-                        placeholder={t('e.g. ,.2f')}
-                        onChange={e => handleFormatChange(metricLabel, { valueFormat: e.target.value })}
+                        showSearch
+                        allowClear
+                        value={settings.subtotalValueFormat?.valueFormat || undefined}
+                        placeholder={t('Adaptive formatting')}
+                        onChange={val => handleFormatChange(metricLabel, { valueFormat: val || '' })}
+                        options={D3_FORMAT_OPTIONS.map(([value, label]) => ({
+                          value,
+                          label,
+                        }))}
+                        style={{ width: '100%' }}
+                        filterOption={(input, option) =>
+                          (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                          || (option?.value ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                        }
                       />
                     </div>
                    <div style={{ display: 'flex', gap: '8px' }}>
