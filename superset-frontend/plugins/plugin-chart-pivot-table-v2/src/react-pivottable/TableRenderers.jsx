@@ -2825,6 +2825,31 @@ export class TableRenderer extends Component {
           continue;
         }
 
+        // ── Проверка: есть ли свёрнутые размерности КРОМЕ метрики? ──
+        // Количество свёрнутых позиций = colAttrs.length - colKey.length.
+        // Из них одна — сама метрика (metricKeyIdxInCols).
+        // Если не-метрических свёрнутых позиций нет (numMarkerPositions <= 0),
+        // виртуальные ключи НЕ будут содержать MARKER и совпадут с обычными
+        // leaf-ключами, что приведёт к дублированию колонок и смещениям.
+        //
+        // Пример: colAttrs=["Дата","Статус1","Metric"], Статус1 subtotal
+        //   prefix=["2024-01","active"] (length=2), metricKeyIdx=2
+        //   → виртуальный ключ ["2024-01","active","Сумма"] === обычный leaf-ключ!
+        //   → numMarkerPositions = (3-2)-1 = 0 → пропускаем expansion.
+        //
+        // Для Дата subtotal: prefix=["2024-01"] (length=1), metricKeyIdx=2
+        //   → виртуальный ключ ["2024-01", MARKER, "Сумма"] — есть MARKER
+        //   → numMarkerPositions = (3-1)-1 = 1 → expansion корректна.
+        const numMarkerPositions = (colAttrs.length - colKey.length) - 1;
+        if (numMarkerPositions <= 0) {
+          // Единственная свёрнутая размерность — сама метрика.
+          // Per-metric expansion бессмысленна: каждый виртуальный ключ
+          // продублирует уже существующий обычный ключ.
+          // Оставляем оригинальный subtotal prefix-key без расширения.
+          expandedVisibleColKeys.push(colKey);
+          continue;
+        }
+
         // Расширяем: создаём один виртуальный ключ на каждую включённую метрику
         let anyExpanded = false;
         for (const metricName of metricsOrderForSubtotals) {
