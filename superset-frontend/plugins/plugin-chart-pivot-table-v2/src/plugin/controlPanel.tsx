@@ -1295,7 +1295,22 @@ const config: ControlPanelConfig = {
                   name: `field_formatting_field${fieldIndex}_selector`,
                   config: {
                     type: 'SelectControl',
-                    label: t('Field %s', fieldIndex + 1),
+                    // Визуально выделяем лейбл «Field N»: жирный шрифт,
+                    // увеличенный размер и фоновая подложка для заметности
+                    label: React.createElement(
+                      'span',
+                      {
+                        style: {
+                          fontWeight: 700,
+                          fontSize: '14px',
+                          background: '#e6f4ff',
+                          padding: '1px 8px',
+                          borderRadius: '4px',
+                          color: '#1677ff',
+                        },
+                      },
+                      t('Field %s', fieldIndex + 1),
+                    ),
                     renderTrigger: true,
                     clearable: true,
                     description: t('Select a field to configure formatting'),
