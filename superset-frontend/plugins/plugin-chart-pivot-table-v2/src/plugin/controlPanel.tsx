@@ -37,6 +37,7 @@ import {
 } from '@superset-ui/core';
 import { ADAPTIVE_FORMATTING, MetricsLayoutEnum } from '../types';
 import MetricSubtotalSettingsControl from './components/MetricSubtotalSettingsControl';
+import FieldSettingsCollapseControl from './components/FieldSettingsCollapseControl';
 
 // Расширенные опции формата даты с добавлением "month year" на русском
 const EXTENDED_D3_TIME_FORMAT_OPTIONS: [string, string][] = [
@@ -1488,6 +1489,27 @@ const config: ControlPanelConfig = {
                   },
                 },
               ],
+              // Контрол-переключатель для сворачивания/разворачивания блока настроек поля
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_expanded`,
+                  config: {
+                    type: FieldSettingsCollapseControl,
+                    label: '',
+                    // ВАЖНО: renderTrigger ОБЯЗАН быть true!
+                    // При renderTrigger:false Superset перемещает всю секцию
+                    // на вкладку Data вместо Customize.
+                    renderTrigger: true,
+                    default: false,
+                    // Показываем стрелку только когда поле выбрано
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      return !!selectorControl?.value;
+                    },
+                  },
+                },
+              ],
               [
                 {
                   name: `field_formatting_field${fieldIndex}_maxWidth`,
@@ -1502,6 +1524,14 @@ const config: ControlPanelConfig = {
                       const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
                       const selectedField = selectorControl?.value;
                       return !!selectedField;
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -1549,6 +1579,14 @@ const config: ControlPanelConfig = {
                       const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
                       const selectedField = selectorControl?.value;
                       return !!selectedField;
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -1600,6 +1638,14 @@ const config: ControlPanelConfig = {
                         controls?.[`field_formatting_field${fieldIndex}_selector`];
                       const selectedField = selectorControl?.value;
                       return !!selectedField;
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
@@ -1673,6 +1719,14 @@ const config: ControlPanelConfig = {
                       const selectedField = selectorControl?.value;
                       return !!selectedField;
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
                       'fieldGroupingSettings',
@@ -1742,6 +1796,14 @@ const config: ControlPanelConfig = {
                       // They have separate header/value styling controls below
                       return false;
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -1787,6 +1849,14 @@ const config: ControlPanelConfig = {
                       // Hide generic typography controls for all fields (Row, Columns, Metrics)
                       // They have separate header/value styling controls below
                       return false;
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -1835,6 +1905,14 @@ const config: ControlPanelConfig = {
                       // Hide generic typography controls for all fields (Row, Columns, Metrics)
                       // They have separate header/value styling controls below
                       return false;
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -1906,6 +1984,14 @@ const config: ControlPanelConfig = {
                         .filter((x: string) => x.length > 0);
                       return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -1974,6 +2060,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
                     mapStateToProps: (state: any) => {
@@ -2046,6 +2140,14 @@ const config: ControlPanelConfig = {
                         .filter((x: string) => x.length > 0);
                       return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -2117,6 +2219,14 @@ const config: ControlPanelConfig = {
                         .filter((x: string) => x.length > 0);
                       return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -2185,6 +2295,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
                     mapStateToProps: (state: any) => {
@@ -2256,6 +2374,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return columnLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyColumns'],
                     mapStateToProps: (state: any) => {
@@ -2329,6 +2455,14 @@ const config: ControlPanelConfig = {
                         .filter((x: string) => x.length > 0);
                       return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -2397,6 +2531,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
                     mapStateToProps: (state: any) => {
@@ -2469,6 +2611,14 @@ const config: ControlPanelConfig = {
                         .filter((x: string) => x.length > 0);
                       return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -2540,6 +2690,14 @@ const config: ControlPanelConfig = {
                         .filter((x: string) => x.length > 0);
                       return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -2608,6 +2766,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
                     mapStateToProps: (state: any) => {
@@ -2679,6 +2845,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return rowLabels.includes(String(selectedField)) && !metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings', 'groupbyRows'],
                     mapStateToProps: (state: any) => {
@@ -2752,6 +2926,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -2838,6 +3020,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -2926,6 +3116,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -3016,6 +3214,14 @@ const config: ControlPanelConfig = {
                         .filter((x: string) => x.length > 0);
                       return metricLabels.includes(String(selectedField));
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
                       if (!state || typeof state !== 'object') {
@@ -3101,6 +3307,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -3189,6 +3403,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -3286,6 +3508,14 @@ const config: ControlPanelConfig = {
                         })
                         .filter((x: string) => x.length > 0);
                       return !metricLabels.includes(String(selectedField));
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
                     mapStateToProps: (state: any) => {
@@ -3396,6 +3626,14 @@ const config: ControlPanelConfig = {
                         subtotalShow === 'show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
@@ -3513,6 +3751,14 @@ const config: ControlPanelConfig = {
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
                       `field_formatting_field${fieldIndex}_subtotalShow`,
@@ -3621,6 +3867,14 @@ const config: ControlPanelConfig = {
                         subtotalShow === 'show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
@@ -3731,6 +3985,14 @@ const config: ControlPanelConfig = {
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
                       `field_formatting_field${fieldIndex}_subtotalShow`,
@@ -3838,6 +4100,14 @@ const config: ControlPanelConfig = {
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
                     },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
                       `field_formatting_field${fieldIndex}_subtotalShow`,
@@ -3942,6 +4212,14 @@ const config: ControlPanelConfig = {
                         subtotalShow === 'show' ||
                         (subtotalShow === undefined && subtotalEnabled === true)
                       );
+                    },
+                    // Скрываем через CSS (display:none) когда блок свёрнут.
+                    // ВАЖНО: используем hidden, а НЕ visibility,
+                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
                     },
                     rerender: [
                       `field_formatting_field${fieldIndex}_selector`,
