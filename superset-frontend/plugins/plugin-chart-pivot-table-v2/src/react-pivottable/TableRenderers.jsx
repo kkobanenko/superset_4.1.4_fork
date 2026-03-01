@@ -1389,6 +1389,10 @@ export class TableRenderer extends Component {
       allowRenderHtml,
       perMetricSubtotalKeySet,
     } = pivotSettings;
+    // Для определения состояния toggle (collapse/expand) используем
+    // maxColVisibleReal — длину без виртуальных per-metric ключей.
+    // Виртуальные ключи всегда full-length и искажают состояние toggle.
+    const maxColVisibleForToggle = pivotSettings.maxColVisibleReal ?? maxColVisible;
     const {
       highlightHeaderCellsOnHover,
       omittedHighlightHeaderGroups = [],
@@ -1411,11 +1415,15 @@ export class TableRenderer extends Component {
     let arrowClickHandle = null;
     let subArrow = null;
     if (needToggle) {
+      // Используем maxColVisibleForToggle (без виртуальных ключей)
+      // для корректного определения: сейчас развёрнуто или свёрнуто.
+      // Если attrIdx + 1 < maxColVisibleForToggle → есть видимые дети
+      // → показываем "-" (collapseAttr). Иначе → всё свёрнуто → "+" (expandAttr).
       arrowClickHandle =
-        attrIdx + 1 < maxColVisible
+        attrIdx + 1 < maxColVisibleForToggle
           ? this.collapseAttr(false, attrIdx, colKeys)
           : this.expandAttr(false, attrIdx, colKeys);
-      subArrow = attrIdx + 1 < maxColVisible ? arrowExpanded : arrowCollapsed;
+      subArrow = attrIdx + 1 < maxColVisibleForToggle ? arrowExpanded : arrowCollapsed;
     }
     // Применяем стили форматирования к заголовку колонки
     const headerStyle = this.getHeaderStyle(attrName);
@@ -2933,6 +2941,19 @@ export class TableRenderer extends Component {
       maxRowVisible: Math.max(...visibleRowKeys.map(k => k.length)),
       visibleColKeys,
       maxColVisible: Math.max(...visibleColKeys.map(k => k.length)),
+      // maxColVisibleReal — максимальная длина видимых ключей БЕЗ учёта
+      // per-metric virtual keys. Виртуальные ключи ВСЕГДА имеют
+      // length === colAttrs.length (т.к. они расширяются до полной длины),
+      // что ломает логику toggle: после collapse всех детей maxColVisible
+      // остаётся равным colAttrs.length из-за виртуальных ключей,
+      // и стрелка "-" никогда не меняется на "+".
+      // maxColVisibleReal учитывает только «настоящие» ключи.
+      maxColVisibleReal: Math.max(
+        0,
+        ...visibleColKeys
+          .filter(k => !perMetricSubtotalKeySet.has(flatKey(k)))
+          .map(k => k.length),
+      ),
       rowAttrSpans: this.calcAttrSpans(visibleRowKeys, rowAttrs.length),
       colAttrSpans: this.calcAttrSpans(visibleColKeys, colAttrs.length),
       allowRenderHtml,
