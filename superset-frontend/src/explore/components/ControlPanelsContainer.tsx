@@ -486,6 +486,10 @@ export const ControlPanelsContainer = (props: ControlPanelsContainerProps) => {
       validationErrors,
       label: baseLabel,
       description: baseDescription,
+      // Извлекаем hidden из controlData, чтобы оно не попало в restProps
+      // и не перезаписало вычисленное boolean-значение isHidden в JSX
+      // через {...restProps} (функция hidden из Redux state всегда truthy)
+      hidden: _hiddenFromControlState,
       ...restProps
     } = controlData as ControlState & {
       validationErrors?: any[];
