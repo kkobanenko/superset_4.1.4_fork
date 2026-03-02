@@ -316,7 +316,9 @@ const SliceHeaderControls = (
     isCached = [],
   } = props;
   const isTable = slice.viz_type === VizType.Table;
-  const isPivotTable = slice.viz_type === VizType.PivotTable;
+  const isPivotTable =
+    slice.viz_type === VizType.PivotTable ||
+    slice.viz_type === VizType.PivotTableV2;
   const cachedWhen = (cachedDttm || []).map(itemCachedDttm =>
     (extendedDayjs.utc(itemCachedDttm) as any).fromNow(),
   );

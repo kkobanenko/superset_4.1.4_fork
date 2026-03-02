@@ -72,7 +72,8 @@ const MENU_KEYS = {
   EXPORT_TO_PIVOT_XLSX: 'export_to_pivot_xlsx',
 };
 
-const VIZ_TYPES_PIVOTABLE = [VizType.PivotTable];
+// Типы чартов, для которых доступен экспорт в pivoted CSV/Excel
+const VIZ_TYPES_PIVOTABLE = [VizType.PivotTable, VizType.PivotTableV2];
 
 export const MenuItemWithCheckboxContainer = styled.div`
   ${({ theme }) => css`
