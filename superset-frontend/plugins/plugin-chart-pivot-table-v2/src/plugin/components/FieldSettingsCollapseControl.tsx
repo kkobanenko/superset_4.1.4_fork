@@ -62,7 +62,6 @@ const FieldSettingsCollapseControl: React.FC<FieldSettingsCollapseControlProps> 
         fontSize: '13px',
         fontWeight: 500,
         color: '#666',
-        borderTop: '1px solid #e8e8e8',
         marginTop: '4px',
       }}
     >
