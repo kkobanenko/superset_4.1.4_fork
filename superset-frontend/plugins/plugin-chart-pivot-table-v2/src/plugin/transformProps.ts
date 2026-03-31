@@ -326,6 +326,9 @@ function buildGlobalTableSettings(
   if (formData['globalTableSettings.colSubTotalsLabel'] !== undefined) {
     out.colSubTotalsLabel = formData['globalTableSettings.colSubTotalsLabel'];
   }
+  if (formData['globalTableSettings.metricsLabel'] !== undefined) {
+    out.metricsLabel = formData['globalTableSettings.metricsLabel'];
+  }
 
   // Добавляем другие поля из существующего объекта (если они еще не добавлены)
   if (existing && typeof existing === 'object') {
@@ -341,6 +344,9 @@ function buildGlobalTableSettings(
     }
     if (existingObj.colSubTotalsLabel !== undefined && out.colSubTotalsLabel === undefined) {
       out.colSubTotalsLabel = existingObj.colSubTotalsLabel;
+    }
+    if (existingObj.metricsLabel !== undefined && out.metricsLabel === undefined) {
+      out.metricsLabel = existingObj.metricsLabel;
     }
   }
 

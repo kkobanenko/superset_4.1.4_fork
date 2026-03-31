@@ -164,6 +164,9 @@ export interface GlobalTableSettings {
   rowTotalsPosition?: 'left' | 'right'; // позиция итога по строкам
   rowTotalsLabel?: string; // наименование итога по строкам
 
+  // Заголовок измерения метрик (строка/столбец "Мера"/"Metric").
+  metricsLabel?: string;
+
   // Настройки подписей/форматов для subtotal (когда включены Show rows/columns subtotal).
   rowSubTotalsLabel?: string;
   colSubTotalsLabel?: string;

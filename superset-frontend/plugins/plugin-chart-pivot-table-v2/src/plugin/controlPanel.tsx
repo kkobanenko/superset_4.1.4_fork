@@ -543,6 +543,20 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'globalTableSettings.metricsLabel',
+            config: {
+              type: 'TextControl',
+              label: t('Metrics header label'),
+              renderTrigger: true,
+              default: t('Metric'),
+              description: t(
+                'Header label for the metrics dimension row or column. Leave empty to hide the label.',
+              ),
+            },
+          },
+        ],
         ['adhoc_filters'],
         ['series_limit'],
         [

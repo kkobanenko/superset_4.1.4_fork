@@ -95,7 +95,7 @@ function displayHeaderCell(
   namesMapping,
   allowRenderHtml,
 ) {
-  const name = namesMapping[value] || value;
+  const name = Object.prototype.hasOwnProperty.call(namesMapping, value) ? namesMapping[value] : value;
   const parsedLabel = parseLabel(name);
   const labelContent =
     allowRenderHtml && typeof parsedLabel === 'string'

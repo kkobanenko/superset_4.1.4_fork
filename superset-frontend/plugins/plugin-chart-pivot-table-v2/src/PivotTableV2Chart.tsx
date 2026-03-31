@@ -740,7 +740,12 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
           sorters={sorters}
           tableOptions={tableOptions}
           subtotalOptions={subtotalOptions}
-          namesMapping={verboseMap}
+          namesMapping={{
+            ...verboseMap,
+            ...(globalTableSettings?.metricsLabel !== undefined
+              ? { [METRIC_KEY]: globalTableSettings.metricsLabel }
+              : {}),
+          }}
           onContextMenu={handleContextMenu}
           allowRenderHtml={allowRenderHtml}
         />
