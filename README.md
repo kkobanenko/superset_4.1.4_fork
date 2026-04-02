@@ -19,6 +19,18 @@ under the License.
 
 # Superset
 
+## Custom fork (4.1.4)
+
+This repository is an Apache Superset 4.1.4 fork with **Pivot Table V2** enhancements (per-field alignment, adaptive number format with empty cells for zero/null, metrics header styling) and an **isolated Docker dev stack** on host port **18088**.
+
+| Document | Purpose |
+| -------- | ------- |
+| [PRD.md](PRD.md) | Product requirements and implementation status for Pivot V2 and related backend UI fixes |
+| [docker/README.dev.md](docker/README.dev.md) | Postgres/Redis/Superset dev compose, ClickHouse via side network, troubleshooting |
+| [superset-frontend/plugins/plugin-chart-pivot-table-v2/](superset-frontend/plugins/plugin-chart-pivot-table-v2/) | Pivot Table V2 plugin source |
+
+Root `VERSION` and `superset-frontend/plugins/plugin-chart-pivot-table-v2/package.json` version are bumped when shipping plugin/UI changes for this fork.
+
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/apache-2-0)
 [![Latest Release on Github](https://img.shields.io/github/v/release/apache/superset?sort=semver)](https://github.com/apache/superset/releases/latest)
 [![Build Status](https://github.com/apache/superset/actions/workflows/superset-python-unittest.yml/badge.svg)](https://github.com/apache/superset/actions)

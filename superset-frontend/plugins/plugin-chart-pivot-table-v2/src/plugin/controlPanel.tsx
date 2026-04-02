@@ -36,7 +36,7 @@ import {
   t,
   validateNonEmpty,
 } from '@superset-ui/core';
-import { ADAPTIVE_FORMATTING, MetricsLayoutEnum } from '../types';
+import { ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0, MetricsLayoutEnum } from '../types';
 import MetricSubtotalSettingsControl from './components/MetricSubtotalSettingsControl';
 import FieldSettingsCollapseControl from './components/FieldSettingsCollapseControl';
 import RemoveFieldInlineCheckbox from './components/RemoveFieldInlineCheckbox';
@@ -78,6 +78,11 @@ const PIVOT_V2_METRIC_AGGREGATE_OPTIONS: string[] = [
 ];
 
 const MAX_FIELD_FORMATTING_SLOTS = 10;
+const ALIGNMENT_CHOICES: [string, string][] = [
+  ['left', t('Left')],
+  ['center', t('Center')],
+  ['right', t('Right')],
+];
 const ALL_FIELD_SELECTOR_CONTROL_NAMES = Array.from(
   { length: MAX_FIELD_FORMATTING_SLOTS },
   (_, index) => getSelectorControlName(index),
@@ -288,7 +293,10 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
             renderTrigger: true,
             description: t('D3 number format for subtotal cells'),
             choices: [
-              [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+              [
+                ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+                t('Adaptive formatting, empty instead 0'),
+              ],
               ...(sharedControls.y_axis_format.choices || []),
             ],
             visibility: ({ controls }: { controls?: any }) => {
@@ -557,6 +565,37 @@ const config: ControlPanelConfig = {
             },
           },
         ],
+        [
+          {
+            name: 'globalTableSettings.metricsLabelFontSize',
+            config: {
+              type: 'NumberControl',
+              label: t('Metrics header font size (px)'),
+              renderTrigger: true,
+              default: undefined,
+            },
+          },
+          {
+            name: 'globalTableSettings.metricsLabelFontColor',
+            config: {
+              type: 'ColorPickerControl',
+              label: t('Metrics header font color'),
+              renderTrigger: true,
+              default: undefined,
+            },
+          },
+          {
+            name: 'globalTableSettings.metricsLabelAlignment',
+            config: {
+              type: 'SelectControl',
+              label: t('Metrics header alignment'),
+              renderTrigger: true,
+              default: undefined,
+              clearable: true,
+              choices: ALIGNMENT_CHOICES,
+            },
+          },
+        ],
         ['adhoc_filters'],
         ['series_limit'],
         [
@@ -633,7 +672,10 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               description: t('D3 number format for the rows total column'),
               choices: [
-                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                [
+                  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+                  t('Adaptive formatting, empty instead 0'),
+                ],
                 ...(sharedControls.y_axis_format.choices || []),
               ],
               visibility: ({ controls }: { controls?: any }) =>
@@ -728,7 +770,10 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               description: t('D3 number format for row subtotal cells'),
               choices: [
-                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                [
+                  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+                  t('Adaptive formatting, empty instead 0'),
+                ],
                 ...(sharedControls.y_axis_format.choices || []),
               ],
               visibility: ({ controls }: { controls?: any }) =>
@@ -823,7 +868,10 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               description: t('D3 number format for the columns total row'),
               choices: [
-                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                [
+                  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+                  t('Adaptive formatting, empty instead 0'),
+                ],
                 ...(sharedControls.y_axis_format.choices || []),
               ],
               visibility: ({ controls }: { controls?: any }) =>
@@ -918,7 +966,10 @@ const config: ControlPanelConfig = {
               renderTrigger: true,
               description: t('D3 number format for column subtotal cells'),
               choices: [
-                [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                [
+                  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+                  t('Adaptive formatting, empty instead 0'),
+                ],
                 ...(sharedControls.y_axis_format.choices || []),
               ],
               visibility: ({ controls }: { controls?: any }) =>
@@ -1642,6 +1693,80 @@ const config: ControlPanelConfig = {
               ],
               [
                 {
+                  name: `field_formatting_field${fieldIndex}_alignment`,
+                  config: {
+                    type: 'SelectControl',
+                    label: t('Alignment'),
+                    renderTrigger: true,
+                    default: undefined,
+                    clearable: true,
+                    choices: ALIGNMENT_CHOICES,
+                    description: t('Alignment for field headers and value cells'),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectorControl = controls?.[`field_formatting_field${fieldIndex}_selector`];
+                      const selectedField = selectorControl?.value;
+                      return !!selectedField;
+                    },
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
+                    rerender: [`field_formatting_field${fieldIndex}_selector`, 'fieldGroupingSettings'],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: undefined };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: undefined };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value:
+                          fieldSettings &&
+                          'alignment' in fieldSettings &&
+                          fieldSettings.alignment !== undefined
+                            ? fieldSettings.alignment
+                            : undefined,
+                      };
+                    },
+                  },
+                },
+              ],
+              [
+                {
                   name: `field_formatting_field${fieldIndex}_valueFormat`,
                   config: {
                     ...sharedControls.y_axis_format,
@@ -1650,6 +1775,13 @@ const config: ControlPanelConfig = {
                     default: undefined,
                     renderTrigger: true,
                     description: t('D3 number format (per field)'),
+                    choices: [
+                      [
+                        ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+                        t('Adaptive formatting, empty instead 0'),
+                      ],
+                      ...(sharedControls.y_axis_format.choices || []),
+                    ],
                     visibility: (props: any) => {
                       const controls = props?.controls || {};
                       const selectorControl =
@@ -3954,7 +4086,10 @@ const config: ControlPanelConfig = {
                     renderTrigger: true,
                     description: t('D3 number format for subtotal cells'),
                     choices: [
-                      [ADAPTIVE_FORMATTING, t('Adaptive formatting')],
+                      [
+                        ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+                        t('Adaptive formatting, empty instead 0'),
+                      ],
                       ...(sharedControls.y_axis_format.choices || []),
                     ],
                     visibility: (props: any) => {
@@ -4453,6 +4588,7 @@ const config: ControlPanelConfig = {
       const fontSizeKey = `field_formatting_field${i}_fontSize` as keyof typeof formData;
       const fontColorKey = `field_formatting_field${i}_fontColor` as keyof typeof formData;
       const backgroundColorKey = `field_formatting_field${i}_backgroundColor` as keyof typeof formData;
+      const alignmentKey = `field_formatting_field${i}_alignment` as keyof typeof formData;
       const metricHeaderFontSizeKey =
         `field_formatting_field${i}_metricHeaderFontSize` as keyof typeof formData;
       const metricHeaderFontColorKey =
@@ -4549,6 +4685,9 @@ const config: ControlPanelConfig = {
       }
       if (formData[valueFormatKey] !== undefined) {
         fieldSettings.valueFormat = formData[valueFormatKey] as string;
+      }
+      if (formData[alignmentKey] !== undefined) {
+        fieldSettings.alignment = formData[alignmentKey] as string;
       }
       if (formData[dateFormatKey] !== undefined) {
         fieldSettings.dateFormat = formData[dateFormatKey] as string;
@@ -4671,6 +4810,8 @@ const config: ControlPanelConfig = {
         resultFormData[`field_formatting_field${i}_truncate`] = fieldSettings.truncate ?? false;
         resultFormData[`field_formatting_field${i}_valueFormat`] =
           fieldSettings.valueFormat;
+        resultFormData[`field_formatting_field${i}_alignment`] =
+          fieldSettings.alignment;
         resultFormData[`field_formatting_field${i}_dateFormat`] = fieldSettings.dateFormat;
         resultFormData[`field_formatting_field${i}_metricAggregationFunction`] =
           fieldSettings.metricAggregationFunction;

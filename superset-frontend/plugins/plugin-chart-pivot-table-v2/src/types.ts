@@ -29,6 +29,7 @@ import {
   TimeGranularity,
   ContextMenuFilters,
   Currency,
+  NumberFormats,
 } from '@superset-ui/core';
 import { ColorFormatters } from '@superset-ui/chart-controls';
 import type {
@@ -61,6 +62,29 @@ export enum MetricsLayoutEnum {
 
 // Константа для идентификации адаптивного форматирования
 export const ADAPTIVE_FORMATTING = 'ADAPTIVE_FORMATTING';
+export const ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0 =
+  'ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0';
+
+/**
+ * Маппинг кастомных сентинелов плагина на ключи форматтера из @superset-ui/core.
+ * SMART_NUMBER в UI уже подписан как «Adaptive formatting».
+ */
+export function resolveD3NumberFormat(format: string): string {
+  if (
+    format === ADAPTIVE_FORMATTING ||
+    format === ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0
+  ) {
+    return NumberFormats.SMART_NUMBER;
+  }
+  return format;
+}
+
+/** Пустая строка вместо 0/null в ячейках значений (не для заголовков). */
+export function isEmptyInsteadOfZeroFormat(
+  format: string | undefined,
+): boolean {
+  return format === ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0;
+}
 
 interface PivotTableCustomizeProps {
   groupbyRows: QueryFormColumn[];
@@ -135,6 +159,7 @@ export interface FieldGroupingSettings {
   fontSize?: number; // размер шрифта в пикселях
   fontColor?: string; // цвет шрифта в hex формате (будет преобразован из RGBColor)
   backgroundColor?: string; // цвет фона в hex формате (будет преобразован из RGBColor)
+  alignment?: 'left' | 'center' | 'right'; // выравнивание заголовков и value-ячеек поля
 
   // Индивидуальная функция агрегации для метрики (имя агрегатора как в списке UI).
   // Применяется только для metric value полей (ключи = имена метрик).
@@ -146,6 +171,7 @@ export interface FieldGroupingSettings {
   metricHeaderFontSize?: number;
   metricHeaderFontColor?: string;
   metricHeaderBackgroundColor?: string;
+  metricHeaderAlignment?: 'left' | 'center' | 'right';
   metricValueFontSize?: number;
   metricValueFontColor?: string;
   metricValueBackgroundColor?: string;
@@ -166,6 +192,9 @@ export interface GlobalTableSettings {
 
   // Заголовок измерения метрик (строка/столбец "Мера"/"Metric").
   metricsLabel?: string;
+  metricsLabelFontSize?: number;
+  metricsLabelFontColor?: string;
+  metricsLabelAlignment?: 'left' | 'center' | 'right';
 
   // Настройки подписей/форматов для subtotal (когда включены Show rows/columns subtotal).
   rowSubTotalsLabel?: string;

@@ -92,8 +92,8 @@ services:
       - FLASK_ENV=development
       - SUPERSET_ENV=development
       - SUPERSET_LOAD_EXAMPLES=yes
-      - SUPERSET_VERSION=0.0.127
-      - APP_VERSION=0.0.127
+      - SUPERSET_VERSION=0.0.129
+      - APP_VERSION=0.0.129
     ports:
       - "18088:8088"  # Dev Superset accessible at http://localhost:18088
     volumes:
@@ -108,9 +108,8 @@ services:
       # ВАЖНО: mount должен быть RW, иначе внутри контейнера нельзя пересобрать плагины/фронтенд
       # (plugins:build пишет в lib/esm, а build пишет в кэш внутри superset-frontend).
       - ../superset-frontend:/app/superset-frontend
-      # Статика фронтенда: НЕ монтируем с хоста — иначе при несовпадении manifest.json и файлов
-      # браузер получает 404 (HTML) вместо .js → MIME type error. Используем артефакты из образа.
-      # Раскомментировать для hot-reload статики после локального npm run build:
+      # Статика с хоста (после npm run build). UIManifestProcessor перечитывает manifest.json
+      # при смене mtime; если страница всё же белая — restart superset_dev (старый процесс).
       - ../superset/static/assets:/app/.venv/lib/python3.11/site-packages/superset/static/assets:ro
       - ../superset/static/assets:/app/superset/static/assets:ro
       # Translations: mount host translation files so the backend can serve JSON language packs.

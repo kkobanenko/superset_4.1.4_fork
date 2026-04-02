@@ -177,6 +177,30 @@ docker compose -f docker-compose.dev.yml restart superset_dev
 
 ## Troubleshooting
 
+### Blank page at http://localhost:18088 after frontend build
+
+Symptoms: white screen, browser console shows failed loads for `/static/assets/*.entry.js` (404) or MIME type errors.
+
+**Cause:** `npm run build` updates `superset/static/assets/manifest.json` and hashed chunk filenames. A long‑running Superset process may still serve **old** script URLs from an in‑memory manifest.
+
+**Fix:**
+
+1. Restart the app container (always works):
+   ```bash
+   docker compose -f docker-compose.dev.yml restart superset_dev
+   ```
+2. The application code reloads `manifest.json` when its file **mtime** changes (`UIManifestProcessor` in `superset/extensions/__init__.py`). Rebuild the Docker image that contains that Python change, or mount the live `superset/` tree if you need it without rebuilding.
+
+**Recommended workflow after changing frontend:**
+
+```bash
+cd /path/to/Superset_4.1.4_fork/superset-frontend
+npm run plugins:build
+npm run build
+cd ../docker
+docker compose -f docker-compose.dev.yml restart superset_dev
+```
+
 ### Port conflicts
 
 If ports 15432, 16379, or 18088 are already in use, modify them in `docker-compose.dev.yml`:

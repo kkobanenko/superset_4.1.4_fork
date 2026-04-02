@@ -17,62 +17,21 @@ specific language governing permissions and limitations
 under the License.
 -->
 
-## @superset-ui/plugin-chart-pivot-table
+## @superset-ui/plugin-chart-pivot-table-v2
 
-[![Version](https://img.shields.io/npm/v/@superset-ui/plugin-chart-pivot-table.svg?style=flat)](https://www.npmjs.com/package/@superset-ui/plugin-chart-pivot-table)
-[![Libraries.io](https://img.shields.io/librariesio/release/npm/%40superset-ui%2Fplugin-chart-pivot-table?style=flat)](https://libraries.io/npm/@superset-ui%2Fplugin-chart-pivot-table)
+Pivot Table V2 for this Superset fork: extended **Customize** controls (per-field formatting, subtotals, metrics layout), **global table** options, and **Data** controls for the metrics axis label (font, color, alignment).
 
-This plugin provides Pivot Table for Superset.
+### Fork-specific behavior (see root [PRD.md](../../../PRD.md))
 
-If you change the logic of this plugin, please update
-[`pivot_table`](https://github.com/apache/superset/blob/master/superset/charts/post_processing.py).
+- **Field Formatting → Alignment:** `left` | `center` | `right` for field headers and values; metric header cells use field alignment where applicable. Values flow through `buildEffectiveFieldGroupingSettings` in `src/plugin/transformProps.ts` (including `field_formatting_field{n}_alignment`).
+- **Number format:** standard Superset **Adaptive formatting** uses `SMART_NUMBER`. Additional option **Adaptive formatting, empty instead 0** (`ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0`) maps to smart number formatting but renders **empty** value cells for 0 / null / undefined (not for numeric headers). Implemented via `resolveD3NumberFormat` / `isEmptyInsteadOfZeroFormat` in `src/types.ts` and consumers `PivotTableV2Chart.tsx` / `TableRenderers.jsx`.
+- If you change aggregation or display logic, keep [superset/charts/post_processing.py](../../../superset/charts/post_processing.py) in mind for any related backend post-processing.
 
-### Usage
+### Package version
 
-Configure `key`, which can be any `string`, and register the plugin. This `key` will be used to
-lookup this chart throughout the app.
+Version in `package.json` is bumped when shipping plugin changes in this fork; the chart metadata string in `src/plugin/index.ts` should stay in sync for support/debugging.
 
-```js
-import PivotTableChartPlugin from '@superset-ui/plugin-chart-pivot-table';
+### Links
 
-new PivotTableChartPlugin().configure({ key: 'pivot-table-v2' }).register();
-```
-
-Then use it via `SuperChart`. See
-[storybook](https://apache-superset.github.io/superset-ui/?selectedKind=plugin-chart-pivot-table)
-for more details.
-
-```js
-<SuperChart
-  chartType="pivot-table-v2"
-  width={600}
-  height={600}
-  formData={...}
-  queriesData={[{
-    data: {...},
-  }]}
-/>
-```
-
-### File structure generated
-
-```
-├── package.json
-├── README.md
-├── tsconfig.json
-├── src
-│   ├── PivotTableChart.tsx
-│   ├── images
-│   │   └── thumbnail.png
-│   ├── index.ts
-│   ├── plugin
-│   │   ├── buildQuery.ts
-│   │   ├── controlPanel.ts
-│   │   ├── index.ts
-│   │   └── transformProps.ts
-│   └── types.ts
-├── test
-│   └── index.test.ts
-└── types
-    └── external.d.ts
-```
+- [Apache Superset](https://superset.apache.org)
+- Dev stack: [docker/README.dev.md](../../../docker/README.dev.md)

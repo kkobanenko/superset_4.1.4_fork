@@ -22,7 +22,12 @@ import { getNumberFormatter, getTimeFormatter, SMART_DATE_ID, t, safeHtmlSpan, N
 import PropTypes from 'prop-types';
 import { PivotData, flatKey } from './utilities';
 import { Styles } from './Styles';
-import { ADAPTIVE_FORMATTING } from '../types';
+import {
+  ADAPTIVE_FORMATTING,
+  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
+  isEmptyInsteadOfZeroFormat,
+  resolveD3NumberFormat,
+} from '../types';
 
 // Sentinel marker for per-metric subtotal virtual column keys.
 // Replaces "collapsed dimension" levels in virtual colKeys so that
@@ -31,7 +36,11 @@ const METRIC_SUBTOTAL_MARKER = '\u200B__METRIC_SUBTOTAL__';
 
 // Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
 const isAdaptiveFormatting = (valueFormat) => {
-  return valueFormat === ADAPTIVE_FORMATTING || valueFormat === NumberFormats.SMART_NUMBER;
+  return (
+    valueFormat === ADAPTIVE_FORMATTING ||
+    valueFormat === ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0 ||
+    valueFormat === NumberFormats.SMART_NUMBER
+  );
 };
 
 // Russian month names
@@ -446,6 +455,15 @@ export class TableRenderer extends Component {
 
   getGlobalTableSettings() {
     return this.props.tableOptions?.globalTableSettings || {};
+  }
+
+  getMetricsLabelStyleSettings() {
+    const globalTableSettings = this.getGlobalTableSettings();
+    return {
+      fontSize: globalTableSettings?.metricsLabelFontSize,
+      fontColor: globalTableSettings?.metricsLabelFontColor,
+      alignment: globalTableSettings?.metricsLabelAlignment,
+    };
   }
 
   /**
@@ -883,6 +901,9 @@ export class TableRenderer extends Component {
     if (settings.backgroundColor) {
       style.backgroundColor = settings.backgroundColor;
     }
+    if (settings.alignment) {
+      style.textAlign = settings.alignment;
+    }
     if (includeWidth && settings.maxWidth) {
       style.maxWidth = `${settings.maxWidth}px`;
       style.overflow = settings.truncate ? 'hidden' : 'visible';
@@ -944,6 +965,7 @@ export class TableRenderer extends Component {
     const hasFormatting = settings.fontSize !== undefined ||
       settings.fontColor !== undefined ||
       settings.backgroundColor !== undefined ||
+      settings.alignment !== undefined ||
       (includeWidth && settings.maxWidth !== undefined);
     if (!hasFormatting) {
       return null;
@@ -958,6 +980,9 @@ export class TableRenderer extends Component {
         }
         if (settings.backgroundColor) {
           element.style.setProperty('background-color', settings.backgroundColor, 'important');
+        }
+        if (settings.alignment) {
+          element.style.setProperty('text-align', settings.alignment, 'important');
         }
         if (includeWidth && settings.maxWidth) {
           element.style.setProperty('max-width', `${settings.maxWidth}px`, 'important');
@@ -994,7 +1019,9 @@ export class TableRenderer extends Component {
       typeof rawValue === 'number'
     ) {
       try {
-        return getNumberFormatter(settings.valueFormat)(rawValue);
+        return getNumberFormatter(resolveD3NumberFormat(settings.valueFormat))(
+          rawValue,
+        );
       } catch (e) {
         return rawValue;
       }
@@ -1047,8 +1074,16 @@ export class TableRenderer extends Component {
       typeof formatSettings.valueFormat === 'string' &&
       formatSettings.valueFormat.length > 0
     ) {
+      if (
+        isEmptyInsteadOfZeroFormat(formatSettings.valueFormat) &&
+        (aggValue === 0 || aggValue === '0' || aggValue === null || aggValue === undefined)
+      ) {
+        return '';
+      }
       try {
-        return getNumberFormatter(formatSettings.valueFormat)(aggValue);
+        return getNumberFormatter(
+          resolveD3NumberFormat(formatSettings.valueFormat),
+        )(aggValue);
       } catch (e) {
         return formattedByAgg;
       }
@@ -1129,6 +1164,7 @@ export class TableRenderer extends Component {
       fontColor: settings.metricHeaderFontColor ?? settings.fontColor,
       backgroundColor:
         settings.metricHeaderBackgroundColor ?? settings.backgroundColor,
+      alignment: settings.metricHeaderAlignment ?? settings.alignment,
     };
     // Header also supports width/truncation
     return this.buildTextStyle(normalized, true);
@@ -1428,16 +1464,27 @@ export class TableRenderer extends Component {
     // Применяем стили форматирования к заголовку колонки
     const headerStyle = this.getHeaderStyle(attrName);
     const fieldSettings = this.getFieldSettings(attrName);
+    const metricKey = this.getMetricKey();
+    const isMetricsAxisLabel = Boolean(metricKey && attrName === metricKey);
+    const metricsLabelStyleSettings = this.getMetricsLabelStyleSettings();
     // Используем правильные настройки для заголовков колонок
     // colAttrs уже объявлена выше через деструктуризацию из pivotSettings
     const isColumn = colAttrs.indexOf(attrName) !== -1;
-    const headerFieldSettings = isColumn
+    const headerFieldSettings = isMetricsAxisLabel
       ? {
-        fontSize: fieldSettings.columnHeaderFontSize ?? fieldSettings.fontSize,
-        fontColor: fieldSettings.columnHeaderFontColor ?? fieldSettings.fontColor,
-        backgroundColor: fieldSettings.columnHeaderBackgroundColor ?? fieldSettings.backgroundColor,
+        ...fieldSettings,
+        fontSize: metricsLabelStyleSettings.fontSize,
+        fontColor: metricsLabelStyleSettings.fontColor,
+        alignment: metricsLabelStyleSettings.alignment,
       }
-      : fieldSettings;
+      : isColumn
+        ? {
+          fontSize: fieldSettings.columnHeaderFontSize ?? fieldSettings.fontSize,
+          fontColor: fieldSettings.columnHeaderFontColor ?? fieldSettings.fontColor,
+          backgroundColor: fieldSettings.columnHeaderBackgroundColor ?? fieldSettings.backgroundColor,
+          alignment: fieldSettings.alignment,
+        }
+        : fieldSettings;
     // Создаем ref callback для применения стилей с !important
     const headerStyleRef = this.buildFieldStyleRef(headerFieldSettings, true);
     // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
@@ -1571,7 +1618,6 @@ export class TableRenderer extends Component {
           dateFormatters,
         );
         // Apply metric-specific header formatting when this header belongs to a metric value.
-        const metricKey = this.getMetricKey();
         const rawHeaderValue = colKey[attrIdx];
         const valueHeaderStyle =
           metricKey &&
@@ -1596,6 +1642,7 @@ export class TableRenderer extends Component {
             fontSize: valueHeaderFieldSettingsRaw.metricHeaderFontSize ?? valueHeaderFieldSettingsRaw.fontSize,
             fontColor: valueHeaderFieldSettingsRaw.metricHeaderFontColor ?? valueHeaderFieldSettingsRaw.fontColor,
             backgroundColor: valueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? valueHeaderFieldSettingsRaw.backgroundColor,
+            alignment: valueHeaderFieldSettingsRaw.metricHeaderAlignment ?? valueHeaderFieldSettingsRaw.alignment,
             maxWidth: valueHeaderFieldSettingsRaw.maxWidth,
             truncate: valueHeaderFieldSettingsRaw.truncate,
           }
@@ -1766,17 +1813,28 @@ export class TableRenderer extends Component {
           // Применяем стили форматирования к заголовкам строк
           const rowHeaderStyle = this.getHeaderStyle(r);
           const rowHeaderFieldSettings = this.getFieldSettings(r);
+          const metricKey = this.getMetricKey();
+          const isMetricsAxisLabel = Boolean(metricKey && r === metricKey);
+          const metricsLabelStyleSettings = this.getMetricsLabelStyleSettings();
           // Используем правильные настройки для заголовков строк
           const rowAttrsLocal = this.props.rows || [];
           const isRow = rowAttrsLocal.indexOf(r) !== -1;
-          const normalizedRowHeaderFieldSettings = isRow
+          const normalizedRowHeaderFieldSettings = isMetricsAxisLabel
             ? {
               ...rowHeaderFieldSettings,
-              fontSize: rowHeaderFieldSettings.rowHeaderFontSize ?? rowHeaderFieldSettings.fontSize,
-              fontColor: rowHeaderFieldSettings.rowHeaderFontColor ?? rowHeaderFieldSettings.fontColor,
-              backgroundColor: rowHeaderFieldSettings.rowHeaderBackgroundColor ?? rowHeaderFieldSettings.backgroundColor,
+              fontSize: metricsLabelStyleSettings.fontSize,
+              fontColor: metricsLabelStyleSettings.fontColor,
+              alignment: metricsLabelStyleSettings.alignment,
             }
-            : rowHeaderFieldSettings;
+            : isRow
+              ? {
+                ...rowHeaderFieldSettings,
+                fontSize: rowHeaderFieldSettings.rowHeaderFontSize ?? rowHeaderFieldSettings.fontSize,
+                fontColor: rowHeaderFieldSettings.rowHeaderFontColor ?? rowHeaderFieldSettings.fontColor,
+                backgroundColor: rowHeaderFieldSettings.rowHeaderBackgroundColor ?? rowHeaderFieldSettings.backgroundColor,
+                alignment: rowHeaderFieldSettings.alignment,
+              }
+              : rowHeaderFieldSettings;
           // Создаем ref callback для применения стилей с !important
           const rowHeaderStyleRef = this.buildFieldStyleRef(normalizedRowHeaderFieldSettings, true);
           // Разделяем стили: fontSize, fontColor, backgroundColor через ref, остальные через style
@@ -1940,6 +1998,7 @@ export class TableRenderer extends Component {
             fontSize: rowValueHeaderFieldSettingsRaw.metricHeaderFontSize ?? rowValueHeaderFieldSettingsRaw.fontSize,
             fontColor: rowValueHeaderFieldSettingsRaw.metricHeaderFontColor ?? rowValueHeaderFieldSettingsRaw.fontColor,
             backgroundColor: rowValueHeaderFieldSettingsRaw.metricHeaderBackgroundColor ?? rowValueHeaderFieldSettingsRaw.backgroundColor,
+            alignment: rowValueHeaderFieldSettingsRaw.metricHeaderAlignment ?? rowValueHeaderFieldSettingsRaw.alignment,
             maxWidth: rowValueHeaderFieldSettingsRaw.maxWidth,
             truncate: rowValueHeaderFieldSettingsRaw.truncate,
           }
@@ -2261,12 +2320,14 @@ export class TableRenderer extends Component {
             fontSize: cellFieldSettings.columnValueFontSize ?? cellFieldSettings.fontSize,
             fontColor: cellFieldSettings.columnValueFontColor ?? cellFieldSettings.fontColor,
             backgroundColor: cellFieldSettings.columnValueBackgroundColor ?? cellFieldSettings.backgroundColor,
+            alignment: cellFieldSettings.alignment,
           }
           : isRowField
             ? {
               fontSize: cellFieldSettings.rowValueFontSize ?? cellFieldSettings.fontSize,
               fontColor: cellFieldSettings.rowValueFontColor ?? cellFieldSettings.fontColor,
               backgroundColor: cellFieldSettings.rowValueBackgroundColor ?? cellFieldSettings.backgroundColor,
+              alignment: cellFieldSettings.alignment,
             }
             : cellFieldSettings)
         : null;
@@ -2276,6 +2337,7 @@ export class TableRenderer extends Component {
         fontSize: metricValueFieldSettings.metricValueFontSize ?? metricValueFieldSettings.fontSize,
         fontColor: metricValueFieldSettings.metricValueFontColor ?? metricValueFieldSettings.fontColor,
         backgroundColor: metricValueFieldSettings.metricValueBackgroundColor ?? metricValueFieldSettings.backgroundColor,
+        alignment: metricValueFieldSettings.alignment,
       }, false) : null;
 
       // ── Per-metric subtotal: применяем стили и формат из MetricSubtotalSettings ──

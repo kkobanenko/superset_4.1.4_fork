@@ -329,6 +329,24 @@ function buildGlobalTableSettings(
   if (formData['globalTableSettings.metricsLabel'] !== undefined) {
     out.metricsLabel = formData['globalTableSettings.metricsLabel'];
   }
+  if (formData['globalTableSettings.metricsLabelFontSize'] !== undefined) {
+    const fontSizeValue = formData['globalTableSettings.metricsLabelFontSize'];
+    if (typeof fontSizeValue === 'number') {
+      out.metricsLabelFontSize = fontSizeValue;
+    } else if (typeof fontSizeValue === 'string' && fontSizeValue.length > 0) {
+      const parsed = Number.parseFloat(fontSizeValue);
+      if (!Number.isNaN(parsed)) {
+        out.metricsLabelFontSize = parsed;
+      }
+    }
+  }
+  if (formData['globalTableSettings.metricsLabelFontColor'] !== undefined) {
+    const fontColorCss = toCssColor(formData['globalTableSettings.metricsLabelFontColor']);
+    out.metricsLabelFontColor = fontColorCss ?? formData['globalTableSettings.metricsLabelFontColor'];
+  }
+  if (formData['globalTableSettings.metricsLabelAlignment'] !== undefined) {
+    out.metricsLabelAlignment = formData['globalTableSettings.metricsLabelAlignment'];
+  }
 
   // Добавляем другие поля из существующего объекта (если они еще не добавлены)
   if (existing && typeof existing === 'object') {
@@ -347,6 +365,40 @@ function buildGlobalTableSettings(
     }
     if (existingObj.metricsLabel !== undefined && out.metricsLabel === undefined) {
       out.metricsLabel = existingObj.metricsLabel;
+    }
+    if (
+      existingObj.metricsLabelFontSize !== undefined &&
+      out.metricsLabelFontSize === undefined
+    ) {
+      out.metricsLabelFontSize = existingObj.metricsLabelFontSize;
+    }
+    if (
+      existingObj.metricsLabelFontColor !== undefined &&
+      out.metricsLabelFontColor === undefined
+    ) {
+      out.metricsLabelFontColor = existingObj.metricsLabelFontColor;
+    }
+    if (
+      existingObj.metricsLabelAlignment !== undefined &&
+      out.metricsLabelAlignment === undefined
+    ) {
+      out.metricsLabelAlignment = existingObj.metricsLabelAlignment;
+    }
+  }
+
+  if (out.metricsLabelFontSize !== undefined) {
+    const size = out.metricsLabelFontSize;
+    if (typeof size === 'string' && size.length > 0) {
+      const parsed = Number.parseFloat(size);
+      if (!Number.isNaN(parsed)) {
+        out.metricsLabelFontSize = parsed;
+      }
+    }
+  }
+  if (out.metricsLabelFontColor !== undefined) {
+    const color = toCssColor(out.metricsLabelFontColor);
+    if (color) {
+      out.metricsLabelFontColor = color;
     }
   }
 
@@ -726,6 +778,7 @@ function buildEffectiveFieldGroupingSettings(
       'cellValueType',
       'percentageType',
       'valueFormat',
+      'alignment',
       'dateFormat',
       'fontSize',
       'fontColor',
@@ -879,6 +932,15 @@ function buildEffectiveFieldGroupingSettings(
     const truncate = fd[`field_formatting_field${i}_truncate`];
     if (typeof truncate === 'boolean') {
       nextFieldSettings.truncate = truncate;
+    }
+
+    const alignmentRaw = fd[`field_formatting_field${i}_alignment`];
+    if (
+      alignmentRaw === 'left' ||
+      alignmentRaw === 'center' ||
+      alignmentRaw === 'right'
+    ) {
+      nextFieldSettings.alignment = alignmentRaw;
     }
 
     const fontSize = fd[`field_formatting_field${i}_fontSize`];

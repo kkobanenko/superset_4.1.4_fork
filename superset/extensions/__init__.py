@@ -74,6 +74,10 @@ class UIManifestProcessor:
         self.app: Optional[Flask] = None
         self.manifest: dict[str, dict[str, list[str]]] = {}
         self.manifest_file = f"{app_dir}/static/assets/manifest.json"
+        # When frontend is rebuilt, manifest.json and chunk filenames change. Without
+        # reloading, templates keep pointing at missing .js files (blank UI). mtime
+        # check fixes this even if app.debug is false in a reloader child process.
+        self._manifest_mtime: float = 0.0
 
     def init_app(self, app: Flask) -> None:
         self.app = app
@@ -109,12 +113,17 @@ class UIManifestProcessor:
                 # templates
                 full_manifest = json.load(f)
                 self.manifest = full_manifest.get("entrypoints", {})
+            self._manifest_mtime = os.path.getmtime(self.manifest_file)
         except Exception:  # pylint: disable=broad-except  # noqa: S110
             pass
 
     def get_manifest_files(self, bundle: str, asset_type: str) -> list[str]:
-        if self.app and self.app.debug:
-            self.parse_manifest_json()
+        if self.app:
+            try:
+                if os.path.getmtime(self.manifest_file) != self._manifest_mtime:
+                    self.parse_manifest_json()
+            except OSError:
+                pass
         return self.manifest.get(bundle, {}).get(asset_type, [])
 
 

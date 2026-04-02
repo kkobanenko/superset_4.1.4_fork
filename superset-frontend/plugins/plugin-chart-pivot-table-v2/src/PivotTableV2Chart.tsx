@@ -41,6 +41,7 @@ import {
   PivotTableV2Props,
   PivotTableStylesProps,
   SelectedFiltersType,
+  resolveD3NumberFormat,
 } from './types';
 
 const Styles = styled.div<PivotTableStylesProps>`
@@ -227,16 +228,15 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
   // valueFormat в Superset обычно всегда заполнен контролом y_axis_format,
   // но на всякий случай держим безопасный fallback.
   const effectiveValueFormat = valueFormat || '';
-  const defaultFormatter = useMemo(
-    () =>
-      currencyFormat?.symbol
-        ? new CurrencyFormatter({
-            currency: currencyFormat,
-            d3Format: effectiveValueFormat,
-          })
-        : getNumberFormatter(effectiveValueFormat),
-    [effectiveValueFormat, currencyFormat],
-  );
+  const defaultFormatter = useMemo(() => {
+    const d3Resolved = resolveD3NumberFormat(effectiveValueFormat);
+    return currencyFormat?.symbol
+      ? new CurrencyFormatter({
+          currency: currencyFormat,
+          d3Format: d3Resolved,
+        })
+      : getNumberFormatter(d3Resolved);
+  }, [effectiveValueFormat, currencyFormat]);
   const customFormatsArray = useMemo(
     () =>
       Array.from(
@@ -244,16 +244,24 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
           ...Object.keys(columnFormats || {}),
           ...Object.keys(currencyFormats || {}),
         ]),
-      ).map(metricName => [
-        metricName,
-        // UI override (fieldGroupingSettings) has priority over datasource formats.
-        (fieldGroupingSettings?.[metricName] &&
-        typeof fieldGroupingSettings[metricName] === 'object' &&
-        (fieldGroupingSettings[metricName] as { valueFormat?: unknown }).valueFormat
-          ? String((fieldGroupingSettings[metricName] as { valueFormat?: unknown }).valueFormat)
-          : columnFormats[metricName]) || valueFormat,
-        currencyFormats[metricName] || currencyFormat,
-      ]),
+      ).map(metricName => {
+        const rawFormat =
+          // UI override (fieldGroupingSettings) has priority over datasource formats.
+          (fieldGroupingSettings?.[metricName] &&
+          typeof fieldGroupingSettings[metricName] === 'object' &&
+          (fieldGroupingSettings[metricName] as { valueFormat?: unknown })
+            .valueFormat
+            ? String(
+                (fieldGroupingSettings[metricName] as { valueFormat?: unknown })
+                  .valueFormat,
+              )
+            : columnFormats[metricName]) || valueFormat;
+        return [
+          metricName,
+          resolveD3NumberFormat(String(rawFormat ?? '')),
+          currencyFormats[metricName] || currencyFormat,
+        ] as const;
+      }),
     [columnFormats, currencyFormat, currencyFormats, fieldGroupingSettings, valueFormat],
   );
   const hasCustomMetricFormatters = customFormatsArray.length > 0;
