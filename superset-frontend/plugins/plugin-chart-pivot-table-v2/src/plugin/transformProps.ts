@@ -162,6 +162,235 @@ function normalizeValueCellFormatSettings(
 }
 
 /**
+ * Для SQL-метрик с одним агрегатным термом возвращает "базовое" имя поля
+ * из backticks, которое нужно смэппить на display label метрики.
+ *
+ * Примеры:
+ * - SUM(if(`Дата` < now(),`Продажи: Сумма без НДС`, 0.)) -> `Продажи: Сумма без НДС`
+ * - SUM(`Значение`) * 1000 -> `Значение`
+ *
+ * Для формул из нескольких агрегатных термов (например `% = SUM(...) / SUM(...)`)
+ * возвращаем null, чтобы не привязать сырой столбец к составной метрике.
+ */
+function extractRepresentativeSqlMetricName(
+  sqlExpression: string | null,
+): string | null {
+  if (!sqlExpression || typeof sqlExpression !== 'string') {
+    return null;
+  }
+
+  const aggregateNames = ['sum', 'count', 'avg', 'min', 'max', 'count_distinct'];
+  const aggregateInners: string[] = [];
+  let idx = 0;
+
+  while (idx < sqlExpression.length) {
+    let matchedName: string | null = null;
+    for (const name of aggregateNames) {
+      const lower = sqlExpression.slice(idx, idx + name.length).toLowerCase();
+      if (lower !== name) {
+        continue;
+      }
+      let j = idx + name.length;
+      while (j < sqlExpression.length && /\s/.test(sqlExpression[j])) {
+        j += 1;
+      }
+      if (sqlExpression[j] === '(') {
+        matchedName = name;
+        break;
+      }
+    }
+
+    if (!matchedName) {
+      idx += 1;
+      continue;
+    }
+
+    let openIdx = idx + matchedName.length;
+    while (openIdx < sqlExpression.length && /\s/.test(sqlExpression[openIdx])) {
+      openIdx += 1;
+    }
+
+    let depth = 0;
+    let closeIdx = -1;
+    for (let p = openIdx; p < sqlExpression.length; p += 1) {
+      if (sqlExpression[p] === '(') {
+        depth += 1;
+      } else if (sqlExpression[p] === ')') {
+        depth -= 1;
+        if (depth === 0) {
+          closeIdx = p;
+          break;
+        }
+      }
+    }
+
+    if (closeIdx === -1) {
+      return null;
+    }
+
+    aggregateInners.push(sqlExpression.slice(openIdx + 1, closeIdx));
+    idx = closeIdx + 1;
+  }
+
+  if (aggregateInners.length !== 1) {
+    return null;
+  }
+
+  const metricMatches = aggregateInners[0].match(/`([^`]+)`/g) || [];
+  if (metricMatches.length === 0) {
+    return null;
+  }
+
+  const lastMetricMatch = metricMatches[metricMatches.length - 1];
+  const metricName = lastMetricMatch.slice(1, -1).trim();
+  return metricName.length > 0 ? metricName : null;
+}
+
+/** Подпись метрики из элемента массива metrics (строка или объект). */
+function getMetricLabelForMigration(metric: unknown): string | null {
+  if (typeof metric === 'string' && metric.length > 0) {
+    return metric;
+  }
+  if (!metric || typeof metric !== 'object') {
+    return null;
+  }
+  const m = metric as { label?: unknown; sqlExpression?: unknown };
+  if (typeof m.label === 'string' && m.label.length > 0) {
+    return m.label;
+  }
+  if (typeof m.sqlExpression === 'string' && m.sqlExpression.length > 0) {
+    return m.sqlExpression;
+  }
+  return null;
+}
+
+/**
+ * Миграция настроек subtotal:
+ * - поле уровня field `subtotalAggregation` не используется (только per-metric);
+ * - устаревшие label / цвета в `metricSubtotalSettings` переносим на уровень поля
+ *   (первое непустое значение в порядке metrics из formData, затем остальные ключи по алфавиту);
+ * - per-metric D3 format сохраняем у метрики, потому что это актуальный контракт;
+ * - field-level D3 format, сохраненный по ошибочной старой реализации, не показываем в UI,
+ *   но оставляем как fallback для уже сохранённых чартов.
+ * - после переноса очищаем только legacy label / colors у записей метрик.
+ */
+function migrateLegacySubtotalFieldLevel(
+  merged: Record<string, Record<string, unknown>>,
+  metricsRaw: unknown,
+): void {
+  const fromForm: string[] = [];
+  if (Array.isArray(metricsRaw)) {
+    for (const m of metricsRaw) {
+      const lbl = getMetricLabelForMigration(m);
+      if (lbl !== null) {
+        fromForm.push(lbl);
+      }
+    }
+  }
+
+  for (const fieldSettings of Object.values(merged)) {
+    if (!fieldSettings || typeof fieldSettings !== 'object') {
+      continue;
+    }
+    delete fieldSettings.subtotalAggregation;
+
+    const mssRaw = fieldSettings.metricSubtotalSettings;
+    if (!mssRaw || typeof mssRaw !== 'object') {
+      continue;
+    }
+    const mss = mssRaw as Record<string, Record<string, unknown>>;
+
+    const seen = new Set(fromForm);
+    const orderedKeys = [...fromForm];
+    for (const k of Object.keys(mss).sort()) {
+      if (!seen.has(k)) {
+        orderedKeys.push(k);
+      }
+    }
+
+    let pickLabel: string | undefined;
+    const pickFormat: Record<string, unknown> = {};
+    const existingFmt =
+      fieldSettings.subtotalValueFormat &&
+      typeof fieldSettings.subtotalValueFormat === 'object'
+        ? { ...(fieldSettings.subtotalValueFormat as Record<string, unknown>) }
+        : {};
+
+    for (const ml of orderedKeys) {
+      const ms = mss[ml];
+      if (!ms || typeof ms !== 'object') {
+        continue;
+      }
+      if (
+        pickLabel === undefined &&
+        typeof ms.subtotalLabel === 'string' &&
+        ms.subtotalLabel.trim().length > 0
+      ) {
+        pickLabel = ms.subtotalLabel;
+      }
+      const svf = ms.subtotalValueFormat;
+      if (svf && typeof svf === 'object') {
+        const v = svf as Record<string, unknown>;
+        const fc = toCssColor(v.fontColor);
+        if (pickFormat.fontColor === undefined && typeof fc === 'string') {
+          pickFormat.fontColor = fc;
+        }
+        const bc = toCssColor(v.backgroundColor);
+        if (pickFormat.backgroundColor === undefined && typeof bc === 'string') {
+          pickFormat.backgroundColor = bc;
+        }
+      }
+    }
+
+    const fieldLabel = fieldSettings.subtotalLabel;
+    const fieldLabelEmpty =
+      typeof fieldLabel !== 'string' || fieldLabel.trim().length === 0;
+    if (fieldLabelEmpty && pickLabel !== undefined) {
+      fieldSettings.subtotalLabel = pickLabel;
+    }
+
+    const mergedFmt = { ...existingFmt };
+    let fmtChanged = false;
+    for (const k of ['fontColor', 'backgroundColor'] as const) {
+      if (mergedFmt[k] === undefined && pickFormat[k] !== undefined) {
+        mergedFmt[k] = pickFormat[k];
+        fmtChanged = true;
+      }
+    }
+    if (fmtChanged && Object.keys(mergedFmt).length > 0) {
+      const norm = normalizeValueCellFormatSettings(mergedFmt);
+      fieldSettings.subtotalValueFormat = norm ?? mergedFmt;
+    }
+
+    const newMss: Record<string, unknown> = {};
+    for (const [k, ms] of Object.entries(mss)) {
+      if (!ms || typeof ms !== 'object') {
+        newMss[k] = ms;
+        continue;
+      }
+      const rest = { ...(ms as Record<string, unknown>) };
+      delete rest.subtotalLabel;
+      if (rest.subtotalValueFormat && typeof rest.subtotalValueFormat === 'object') {
+        const metricFormat = {
+          ...(rest.subtotalValueFormat as Record<string, unknown>),
+        };
+        delete metricFormat.fontColor;
+        delete metricFormat.backgroundColor;
+        const normalizedMetricFormat =
+          normalizeValueCellFormatSettings(metricFormat) ?? metricFormat;
+        if (Object.keys(normalizedMetricFormat).length > 0) {
+          rest.subtotalValueFormat = normalizedMetricFormat;
+        } else {
+          delete rest.subtotalValueFormat;
+        }
+      }
+      newMss[k] = rest;
+    }
+    fieldSettings.metricSubtotalSettings = newMss;
+  }
+}
+
+/**
  * Собрать globalTableSettings из formData.
  * Superset может не сохранять вложенные объекты правильно, поэтому собираем
  * из плоской структуры formData (как для fieldGroupingSettings).
@@ -523,7 +752,9 @@ function buildEffectiveFieldGroupingSettings(
       continue;
     }
     const normalized: Record<string, unknown> = { ...fieldSettings };
-    
+    // Агрегация subtotal задаётся только per-metric; сохранённое поле уровня field не используем.
+    delete normalized.subtotalAggregation;
+
     // Нормализуем fontSize (может быть строкой из NumberControl)
     if (normalized.fontSize !== undefined) {
       const fontSizeValue = normalized.fontSize;
@@ -774,7 +1005,6 @@ function buildEffectiveFieldGroupingSettings(
       'subtotalEnabled',
       'subtotalShow',
       'subtotalLabel',
-      'subtotalAggregation',
       'cellValueType',
       'percentageType',
       'valueFormat',
@@ -801,6 +1031,7 @@ function buildEffectiveFieldGroupingSettings(
       'metricValueFontSize',
       'metricValueFontColor',
       'metricValueBackgroundColor',
+      'showNonZeroOnly',
       'metricAggregationFunction',
     ];
     
@@ -1035,6 +1266,11 @@ function buildEffectiveFieldGroupingSettings(
       nextFieldSettings.metricValueBackgroundColor = metricValueBackgroundColorCss;
     }
 
+    const showNonZeroOnly = fd[`field_formatting_field${i}_showNonZeroOnly`];
+    if (typeof showNonZeroOnly === 'boolean') {
+      nextFieldSettings.showNonZeroOnly = showNonZeroOnly;
+    }
+
     // Column-specific formatting: header styles
     const columnHeaderFontSize = fd[`field_formatting_field${i}_columnHeaderFontSize`];
     if (typeof columnHeaderFontSize === 'number') {
@@ -1142,11 +1378,6 @@ function buildEffectiveFieldGroupingSettings(
       nextFieldSettings.subtotalLabel = subtotalLabel;
     }
 
-    const subtotalAggregation = fd[`field_formatting_field${i}_subtotalAggregation`];
-    if (typeof subtotalAggregation === 'string' && subtotalAggregation.length > 0) {
-      nextFieldSettings.subtotalAggregation = subtotalAggregation;
-    }
-
     // Собираем subtotalValueFormat из временных контролов
     const subtotalValueFormat: Record<string, unknown> = {};
     const subtotalValueFormatValue = fd[`field_formatting_field${i}_subtotalValueFormat`];
@@ -1218,6 +1449,8 @@ function buildEffectiveFieldGroupingSettings(
       }
     }
   }
+
+  migrateLegacySubtotalFieldLevel(merged, fd.metrics);
 
   return merged;
 }
@@ -1475,16 +1708,13 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
       // Сохраняем sqlExpression только если это формула (содержит операции)
       metricsSqlExpressions[metricName] = isFormulaMetric(sqlExpression) ? sqlExpression : null;
       
-      // Если это не формула, но есть SQL-выражение, создаем маппинг
-      // для случаев, когда метрика используется в формуле другой метрики
-      if (sqlExpression && !isFormulaMetric(sqlExpression)) {
-        // Извлекаем имя метрики из SQL-выражения (например, из sum(`Продажи: Сумма без НДС`))
-        const metricNameRegex = /(?:sum|count|avg|min|max|count_distinct)\s*\(\s*`([^`]+)`\s*\)/gi;
-        let match;
-        while ((match = metricNameRegex.exec(sqlExpression)) !== null) {
-          const sqlMetricName = match[1].trim();
-          metricNameMapping[sqlMetricName] = metricName;
-        }
+      // Строим маппинг "сырой SQL-идентификатор -> display label метрики".
+      // Это нужно для formula-subtotal, когда формула `%` ссылается не на labels,
+      // а на исходные поля внутри SUM(...).
+      const representativeSqlMetricName =
+        extractRepresentativeSqlMetricName(sqlExpression);
+      if (representativeSqlMetricName) {
+        metricNameMapping[representativeSqlMetricName] = metricName;
       }
     }
   }

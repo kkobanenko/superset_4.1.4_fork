@@ -33,6 +33,7 @@ import {
 // Replaces "collapsed dimension" levels in virtual colKeys so that
 // header rendering can identify them and display a subtotal label.
 const METRIC_SUBTOTAL_MARKER = '\u200B__METRIC_SUBTOTAL__';
+const NON_ZERO_EPSILON = 1e-9;
 
 // Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
 const isAdaptiveFormatting = (valueFormat) => {
@@ -41,6 +42,29 @@ const isAdaptiveFormatting = (valueFormat) => {
     valueFormat === ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0 ||
     valueFormat === NumberFormats.SMART_NUMBER
   );
+};
+
+const shouldRenderEmptyForNonZeroOnly = aggValue => {
+  if (aggValue === null || aggValue === undefined) {
+    return true;
+  }
+  if (typeof aggValue === 'number') {
+    if (Number.isNaN(aggValue)) {
+      return true;
+    }
+    return Math.abs(aggValue) < NON_ZERO_EPSILON;
+  }
+  if (typeof aggValue === 'string') {
+    const trimmed = aggValue.trim();
+    if (trimmed.length === 0) {
+      return true;
+    }
+    const numeric = Number.parseFloat(trimmed);
+    if (!Number.isNaN(numeric)) {
+      return Math.abs(numeric) < NON_ZERO_EPSILON;
+    }
+  }
+  return false;
 };
 
 // Russian month names
@@ -559,92 +583,196 @@ export class TableRenderer extends Component {
     return undefined;
   }
 
-  // Парсинг SQL-формулы для извлечения базовых метрик и операций
-  // Возвращает структуру: { baseMetrics: string[], operations: string[], isValid: boolean }
+  // Парсинг SQL-формулы на агрегатные термы и выражение между ними.
+  // Возвращает структуру: { terms, expression, baseMetrics, operations, isValid }.
   parseSqlFormula(sqlExpression, metricNames, metricNameMapping) {
     if (!sqlExpression || typeof sqlExpression !== 'string') {
       return { baseMetrics: [], operations: [], isValid: false };
     }
+    const aggregateNames = ['sum', 'count', 'avg', 'min', 'max', 'count_distinct'];
+    const terms = [];
+    let simplifiedExpression = '';
+    let idx = 0;
 
-    // Регулярное выражение для поиска паттернов типа sum(`метрика`), count(`метрика`), avg(`метрика`)
-    // Поддерживаем основные агрегатные функции: SUM, COUNT, AVG, MIN, MAX, COUNT_DISTINCT
-    // Учитываем регистронезависимость и возможные пробелы
-    const aggregateFunctionPattern = /(?:sum|count|avg|min|max|count_distinct)\s*\(\s*`([^`]+)`\s*\)/gi;
+    while (idx < sqlExpression.length) {
+      let matchedName = null;
+      for (const name of aggregateNames) {
+        const lower = sqlExpression.slice(idx, idx + name.length).toLowerCase();
+        if (lower !== name) {
+          continue;
+        }
+        let j = idx + name.length;
+        while (j < sqlExpression.length && /\s/.test(sqlExpression[j])) {
+          j += 1;
+        }
+        if (sqlExpression[j] === '(') {
+          matchedName = name;
+          break;
+        }
+      }
 
-    // Извлекаем все метрики из формулы
-    const baseMetrics = [];
-    const metricMatches = [];
-    let match;
+      if (!matchedName) {
+        simplifiedExpression += sqlExpression[idx];
+        idx += 1;
+        continue;
+      }
 
-    while ((match = aggregateFunctionPattern.exec(sqlExpression)) !== null) {
-      const sqlMetricName = match[1].trim();
-      // Пытаемся найти отображаемое имя метрики через маппинг
-      // Если маппинг не найден, используем имя из SQL напрямую
-      const displayMetricName = metricNameMapping && metricNameMapping[sqlMetricName]
-        ? metricNameMapping[sqlMetricName]
-        : sqlMetricName;
+      let openIdx = idx + matchedName.length;
+      while (openIdx < sqlExpression.length && /\s/.test(sqlExpression[openIdx])) {
+        openIdx += 1;
+      }
 
+      let depth = 0;
+      let closeIdx = -1;
+      for (let p = openIdx; p < sqlExpression.length; p += 1) {
+        if (sqlExpression[p] === '(') {
+          depth += 1;
+        } else if (sqlExpression[p] === ')') {
+          depth -= 1;
+          if (depth === 0) {
+            closeIdx = p;
+            break;
+          }
+        }
+      }
+      if (closeIdx === -1) {
+        return { baseMetrics: [], operations: [], expression: '', terms: [], isValid: false };
+      }
 
-      baseMetrics.push(displayMetricName);
-      metricMatches.push({
-        metricName: displayMetricName,
-        startIndex: match.index,
-        endIndex: match.index + match[0].length,
-      });
+      const fullTerm = sqlExpression.slice(idx, closeIdx + 1);
+      const inner = sqlExpression.slice(openIdx + 1, closeIdx);
+      const token = `__TERM_${terms.length}__`;
+
+      const metricMatches = inner.match(/`([^`]+)`/g) || [];
+      let sqlMetricName = null;
+      for (const metricMatch of metricMatches) {
+        const candidate = metricMatch.slice(1, -1).trim();
+        if (metricNameMapping && metricNameMapping[candidate]) {
+          sqlMetricName = candidate;
+          break;
+        }
+        // Если точного маппинга нет, используем последний backtick-кандидат.
+        // Это лучше работает для выражений вида SUM(if(`Дата` < now(), `Продажи`, 0.)).
+        sqlMetricName = candidate;
+      }
+      const displayMetricName = sqlMetricName
+        ? ((metricNameMapping && metricNameMapping[sqlMetricName]) || sqlMetricName)
+        : null;
+
+      terms.push({ token, term: fullTerm, metricName: displayMetricName });
+      simplifiedExpression += token;
+      idx = closeIdx + 1;
     }
 
-    // Если не нашли метрики, формула невалидна
-    if (baseMetrics.length === 0) {
-      return { baseMetrics: [], operations: [], isValid: false };
+    if (terms.length === 0) {
+      return { baseMetrics: [], operations: [], expression: '', terms: [], isValid: false };
     }
 
-    // Извлекаем операции между метриками
-    // Ищем операции /, *, +, - между найденными метриками
-    const operations = [];
-    const operationPattern = /[+\-*/]/g;
-    const operationMatches = [];
+    const expression = simplifiedExpression.replace(/\s+/g, '');
+    const operations = (expression.match(/[+\-*/]/g) || []).filter(Boolean);
+    const hasOnlyAllowedTokens = /^([()+\-*/.]|__TERM_\d+__)+$/.test(expression);
+    const allTermsMapped = terms.every(
+      t => typeof t.metricName === 'string' && t.metricName.length > 0,
+    );
 
-    while ((match = operationPattern.exec(sqlExpression)) !== null) {
-      operationMatches.push({
-        operation: match[0],
-        index: match.index,
-      });
+    return {
+      terms,
+      expression,
+      baseMetrics: terms.map(t => t.metricName).filter(Boolean),
+      operations,
+      isValid: hasOnlyAllowedTokens && allTermsMapped,
+    };
+  }
+
+  evaluateFormulaExpression(expression, termValues) {
+    const rawTokens = expression.match(
+      /__TERM_\d+__|[()+\-*/]|(?:\d+\.\d+|\d+|\.\d+)/g,
+    );
+    if (!rawTokens || rawTokens.join('') !== expression) {
+      return null;
     }
 
-    // Определяем операции между метриками
-    // Операция должна быть между двумя метриками
+    const outputQueue = [];
+    const operatorStack = [];
+    const precedence = { '+': 1, '-': 1, '*': 2, '/': 2 };
 
-    for (let i = 0; i < metricMatches.length - 1; i += 1) {
-      const currentMetricEnd = metricMatches[i].endIndex;
-      const nextMetricStart = metricMatches[i + 1].startIndex;
-
-
-      // Ищем операции между текущей и следующей метрикой
-      // Операция может находиться сразу после конца первой метрики (>=) и до начала следующей (<)
-      const operationsBetween = operationMatches.filter(
-        op => op.index >= currentMetricEnd && op.index < nextMetricStart
-      );
-
-
-      if (operationsBetween.length > 0) {
-        // Берем первую операцию между метриками
-        operations.push(operationsBetween[0].operation);
+    for (const token of rawTokens) {
+      if (token in termValues) {
+        outputQueue.push(termValues[token]);
+      } else if (!Number.isNaN(Number.parseFloat(token))) {
+        outputQueue.push(Number.parseFloat(token));
+      } else if (token in precedence) {
+        while (
+          operatorStack.length > 0 &&
+          operatorStack[operatorStack.length - 1] in precedence &&
+          precedence[operatorStack[operatorStack.length - 1]] >= precedence[token]
+        ) {
+          outputQueue.push(operatorStack.pop());
+        }
+        operatorStack.push(token);
+      } else if (token === '(') {
+        operatorStack.push(token);
+      } else if (token === ')') {
+        while (
+          operatorStack.length > 0 &&
+          operatorStack[operatorStack.length - 1] !== '('
+        ) {
+          outputQueue.push(operatorStack.pop());
+        }
+        if (operatorStack.length === 0) {
+          return null;
+        }
+        operatorStack.pop();
       } else {
-        // Если операция не найдена, формула невалидна
-        return { baseMetrics: [], operations: [], isValid: false };
+        return null;
       }
     }
 
-    // Проверяем, что количество операций соответствует количеству метрик - 1
-    if (operations.length !== baseMetrics.length - 1) {
-      return { baseMetrics: [], operations: [], isValid: false };
+    while (operatorStack.length > 0) {
+      const op = operatorStack.pop();
+      if (op === '(' || op === ')') {
+        return null;
+      }
+      outputQueue.push(op);
     }
 
-    return {
-      baseMetrics,
-      operations,
-      isValid: true,
-    };
+    const stack = [];
+    for (const token of outputQueue) {
+      if (typeof token === 'number') {
+        stack.push(token);
+      } else if (token in precedence) {
+        if (stack.length < 2) {
+          return null;
+        }
+        const right = stack.pop();
+        const left = stack.pop();
+        let result = null;
+        if (token === '+') result = left + right;
+        if (token === '-') result = left - right;
+        if (token === '*') result = left * right;
+        if (token === '/') {
+          if (right === 0) {
+            return null;
+          }
+          result = left / right;
+        }
+        if (result === null || Number.isNaN(result) || !Number.isFinite(result)) {
+          return null;
+        }
+        stack.push(result);
+      } else {
+        return null;
+      }
+    }
+
+    if (
+      stack.length !== 1 ||
+      Number.isNaN(stack[0]) ||
+      !Number.isFinite(stack[0])
+    ) {
+      return null;
+    }
+    return stack[0];
   }
 
   // Получение значения базовой метрики из подытогов/итогов
@@ -685,67 +813,96 @@ export class TableRenderer extends Component {
       }
 
       if (isRowSubtotal && !transposePivot) {
-        // Для подытога строки при transposePivot = false: метрики в колонках
-        // Для row subtotals нужно суммировать значения базовых метрик из всех обычных ячеек,
-        // которые принадлежат этой подытоге строки (имеют тот же rowKey[0] и colKey[0])
-
-        // Получаем rowKeys и colKeys из props для поиска всех обычных ячеек
-        const { rowKeys, colKeys } = this.props;
+        // Для подытога строки при transposePivot = false нужно суммировать leaf-ячейки
+        // той же группы строк и того же полного col-prefix, а затем подставить базовую метрику.
+        // Это корректно работает и для нескольких уровней rows/cols.
+        const rowKeys =
+          typeof pivotData.getRowKeys === 'function'
+            ? pivotData.getRowKeys()
+            : this.props.rowKeys;
+        const colKeys =
+          typeof pivotData.getColKeys === 'function'
+            ? pivotData.getColKeys()
+            : this.props.colKeys;
         if (!rowKeys || !colKeys || rowKeys.length === 0 || colKeys.length === 0) {
           return null;
         }
 
-        // Для row subtotals rowKey имеет структуру [groupingLevel1]
-        // Нужно найти все обычные ячейки с тем же rowKey[0] и colKey[0] (timestamp)
-        const subtotalRowKeyPrefix = rowKey[0]; // Первый уровень группировки (например, "Москва и Центр")
-        const timestamp = colKey && colKey.length > 0 ? colKey[0] : null;
+        const matchingRowKeys = rowKeys.filter(leafRowKey => {
+          if (!Array.isArray(leafRowKey) || leafRowKey.length < rowKey.length) {
+            return false;
+          }
+          for (let i = 0; i < rowKey.length; i += 1) {
+            if (leafRowKey[i] !== rowKey[i]) {
+              return false;
+            }
+          }
+          return true;
+        });
 
-        if (!subtotalRowKeyPrefix || timestamp === null) {
-          return null;
-        }
-
-        // Суммируем значения базовых метрик из всех обычных ячеек
-        let sum = 0;
-        let foundAny = false;
-
-        for (let i = 0; i < rowKeys.length; i++) {
-          const normalRowKey = rowKeys[i];
-          // Проверяем, что обычная ячейка принадлежит этой подытоге строки
-          // (имеет тот же rowKey[0])
-          if (!normalRowKey || normalRowKey.length === 0 || normalRowKey[0] !== subtotalRowKeyPrefix) {
-            continue;
+        const matchingLeafColKeys = colKeys.filter(leafColKey => {
+          if (!Array.isArray(leafColKey) || leafColKey.length !== colAttrs.length) {
+            return false;
           }
 
-          // Для каждой обычной ячейки ищем colKey с тем же timestamp и базовой метрикой
-          for (let j = 0; j < colKeys.length; j++) {
-            const normalColKey = colKeys[j];
-            // Проверяем, что timestamp совпадает
-            if (!normalColKey || normalColKey.length === 0 || normalColKey[0] !== timestamp) {
+          for (let i = 0; i < colAttrs.length; i += 1) {
+            if (i === metricKeyIndex) {
               continue;
             }
 
-            // Создаем colKey для базовой метрики из этого colKey
-            const baseMetricColKey = [...normalColKey];
-            if (baseMetricColKey.length > metricKeyIndex) {
-              baseMetricColKey[metricKeyIndex] = baseMetricName;
-            } else {
-              while (baseMetricColKey.length <= metricKeyIndex) {
-                baseMetricColKey.push(null);
-              }
-              baseMetricColKey[metricKeyIndex] = baseMetricIndex;
+            const currentColValue = colKey[i];
+            if (
+              currentColValue === undefined ||
+              currentColValue === null ||
+              currentColValue === METRIC_SUBTOTAL_MARKER
+            ) {
+              continue;
             }
 
-            // Получаем агрегатор для обычной ячейки с базовой метрикой
+            if (
+              typeof currentColValue === 'string' &&
+              currentColValue.startsWith(METRIC_SUBTOTAL_MARKER)
+            ) {
+              continue;
+            }
+
+            if (leafColKey[i] !== currentColValue) {
+              return false;
+            }
+          }
+
+          return true;
+        });
+
+        if (matchingRowKeys.length === 0 || matchingLeafColKeys.length === 0) {
+          return null;
+        }
+
+        let sum = 0;
+        let foundAny = false;
+
+        for (const normalRowKey of matchingRowKeys) {
+          for (const normalColKey of matchingLeafColKeys) {
+            const baseMetricColKey = [...normalColKey];
+            const leafMetricValue = baseMetricColKey[metricKeyIndex];
+            baseMetricColKey[metricKeyIndex] =
+              typeof leafMetricValue === 'number' ? baseMetricIndex : baseMetricName;
+
             const normalAgg = pivotData.getAggregator(normalRowKey, baseMetricColKey);
-            if (normalAgg) {
-              const normalValue = normalAgg.value();
-              if (normalValue !== null && normalValue !== undefined && !Number.isNaN(normalValue)) {
-                const numValue = typeof normalValue === 'number' ? normalValue : Number.parseFloat(normalValue);
-                if (!Number.isNaN(numValue)) {
-                  sum += numValue;
-                  foundAny = true;
-                }
-              }
+            if (!normalAgg) {
+              continue;
+            }
+            const normalValue = normalAgg.value();
+            if (normalValue === null || normalValue === undefined || Number.isNaN(normalValue)) {
+              continue;
+            }
+            const numValue =
+              typeof normalValue === 'number'
+                ? normalValue
+                : Number.parseFloat(normalValue);
+            if (!Number.isNaN(numValue)) {
+              sum += numValue;
+              foundAny = true;
             }
           }
         }
@@ -753,8 +910,6 @@ export class TableRenderer extends Component {
         if (!foundAny) {
           return null;
         }
-
-
         return sum;
       } else if (isColSubtotal && !transposePivot) {
         // Для подытога колонки при transposePivot = false: метрики в колонках
@@ -817,17 +972,24 @@ export class TableRenderer extends Component {
 
 
     // Парсим формулу
-    const parsed = this.parseSqlFormula(sqlExpression, metricsOrder || [], metricNameMapping || {});
-    if (!parsed.isValid || parsed.baseMetrics.length === 0) {
+    const parsed = this.parseSqlFormula(
+      sqlExpression,
+      metricsOrder || [],
+      metricNameMapping || {},
+    );
+    if (!parsed.isValid || !Array.isArray(parsed.terms) || parsed.terms.length === 0) {
       // Если формула не может быть распарсена, возвращаем null (будет использовано стандартное поведение)
       return null;
     }
 
-    // Получаем значения базовых метрик
-    const baseValues = [];
-    for (const baseMetric of parsed.baseMetrics) {
+    // Получаем значения базовых метрик для каждого агрегатного терма
+    const termValues = {};
+    for (const termInfo of parsed.terms) {
+      if (!termInfo?.metricName || !termInfo?.token) {
+        return null;
+      }
       const value = this.getBaseMetricValue(
-        baseMetric,
+        termInfo.metricName,
         rowKey,
         colKey,
         isRowSubtotal,
@@ -844,50 +1006,10 @@ export class TableRenderer extends Component {
         return null;
       }
 
-      baseValues.push(value);
+      termValues[termInfo.token] = value;
     }
 
-
-    // Применяем операции к значениям базовых метрик
-    let result = baseValues[0];
-    for (let i = 0; i < parsed.operations.length; i += 1) {
-      const operation = parsed.operations[i];
-      const nextValue = baseValues[i + 1];
-
-      if (nextValue === null || nextValue === undefined || Number.isNaN(nextValue)) {
-        return null;
-      }
-
-      switch (operation) {
-        case '/':
-          if (nextValue === 0) {
-            // Деление на ноль
-            return null;
-          }
-          result = result / nextValue;
-          break;
-        case '*':
-          result = result * nextValue;
-          break;
-        case '+':
-          result = result + nextValue;
-          break;
-        case '-':
-          result = result - nextValue;
-          break;
-        default:
-          // Неподдерживаемая операция
-          return null;
-      }
-    }
-
-
-    // Проверяем результат на валидность
-    if (result === null || result === undefined || Number.isNaN(result) || !Number.isFinite(result)) {
-      return null;
-    }
-
-    return result;
+    return this.evaluateFormulaExpression(parsed.expression, termValues);
   }
 
   buildTextStyle(settings, includeWidth = false) {
@@ -1049,6 +1171,13 @@ export class TableRenderer extends Component {
   // Форматировать агрегированное значение (metric value / totals/subtotals).
   // Если formatSettings содержит dateFormat/valueFormat, они перекрывают agg.format(...).
   formatAggValue(aggValue, formattedByAgg, formatSettings) {
+    if (
+      formatSettings?.showNonZeroOnly &&
+      shouldRenderEmptyForNonZeroOnly(aggValue)
+    ) {
+      return '';
+    }
+
     if (!formatSettings || typeof formatSettings !== 'object') {
       return formattedByAgg;
     }
@@ -2130,13 +2259,46 @@ export class TableRenderer extends Component {
               result = Math.min(result, num);
             } else if (aggType === 'max') {
               result = Math.max(result, num);
-            } else {
-              // sum (по умолчанию)
+            } else if (aggType === 'sum') {
               result += num;
             }
           }
         }
-        aggValue = hasValue ? result : null;
+        if (aggType === 'formula') {
+          aggValue = null;
+          const formulaValue = this.computeFormulaValue(
+            pmInfo?.metricName,
+            rowKey,
+            colKey,
+            isRowSubtotalRow,
+            false,
+            pivotData,
+            rowAttrs,
+            colAttrs,
+            metricKey,
+            metricsSqlExpressions,
+            metricsOrder,
+            metricNameMapping,
+          );
+          if (
+            formulaValue !== null &&
+            formulaValue !== undefined &&
+            !Number.isNaN(formulaValue)
+          ) {
+            aggValue = formulaValue;
+          } else {
+            console.warn(
+              '[PivotTableV2] Formula subtotal fallback to empty value',
+              {
+                metric: pmInfo?.metricName,
+                rowKey,
+                colKey,
+              },
+            );
+          }
+        } else {
+          aggValue = hasValue ? result : null;
+        }
       }
 
       if (!isPerMetricSubtotal && isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
@@ -2434,6 +2596,13 @@ export class TableRenderer extends Component {
         }
       }
 
+      if (metricFormatSettings?.showNonZeroOnly) {
+        overrideFormatSettings = {
+          ...(overrideFormatSettings || {}),
+          showNonZeroOnly: true,
+        };
+      }
+
       const formattedValue = this.formatAggValue(
         aggValue,
         formattedByAgg,
@@ -2465,6 +2634,13 @@ export class TableRenderer extends Component {
 
       // Обработка адаптивного форматирования для итогов строк
       let totalFormatSettings = globalTableSettings?.rowTotalsValueFormat;
+      const rowTotalMetricName = this.getMetricNameForCell(rowKey, [], rowAttrs, colAttrs);
+      if (rowTotalMetricName && this.getFieldSettings(rowTotalMetricName)?.showNonZeroOnly) {
+        totalFormatSettings = {
+          ...(totalFormatSettings || {}),
+          showNonZeroOnly: true,
+        };
+      }
       if (isAdaptiveFormatting(totalFormatSettings?.valueFormat)) {
         // Для итогов строк метрика определяется по rowKey (когда transposePivot = true)
         const adaptiveMetricName = this.getMetricNameForCell(rowKey, [], rowAttrs, colAttrs);
@@ -2616,12 +2792,46 @@ export class TableRenderer extends Component {
               result = Math.min(result, num);
             } else if (aggType === 'max') {
               result = Math.max(result, num);
-            } else {
+            } else if (aggType === 'sum') {
               result += num;
             }
           }
         }
-        aggValue = hasValue ? result : null;
+        if (aggType === 'formula') {
+          aggValue = null;
+          const formulaValue = this.computeFormulaValue(
+            pmInfo?.metricName,
+            [],
+            colKey,
+            false,
+            false,
+            pivotData,
+            rowAttrs,
+            colAttrs,
+            metricKey,
+            metricsSqlExpressions,
+            metricsOrder,
+            metricNameMapping,
+          );
+          if (
+            formulaValue !== null &&
+            formulaValue !== undefined &&
+            !Number.isNaN(formulaValue)
+          ) {
+            aggValue = formulaValue;
+          } else {
+            console.warn(
+              '[PivotTableV2] Formula subtotal fallback to empty value',
+              {
+                metric: pmInfo?.metricName,
+                rowKey: [],
+                colKey,
+              },
+            );
+          }
+        } else {
+          aggValue = hasValue ? result : null;
+        }
       }
 
       if (!isPerMetricSubtotal && !transposePivot && metricsSqlExpressions && metricKey) {
@@ -2683,11 +2893,18 @@ export class TableRenderer extends Component {
       const effectiveTotalFormat = isPerMetricSubtotal && perMetricTotalFormatOverride
         ? perMetricTotalFormatOverride
         : totalRowFormatSettings;
+      const totalMetricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
+      const totalMetricSettings = totalMetricName
+        ? this.getFieldSettings(totalMetricName)
+        : null;
+      const effectiveTotalFormatWithFilter = totalMetricSettings?.showNonZeroOnly
+        ? { ...(effectiveTotalFormat || {}), showNonZeroOnly: true }
+        : effectiveTotalFormat;
 
       const totalRowFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
-        effectiveTotalFormat,
+        effectiveTotalFormatWithFilter,
       );
 
       // Объединяем ref callbacks: per-metric стили + глобальные total стили + padding
@@ -2726,10 +2943,20 @@ export class TableRenderer extends Component {
       const grandTotalStyleRef = globalTableSettings?.columnTotalsValueFormat
         ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
         : null;
+      const grandTotalMetricName = this.getMetricNameForCell([], [], rowAttrs, colAttrs);
+      const grandTotalMetricSettings = grandTotalMetricName
+        ? this.getFieldSettings(grandTotalMetricName)
+        : null;
+      const grandTotalFormatSettings = grandTotalMetricSettings?.showNonZeroOnly
+        ? {
+          ...(globalTableSettings?.columnTotalsValueFormat || {}),
+          showNonZeroOnly: true,
+        }
+        : globalTableSettings?.columnTotalsValueFormat;
       const grandTotalFormattedValue = this.formatAggValue(
         aggValue,
         agg.format(aggValue),
-        globalTableSettings?.columnTotalsValueFormat,
+        grandTotalFormatSettings,
       );
       // Объединяем ref callback со стилями padding
       const grandTotalRef = grandTotalStyleRef

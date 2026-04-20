@@ -150,7 +150,6 @@ export interface FieldGroupingSettings {
   // Настройки subtotal для поля (переопределяют общие настройки таблицы)
   subtotalShow?: 'show' | 'no_show' | 'general_setting'; // По умолчанию 'general_setting' - использовать общие настройки
   subtotalLabel?: string; // Переопределяет globalTableSettings.rowSubTotalsLabel/colSubTotalsLabel
-  subtotalAggregation?: 'sum' | 'max' | 'min'; // тип агрегирования для подытога
   subtotalValueFormat?: ValueCellFormatSettings; // Переопределяет globalTableSettings.rowSubTotalsValueFormat/colSubTotalsValueFormat
   cellValueType?: 'absolute' | 'percentage' | 'absolute_and_percentage'; // тип отображаемого значения
   percentageType?: 'total' | 'parent_row' | 'parent_column'; // тип доли (если cellValueType включает percentage)
@@ -175,6 +174,7 @@ export interface FieldGroupingSettings {
   metricValueFontSize?: number;
   metricValueFontColor?: string;
   metricValueBackgroundColor?: string;
+  showNonZeroOnly?: boolean; // скрывать 0/null/NaN/почти 0 в value-ячейках метрики
 
   // Настройки subtotal для конкретных метрик (Metric-specific overrides)
   // Ключ - имя метрики (label)

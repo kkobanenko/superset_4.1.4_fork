@@ -259,57 +259,6 @@ function createFieldFormattingSection(fieldName: string, fieldLabel: string) {
             },
           },
         },
-        {
-          name: `fieldGroupingSettings.${fieldName}.subtotalAggregation`,
-          config: {
-            type: 'SelectControl',
-            label: t('Subtotal aggregation'),
-            renderTrigger: true,
-            default: 'sum',
-            choices: [
-              ['sum', t('Sum')],
-              ['max', t('Maximum')],
-              ['min', t('Minimum')],
-            ],
-            description: t('Aggregation type for subtotals'),
-            visibility: ({ controls }: { controls?: any }) => {
-              const fieldSettings = controls?.fieldGroupingSettings?.value || {};
-              const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
-              const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
-              return (
-                subtotalShow === 'show' ||
-                (subtotalShow === undefined && subtotalEnabled === true)
-              );
-            },
-          },
-        },
-      ],
-      [
-        {
-          name: `fieldGroupingSettings.${fieldName}.subtotalValueFormat.valueFormat`,
-          config: {
-            ...sharedControls.y_axis_format,
-            label: t('Subtotal number format'),
-            renderTrigger: true,
-            description: t('D3 number format for subtotal cells'),
-            choices: [
-              [
-                ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
-                t('Adaptive formatting, empty instead 0'),
-              ],
-              ...(sharedControls.y_axis_format.choices || []),
-            ],
-            visibility: ({ controls }: { controls?: any }) => {
-              const fieldSettings = controls?.fieldGroupingSettings?.value || {};
-              const subtotalShow = fieldSettings[fieldName]?.subtotalShow;
-              const subtotalEnabled = fieldSettings[fieldName]?.subtotalEnabled;
-              return (
-                subtotalShow === 'show' ||
-                (subtotalShow === undefined && subtotalEnabled === true)
-              );
-            },
-          },
-        },
       ],
       [
         {
@@ -3614,6 +3563,100 @@ const config: ControlPanelConfig = {
                   },
                 },
               ],
+              [
+                {
+                  name: `field_formatting_field${fieldIndex}_showNonZeroOnly`,
+                  config: {
+                    type: 'CheckboxControl',
+                    label: t('Show non-zero values only'),
+                    renderTrigger: true,
+                    default: false,
+                    description: t(
+                      'Render empty string for null/NaN/zero/near-zero metric values.',
+                    ),
+                    visibility: (props: any) => {
+                      const controls = props?.controls || {};
+                      const selectedField =
+                        controls?.[`field_formatting_field${fieldIndex}_selector`]?.value;
+                      if (!selectedField) {
+                        return false;
+                      }
+                      const metrics = ensureIsArray(controls?.metrics?.value || []);
+                      const metricLabels = metrics
+                        .map((m: QueryFormMetric) => {
+                          if (typeof m === 'string') return m;
+                          if (m && typeof m === 'object' && 'label' in m && m.label) {
+                            return String(m.label);
+                          }
+                          if (
+                            m &&
+                            typeof m === 'object' &&
+                            'sqlExpression' in m &&
+                            m.sqlExpression
+                          ) {
+                            return String(m.sqlExpression);
+                          }
+                          return '';
+                        })
+                        .filter((x: string) => x.length > 0);
+                      return metricLabels.includes(String(selectedField));
+                    },
+                    hidden: (props: any) => {
+                      const controls = props?.controls || {};
+                      const expandedControl =
+                        controls?.[`field_formatting_field${fieldIndex}_expanded`];
+                      return !expandedControl?.value;
+                    },
+                    rerender: [
+                      `field_formatting_field${fieldIndex}_selector`,
+                      'fieldGroupingSettings',
+                    ],
+                    mapStateToProps: (state: any) => {
+                      if (!state || typeof state !== 'object') {
+                        return { value: false };
+                      }
+                      const controls =
+                        state.controls && typeof state.controls === 'object'
+                          ? state.controls
+                          : {};
+                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
+                      const selectorControl =
+                        controls && selectorControlName in controls
+                          ? controls[selectorControlName]
+                          : undefined;
+                      const selectedField =
+                        selectorControl &&
+                        typeof selectorControl === 'object' &&
+                        'value' in selectorControl
+                          ? selectorControl.value
+                          : undefined;
+                      if (!selectedField) {
+                        return { value: false };
+                      }
+                      const fieldGroupingSettingsControl =
+                        controls && 'fieldGroupingSettings' in controls
+                          ? controls.fieldGroupingSettings
+                          : undefined;
+                      const fieldGroupingSettings =
+                        fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl === 'object' &&
+                        'value' in fieldGroupingSettingsControl &&
+                        typeof fieldGroupingSettingsControl.value === 'object'
+                          ? fieldGroupingSettingsControl.value
+                          : {};
+                      const fieldSettings =
+                        fieldGroupingSettings &&
+                        selectedField in fieldGroupingSettings &&
+                        typeof fieldGroupingSettings[selectedField] === 'object'
+                          ? fieldGroupingSettings[selectedField]
+                          : {};
+                      return {
+                        value: Boolean(fieldSettings?.showNonZeroOnly),
+                      };
+                    },
+                  },
+                },
+              ],
               // Subtotal settings для поля
               [
                 {
@@ -3955,244 +3998,6 @@ const config: ControlPanelConfig = {
                           : {};
                       return {
                         value: fieldSettings?.subtotalLabel || undefined,
-                      };
-                    },
-                  },
-                },
-                {
-                  name: `field_formatting_field${fieldIndex}_subtotalAggregation`,
-                  config: {
-                    type: 'SelectControl',
-                    label: t('Subtotal aggregation'),
-                    renderTrigger: true,
-                    default: 'sum',
-                    choices: [
-                      ['sum', t('Sum')],
-                      ['max', t('Maximum')],
-                      ['min', t('Minimum')],
-                    ],
-                    description: t('Aggregation type for subtotals'),
-                    visibility: (props: any) => {
-                      const controls = props?.controls || {};
-                      const selectorControl =
-                        controls?.[`field_formatting_field${fieldIndex}_selector`];
-                      const selectedField = selectorControl?.value;
-                      if (!selectedField) {
-                        return false;
-                      }
-
-                      // Hide subtotal settings for metrics
-                      const metrics = ensureIsArray(controls?.metrics?.value || []);
-                      const metricLabels = metrics
-                        .map((m: QueryFormMetric) => {
-                          if (typeof m === 'string') return m;
-                          if (m && typeof m === 'object' && 'label' in m && m.label) {
-                            return String(m.label);
-                          }
-                          if (
-                            m &&
-                            typeof m === 'object' &&
-                            'sqlExpression' in m &&
-                            m.sqlExpression
-                          ) {
-                            return String(m.sqlExpression);
-                          }
-                          return '';
-                        })
-                        .filter((x: string) => x.length > 0);
-                      if (metricLabels.includes(String(selectedField))) {
-                        return false;
-                      }
-
-                      const subtotalShowControl =
-                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
-                      const subtotalShow = subtotalShowControl?.value;
-                      const fieldGroupingSettingsControl =
-                        controls?.fieldGroupingSettings;
-                      const fieldGroupingSettings =
-                        fieldGroupingSettingsControl?.value || {};
-                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
-                      const subtotalEnabled = fieldSettings.subtotalEnabled;
-                      return (
-                        subtotalShow === 'show' ||
-                        (subtotalShow === undefined && subtotalEnabled === true)
-                      );
-                    },
-                    // Скрываем через CSS (display:none) когда блок свёрнут.
-                    // ВАЖНО: используем hidden, а НЕ visibility,
-                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
-                    hidden: (props: any) => {
-                      const controls = props?.controls || {};
-                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
-                      return !expandedControl?.value;
-                    },
-                    rerender: [
-                      `field_formatting_field${fieldIndex}_selector`,
-                      `field_formatting_field${fieldIndex}_subtotalShow`,
-                      'fieldGroupingSettings',
-                    ],
-                    mapStateToProps: (state: any) => {
-                      if (!state || typeof state !== 'object') {
-                        return { value: 'sum' };
-                      }
-                      const controls =
-                        state.controls && typeof state.controls === 'object'
-                          ? state.controls
-                          : {};
-                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
-                      const selectorControl =
-                        controls && selectorControlName in controls
-                          ? controls[selectorControlName]
-                          : undefined;
-                      const selectedField =
-                        selectorControl &&
-                        typeof selectorControl === 'object' &&
-                        'value' in selectorControl
-                          ? selectorControl.value
-                          : undefined;
-                      if (!selectedField) {
-                        return { value: 'sum' };
-                      }
-                      const fieldGroupingSettingsControl =
-                        controls && 'fieldGroupingSettings' in controls
-                          ? controls.fieldGroupingSettings
-                          : undefined;
-                      const fieldGroupingSettings =
-                        fieldGroupingSettingsControl &&
-                        typeof fieldGroupingSettingsControl === 'object' &&
-                        'value' in fieldGroupingSettingsControl &&
-                        typeof fieldGroupingSettingsControl.value === 'object'
-                          ? fieldGroupingSettingsControl.value
-                          : {};
-                      const fieldSettings =
-                        fieldGroupingSettings &&
-                        selectedField in fieldGroupingSettings &&
-                        typeof fieldGroupingSettings[selectedField] === 'object'
-                          ? fieldGroupingSettings[selectedField]
-                          : {};
-                      return {
-                        value: fieldSettings?.subtotalAggregation || 'sum',
-                      };
-                    },
-                  },
-                },
-              ],
-              [
-                {
-                  name: `field_formatting_field${fieldIndex}_subtotalValueFormat`,
-                  config: {
-                    ...sharedControls.y_axis_format,
-                    label: t('Subtotal number format'),
-                    renderTrigger: true,
-                    description: t('D3 number format for subtotal cells'),
-                    choices: [
-                      [
-                        ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
-                        t('Adaptive formatting, empty instead 0'),
-                      ],
-                      ...(sharedControls.y_axis_format.choices || []),
-                    ],
-                    visibility: (props: any) => {
-                      const controls = props?.controls || {};
-                      const selectorControl =
-                        controls?.[`field_formatting_field${fieldIndex}_selector`];
-                      const selectedField = selectorControl?.value;
-                      if (!selectedField) {
-                        return false;
-                      }
-
-                      // Hide subtotal settings for metrics
-                      const metrics = ensureIsArray(controls?.metrics?.value || []);
-                      const metricLabels = metrics
-                        .map((m: QueryFormMetric) => {
-                          if (typeof m === 'string') return m;
-                          if (m && typeof m === 'object' && 'label' in m && m.label) {
-                            return String(m.label);
-                          }
-                          if (
-                            m &&
-                            typeof m === 'object' &&
-                            'sqlExpression' in m &&
-                            m.sqlExpression
-                          ) {
-                            return String(m.sqlExpression);
-                          }
-                          return '';
-                        })
-                        .filter((x: string) => x.length > 0);
-                      if (metricLabels.includes(String(selectedField))) {
-                        return false;
-                      }
-
-                      const subtotalShowControl =
-                        controls?.[`field_formatting_field${fieldIndex}_subtotalShow`];
-                      const subtotalShow = subtotalShowControl?.value;
-                      const fieldGroupingSettingsControl =
-                        controls?.fieldGroupingSettings;
-                      const fieldGroupingSettings =
-                        fieldGroupingSettingsControl?.value || {};
-                      const fieldSettings = fieldGroupingSettings[selectedField] || {};
-                      const subtotalEnabled = fieldSettings.subtotalEnabled;
-                      return (
-                        subtotalShow === 'show' ||
-                        (subtotalShow === undefined && subtotalEnabled === true)
-                      );
-                    },
-                    // Скрываем через CSS (display:none) когда блок свёрнут.
-                    // ВАЖНО: используем hidden, а НЕ visibility,
-                    // т.к. visibility=false размонтирует компонент и сбрасывает значения.
-                    hidden: (props: any) => {
-                      const controls = props?.controls || {};
-                      const expandedControl = controls?.[`field_formatting_field${fieldIndex}_expanded`];
-                      return !expandedControl?.value;
-                    },
-                    rerender: [
-                      `field_formatting_field${fieldIndex}_selector`,
-                      `field_formatting_field${fieldIndex}_subtotalShow`,
-                      'fieldGroupingSettings',
-                    ],
-                    mapStateToProps: (state: any) => {
-                      if (!state || typeof state !== 'object') {
-                        return { value: undefined };
-                      }
-                      const controls =
-                        state.controls && typeof state.controls === 'object'
-                          ? state.controls
-                          : {};
-                      const selectorControlName = `field_formatting_field${fieldIndex}_selector`;
-                      const selectorControl =
-                        controls && selectorControlName in controls
-                          ? controls[selectorControlName]
-                          : undefined;
-                      const selectedField =
-                        selectorControl &&
-                        typeof selectorControl === 'object' &&
-                        'value' in selectorControl
-                          ? selectorControl.value
-                          : undefined;
-                      if (!selectedField) {
-                        return { value: undefined };
-                      }
-                      const fieldGroupingSettingsControl =
-                        controls && 'fieldGroupingSettings' in controls
-                          ? controls.fieldGroupingSettings
-                          : undefined;
-                      const fieldGroupingSettings =
-                        fieldGroupingSettingsControl &&
-                        typeof fieldGroupingSettingsControl === 'object' &&
-                        'value' in fieldGroupingSettingsControl &&
-                        typeof fieldGroupingSettingsControl.value === 'object'
-                          ? fieldGroupingSettingsControl.value
-                          : {};
-                      const fieldSettings =
-                        fieldGroupingSettings &&
-                        selectedField in fieldGroupingSettings &&
-                        typeof fieldGroupingSettings[selectedField] === 'object'
-                          ? fieldGroupingSettings[selectedField]
-                          : {};
-                      const subtotalValueFormat = fieldSettings?.subtotalValueFormat;
-                      return {
-                        value: subtotalValueFormat?.valueFormat || undefined,
                       };
                     },
                   },
@@ -4556,7 +4361,10 @@ const config: ControlPanelConfig = {
     const fieldGroupingSettings = Object.entries(rawFieldGroupingSettings).reduce(
       (acc, [fieldName, fieldSettings]) => {
         if (selectedFields.has(fieldName) && fieldSettings !== null) {
-          acc[fieldName] = fieldSettings;
+          const next = { ...(fieldSettings as Record<string, unknown>) };
+          // Агрегация subtotal задаётся только в Per-Metric Overrides.
+          delete next.subtotalAggregation;
+          acc[fieldName] = next;
         }
         return acc;
       },
@@ -4601,6 +4409,8 @@ const config: ControlPanelConfig = {
         `field_formatting_field${i}_metricValueFontColor` as keyof typeof formData;
       const metricValueBackgroundColorKey =
         `field_formatting_field${i}_metricValueBackgroundColor` as keyof typeof formData;
+      const showNonZeroOnlyKey =
+        `field_formatting_field${i}_showNonZeroOnly` as keyof typeof formData;
       const columnHeaderFontSizeKey =
         `field_formatting_field${i}_columnHeaderFontSize` as keyof typeof formData;
       const columnHeaderFontColorKey =
@@ -4629,8 +4439,6 @@ const config: ControlPanelConfig = {
         `field_formatting_field${i}_subtotalShow` as keyof typeof formData;
       const subtotalLabelKey = 
         `field_formatting_field${i}_subtotalLabel` as keyof typeof formData;
-      const subtotalAggregationKey = 
-        `field_formatting_field${i}_subtotalAggregation` as keyof typeof formData;
       const subtotalValueFormatKey = 
         `field_formatting_field${i}_subtotalValueFormat` as keyof typeof formData;
       const subtotalFontColorKey = 
@@ -4655,9 +4463,6 @@ const config: ControlPanelConfig = {
       }
       if (formData[subtotalLabelKey] !== undefined) {
         fieldSettings.subtotalLabel = formData[subtotalLabelKey] as string;
-      }
-      if (formData[subtotalAggregationKey] !== undefined) {
-        fieldSettings.subtotalAggregation = formData[subtotalAggregationKey] as string;
       }
       // Сохраняем формат и цвета сабтоталов как объект
       if (
@@ -4738,6 +4543,9 @@ const config: ControlPanelConfig = {
         fieldSettings.metricValueBackgroundColor =
           formData[metricValueBackgroundColorKey] as string;
       }
+      if (formData[showNonZeroOnlyKey] !== undefined) {
+        fieldSettings.showNonZeroOnly = Boolean(formData[showNonZeroOnlyKey]);
+      }
       if (formData[columnHeaderFontSizeKey] !== undefined) {
         fieldSettings.columnHeaderFontSize = formData[columnHeaderFontSizeKey] as number;
       }
@@ -4778,7 +4586,9 @@ const config: ControlPanelConfig = {
         fieldSettings.rowValueBackgroundColor =
           formData[rowValueBackgroundColorKey] as string;
       }
-      
+
+      delete fieldSettings.subtotalAggregation;
+
       // Сохраняем настройки только если есть хотя бы одно значение
       if (Object.keys(fieldSettings).length > 0) {
         fieldGroupingSettings[selectedField] = fieldSettings;
@@ -4842,6 +4652,8 @@ const config: ControlPanelConfig = {
           fieldSettings.metricValueFontColor;
         resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] =
           fieldSettings.metricValueBackgroundColor;
+        resultFormData[`field_formatting_field${i}_showNonZeroOnly`] =
+          Boolean(fieldSettings.showNonZeroOnly);
         resultFormData[`field_formatting_field${i}_columnHeaderFontSize`] =
           fieldSettings.columnHeaderFontSize;
         resultFormData[`field_formatting_field${i}_columnHeaderFontColor`] =
@@ -4869,7 +4681,6 @@ const config: ControlPanelConfig = {
         // Восстанавливаем настройки subtotal
         resultFormData[`field_formatting_field${i}_subtotalShow`] = fieldSettings.subtotalShow;
         resultFormData[`field_formatting_field${i}_subtotalLabel`] = fieldSettings.subtotalLabel;
-        resultFormData[`field_formatting_field${i}_subtotalAggregation`] = fieldSettings.subtotalAggregation;
         if (fieldSettings.subtotalValueFormat) {
           resultFormData[`field_formatting_field${i}_subtotalValueFormat`] = fieldSettings.subtotalValueFormat.valueFormat;
           resultFormData[`field_formatting_field${i}_subtotalFontColor`] = fieldSettings.subtotalValueFormat.fontColor;
@@ -4936,6 +4747,8 @@ const config: ControlPanelConfig = {
         fieldSettings.metricValueFontColor;
       resultFormData[`field_formatting_field${nextFreeIndex}_metricValueBackgroundColor`] =
         fieldSettings.metricValueBackgroundColor;
+      resultFormData[`field_formatting_field${nextFreeIndex}_showNonZeroOnly`] =
+        Boolean(fieldSettings.showNonZeroOnly);
       resultFormData[`field_formatting_field${nextFreeIndex}_columnHeaderFontSize`] =
         fieldSettings.columnHeaderFontSize;
       resultFormData[`field_formatting_field${nextFreeIndex}_columnHeaderFontColor`] =
@@ -4963,7 +4776,6 @@ const config: ControlPanelConfig = {
       // Восстанавливаем настройки subtotal
       resultFormData[`field_formatting_field${nextFreeIndex}_subtotalShow`] = fieldSettings.subtotalShow;
       resultFormData[`field_formatting_field${nextFreeIndex}_subtotalLabel`] = fieldSettings.subtotalLabel;
-      resultFormData[`field_formatting_field${nextFreeIndex}_subtotalAggregation`] = fieldSettings.subtotalAggregation;
       if (fieldSettings.subtotalValueFormat) {
         resultFormData[`field_formatting_field${nextFreeIndex}_subtotalValueFormat`] = fieldSettings.subtotalValueFormat.valueFormat;
         resultFormData[`field_formatting_field${nextFreeIndex}_subtotalFontColor`] = fieldSettings.subtotalValueFormat.fontColor;
@@ -4997,6 +4809,7 @@ const config: ControlPanelConfig = {
         resultFormData[`field_formatting_field${i}_metricValueFontSize`] = undefined;
         resultFormData[`field_formatting_field${i}_metricValueFontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_metricValueBackgroundColor`] = undefined;
+        resultFormData[`field_formatting_field${i}_showNonZeroOnly`] = false;
         resultFormData[`field_formatting_field${i}_columnHeaderFontSize`] = undefined;
         resultFormData[`field_formatting_field${i}_columnHeaderFontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_columnHeaderBackgroundColor`] = undefined;
@@ -5012,7 +4825,6 @@ const config: ControlPanelConfig = {
         // Очищаем настройки subtotal
         resultFormData[`field_formatting_field${i}_subtotalShow`] = undefined;
         resultFormData[`field_formatting_field${i}_subtotalLabel`] = undefined;
-        resultFormData[`field_formatting_field${i}_subtotalAggregation`] = undefined;
         resultFormData[`field_formatting_field${i}_subtotalValueFormat`] = undefined;
         resultFormData[`field_formatting_field${i}_subtotalFontColor`] = undefined;
         resultFormData[`field_formatting_field${i}_subtotalBackgroundColor`] = undefined;

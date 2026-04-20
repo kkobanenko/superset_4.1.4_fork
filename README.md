@@ -21,7 +21,7 @@ under the License.
 
 ## Custom fork (4.1.4)
 
-This repository is an Apache Superset 4.1.4 fork with **Pivot Table V2** enhancements (per-field alignment, adaptive number format with empty cells for zero/null, metrics header styling) and an **isolated Docker dev stack** on host port **18088**.
+This repository is an Apache Superset 4.1.4 fork with **Pivot Table V2** enhancements (per-field alignment, adaptive number format with empty cells for zero/null, metrics header styling, and correct **formula subtotal** recomputation at group level) and an **isolated Docker dev stack** on host port **18088**.
 
 | Document | Purpose |
 | -------- | ------- |
@@ -29,7 +29,16 @@ This repository is an Apache Superset 4.1.4 fork with **Pivot Table V2** enhance
 | [docker/README.dev.md](docker/README.dev.md) | Postgres/Redis/Superset dev compose, ClickHouse via side network, troubleshooting |
 | [superset-frontend/plugins/plugin-chart-pivot-table-v2/](superset-frontend/plugins/plugin-chart-pivot-table-v2/) | Pivot Table V2 plugin source |
 
+Current fork build verified in this task: `0.0.136`.
+
 Root `VERSION` and `superset-frontend/plugins/plugin-chart-pivot-table-v2/package.json` version are bumped when shipping plugin/UI changes for this fork.
+
+### Pivot V2 formula subtotal
+
+- `Per-Metric Subtotal Overrides -> Aggregation = Formula` recomputes the SQL formula from its base metrics at the subtotal group level.
+- The plugin does **not** sum child percentage values for formula subtotals.
+- On recalculation failure, the chart renders an empty subtotal cell and logs a warning instead of breaking the table.
+- Verified scenario: `http://localhost:18088/explore/?slice_id=312`, row `ВОЛГА`, subtotal `Всего по ОП`, metric `%` -> **`18.1%`**.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/license/apache-2-0)
 [![Latest Release on Github](https://img.shields.io/github/v/release/apache/superset?sort=semver)](https://github.com/apache/superset/releases/latest)

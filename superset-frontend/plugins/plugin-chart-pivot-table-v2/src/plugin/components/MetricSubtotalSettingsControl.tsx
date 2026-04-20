@@ -20,7 +20,7 @@ import React, { useMemo, useCallback } from 'react';
 import { t, ensureIsArray, QueryFormMetric } from '@superset-ui/core';
 import { useTheme, SupersetTheme } from '@apache-superset/core/ui';
 import { ControlHeader, D3_FORMAT_OPTIONS } from '@superset-ui/chart-controls';
-import { Collapse, Checkbox, Input, Select, Typography } from 'antd';
+import { Collapse, Checkbox, Select, Typography } from 'antd';
 import { MetricSubtotalSettingsType } from '../../types';
 
 const { Panel } = Collapse;
@@ -63,19 +63,21 @@ const MetricSubtotalSettingsControl: React.FC<MetricSubtotalSettingsControlProps
   );
 
   const handleFormatChange = useCallback(
-    (metricLabel: string, formatChanges: Partial<NonNullable<MetricSubtotalSettingsType['subtotalValueFormat']>>) => {
+    (
+      metricLabel: string,
+      formatChanges: Partial<
+        NonNullable<MetricSubtotalSettingsType['subtotalValueFormat']>
+      >,
+    ) => {
       const currentSettings = value[metricLabel] || {};
       const currentFormat = currentSettings.subtotalValueFormat || {};
       const newFormat = { ...currentFormat, ...formatChanges };
-      
-      const newSettings = {
-        ...currentSettings,
-        subtotalValueFormat: newFormat,
-      };
-
       onChange({
         ...value,
-        [metricLabel]: newSettings,
+        [metricLabel]: {
+          ...currentSettings,
+          subtotalValueFormat: newFormat,
+        },
       });
     },
     [value, onChange],
@@ -93,7 +95,9 @@ const MetricSubtotalSettingsControl: React.FC<MetricSubtotalSettingsControlProps
     <div className="metric-subtotal-settings-control">
       <ControlHeader label={t('Per-Metric Subtotal Overrides')} />
       <div style={{ marginBottom: 8, fontSize: '12px', color: theme.colorTextSecondary }}>
-        {t('Customize subtotal calculation and style for each metric individually.')}
+        {t(
+          'Per metric: enable subtotal row, choose aggregation and optionally override subtotal number format. Label and subtotal colors are set at field level.',
+        )}
       </div>
       <Collapse ghost>
         {metricLabels.map(metricLabel => {
@@ -102,7 +106,7 @@ const MetricSubtotalSettingsControl: React.FC<MetricSubtotalSettingsControlProps
 
           return (
             <Panel
-              className="ant-collapse-item" 
+              className="ant-collapse-item"
               header={
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={e => e.stopPropagation()}>
                   <Checkbox
@@ -120,24 +124,18 @@ const MetricSubtotalSettingsControl: React.FC<MetricSubtotalSettingsControlProps
                 {isEnabled && (
                   <>
                     <div>
-                      <div className="control-label">{t('Label')}</div>
-                      <Input
-                        size="small"
-                        value={settings.subtotalLabel || ''}
-                        placeholder={t('Default logic')}
-                        onChange={e => handleChange(metricLabel, { subtotalLabel: e.target.value })}
-                      />
-                    </div>
-                    <div>
                       <div className="control-label">{t('Aggregation')}</div>
                       <Select
                         size="small"
                         value={settings.subtotalAggregation || 'sum'}
-                        onChange={val => handleChange(metricLabel, { subtotalAggregation: val })}
+                        onChange={val =>
+                          handleChange(metricLabel, { subtotalAggregation: val })
+                        }
                         options={[
                           { value: 'sum', label: t('Sum') },
                           { value: 'max', label: t('Maximum') },
                           { value: 'min', label: t('Minimum') },
+                          { value: 'formula', label: t('Formula') },
                         ]}
                         style={{ width: '100%' }}
                       />
@@ -149,54 +147,26 @@ const MetricSubtotalSettingsControl: React.FC<MetricSubtotalSettingsControlProps
                         showSearch
                         allowClear
                         value={settings.subtotalValueFormat?.valueFormat || undefined}
-                        placeholder={t('Adaptive formatting')}
-                        onChange={val => handleFormatChange(metricLabel, { valueFormat: val || '' })}
+                        placeholder={t('Use field/global fallback')}
+                        onChange={val =>
+                          handleFormatChange(metricLabel, { valueFormat: val || '' })
+                        }
                         options={D3_FORMAT_OPTIONS.map(([value, label]) => ({
                           value,
                           label,
                         }))}
                         style={{ width: '100%' }}
                         filterOption={(input, option) =>
-                          (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
-                          || (option?.value ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                          (option?.label ?? '')
+                            .toString()
+                            .toLowerCase()
+                            .includes(input.toLowerCase()) ||
+                          (option?.value ?? '')
+                            .toString()
+                            .toLowerCase()
+                            .includes(input.toLowerCase())
                         }
                       />
-                    </div>
-                   <div style={{ display: 'flex', gap: '8px' }}>
-                       <div style={{ flex: 1 }}>
-                          <div className="control-label">{t('Font Color')}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                             <input 
-                                type="color" 
-                                value={settings.subtotalValueFormat?.fontColor || '#000000'}
-                                onChange={e => handleFormatChange(metricLabel, { fontColor: e.target.value })}
-                                style={{ height: '24px', padding: 0, border: 'none', background: 'none', cursor: 'pointer', width: '24px' }}
-                             />
-                             <Input 
-                                size="small"
-                                value={settings.subtotalValueFormat?.fontColor || ''}
-                                placeholder="#Hex"
-                                onChange={e => handleFormatChange(metricLabel, { fontColor: e.target.value })}
-                             />
-                          </div>
-                       </div>
-                       <div style={{ flex: 1 }}>
-                          <div className="control-label">{t('Background')}</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                             <input 
-                                type="color" 
-                                value={settings.subtotalValueFormat?.backgroundColor || '#ffffff'}
-                                onChange={e => handleFormatChange(metricLabel, { backgroundColor: e.target.value })}
-                                style={{ height: '24px', padding: 0, border: 'none', background: 'none', cursor: 'pointer', width: '24px' }}
-                             />
-                             <Input 
-                                size="small"
-                                value={settings.subtotalValueFormat?.backgroundColor || ''}
-                                placeholder="#Hex"
-                                onChange={e => handleFormatChange(metricLabel, { backgroundColor: e.target.value })}
-                             />
-                          </div>
-                      </div>
                     </div>
                   </>
                 )}
