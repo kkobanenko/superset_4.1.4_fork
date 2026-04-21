@@ -161,6 +161,46 @@ function normalizeValueCellFormatSettings(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function normalizeMetricTotalSettingsMap(
+  value: unknown,
+): Record<string, Record<string, unknown>> | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const out: Record<string, Record<string, unknown>> = {};
+
+  Object.entries(value as Record<string, unknown>).forEach(([metricName, settings]) => {
+    if (!settings || typeof settings !== 'object') {
+      return;
+    }
+
+    const nextSettings = { ...(settings as Record<string, unknown>) };
+    if (
+      nextSettings.totalAggregation !== 'sum' &&
+      nextSettings.totalAggregation !== 'max' &&
+      nextSettings.totalAggregation !== 'min' &&
+      nextSettings.totalAggregation !== 'formula'
+    ) {
+      delete nextSettings.totalAggregation;
+    }
+    if (nextSettings.totalValueFormat && typeof nextSettings.totalValueFormat === 'object') {
+      const normalized = normalizeValueCellFormatSettings(nextSettings.totalValueFormat);
+      if (normalized && Object.keys(normalized).length > 0) {
+        nextSettings.totalValueFormat = normalized;
+      } else {
+        delete nextSettings.totalValueFormat;
+      }
+    }
+
+    if (Object.keys(nextSettings).length > 0) {
+      out[metricName] = nextSettings;
+    }
+  });
+
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /**
  * Для SQL-метрик с одним агрегатным термом возвращает "базовое" имя поля
  * из backticks, которое нужно смэппить на display label метрики.
@@ -390,6 +430,67 @@ function migrateLegacySubtotalFieldLevel(
   }
 }
 
+function migrateLegacyColumnTotalsMetricSettings(
+  globalSettings: Record<string, unknown> | undefined,
+  metricsRaw: unknown,
+): void {
+  if (!globalSettings || typeof globalSettings !== 'object') {
+    return;
+  }
+
+  const legacyTotalsFormat =
+    globalSettings.columnTotalsValueFormat &&
+    typeof globalSettings.columnTotalsValueFormat === 'object'
+      ? (globalSettings.columnTotalsValueFormat as Record<string, unknown>)
+      : null;
+
+  const legacyValueFormat = legacyTotalsFormat?.valueFormat;
+  if (typeof legacyValueFormat !== 'string' || legacyValueFormat.length === 0) {
+    return;
+  }
+
+  const metricLabels: string[] = [];
+  if (Array.isArray(metricsRaw)) {
+    metricsRaw.forEach(metric => {
+      const label = getMetricLabelForMigration(metric);
+      if (label) {
+        metricLabels.push(label);
+      }
+    });
+  }
+
+  if (metricLabels.length === 0) {
+    return;
+  }
+
+  const existingMetricSettings = normalizeMetricTotalSettingsMap(
+    globalSettings.columnTotalsMetricSettings,
+  ) || {};
+
+  metricLabels.forEach(metricLabel => {
+    const currentSettings = existingMetricSettings[metricLabel] || {};
+    const currentFormat =
+      currentSettings.totalValueFormat &&
+      typeof currentSettings.totalValueFormat === 'object'
+        ? (currentSettings.totalValueFormat as Record<string, unknown>)
+        : {};
+
+    if (currentFormat.valueFormat === undefined) {
+      existingMetricSettings[metricLabel] = {
+        ...currentSettings,
+        totalValueFormat: {
+          ...currentFormat,
+          valueFormat: legacyValueFormat,
+        },
+      };
+    }
+  });
+
+  if (Object.keys(existingMetricSettings).length > 0) {
+    globalSettings.columnTotalsMetricSettings = existingMetricSettings;
+  }
+}
+
 /**
  * Собрать globalTableSettings из formData.
  * Superset может не сохранять вложенные объекты правильно, поэтому собираем
@@ -424,6 +525,15 @@ function buildGlobalTableSettings(
     if (existingObj.colSubTotalsValueFormat) {
       const normalized = normalizeValueCellFormatSettings(existingObj.colSubTotalsValueFormat);
       out.colSubTotalsValueFormat = normalized !== undefined ? normalized : existingObj.colSubTotalsValueFormat;
+    }
+    if (existingObj.columnTotalsMetricSettings) {
+      const normalized = normalizeMetricTotalSettingsMap(
+        existingObj.columnTotalsMetricSettings,
+      );
+      out.columnTotalsMetricSettings =
+        normalized !== undefined
+          ? normalized
+          : existingObj.columnTotalsMetricSettings;
     }
   }
 
@@ -540,6 +650,13 @@ function buildGlobalTableSettings(
   }
   if (Object.keys(colSubTotalsValueFormat).length > 0) {
     out.colSubTotalsValueFormat = normalizeValueCellFormatSettings(colSubTotalsValueFormat) || colSubTotalsValueFormat;
+  }
+
+  const columnTotalsMetricSettings = normalizeMetricTotalSettingsMap(
+    formData['globalTableSettings.columnTotalsMetricSettings'],
+  );
+  if (columnTotalsMetricSettings) {
+    out.columnTotalsMetricSettings = columnTotalsMetricSettings;
   }
 
   // Собираем label настройки из плоских ключей formData (перезаписывает существующие значения)
@@ -1690,6 +1807,7 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
   const normalizedGlobalTableSettings = buildGlobalTableSettings(
     rawFormData as unknown as Record<string, unknown>,
   );
+  migrateLegacyColumnTotalsMetricSettings(normalizedGlobalTableSettings, metrics);
 
   // Создаем объект с SQL-выражениями метрик для определения формул
   const metricsSqlExpressions: Record<string, string | null> = {};
@@ -1713,7 +1831,10 @@ export default function transformProps(chartProps: ChartProps<PivotTableV2QueryF
       // а на исходные поля внутри SUM(...).
       const representativeSqlMetricName =
         extractRepresentativeSqlMetricName(sqlExpression);
-      if (representativeSqlMetricName) {
+      if (
+        representativeSqlMetricName &&
+        metricNameMapping[representativeSqlMetricName] === undefined
+      ) {
         metricNameMapping[representativeSqlMetricName] = metricName;
       }
     }

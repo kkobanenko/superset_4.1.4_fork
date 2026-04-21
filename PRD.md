@@ -63,6 +63,19 @@
 - В `TableRenderers.jsx` parser formula использует более устойчивый fallback для выражений вида `SUM(if(...))`.
 - Источником leaf-ключей для subtotal-пересчёта являются `pivotData.getRowKeys()` / `pivotData.getColKeys()`, а не `props`, чтобы пересчёт работал в реальном runtime и не сваливался в fallback на сумму leaf-процентов.
 
+### 2.5. Форматирование итогов по колонкам
+
+**Статус: выполнено.**
+
+- В `Data -> Options` удалён `Show row subtotals`, потому что subtotal-настройки живут на уровне измерений в `Customize -> Field<n>(Row)` и `Per-Metric Subtotal Overrides -> Metrics<m>`.
+- В `Data -> Options` для subtotal больше не остаётся отдельного formatting UI.
+- В `Data -> Options` форматирование **column totals** переведено на контракт, аналогичный subtotal:
+  - сначала блок `Per-Metric Total Overrides` c D3 format для каждой метрики;
+  - затем общая часть: `Total label`, `Total font size (px)`, `Total font color`, `Total background color`.
+- `Show columns subtotal` получил собственный блок: `Columns subtotal label`, `Columns subtotal font size (px)`, `Columns subtotal font color`, `Columns subtotal background color`.
+- Legacy `globalTableSettings.columnTotalsValueFormat.valueFormat` больше не редактируется в новом UI, но сохраняется как fallback для уже сохранённых chart settings.
+- При открытии старого чарта legacy global format для totals автоматически отображается как per-metric override для всех метрик, чтобы новый UI отражал фактическое поведение без ручной миграции.
+
 ---
 
 ## 3. Сопутствующие исправления платформы
@@ -95,6 +108,7 @@
 2. При необходимости: `docker compose -f docker/docker-compose.dev.yml restart superset_dev`
 3. Проверка UI: Explore/дашборд на `:18088`, отсутствие `Invalid format` в ячейках, применение alignment и empty-instead-zero по полям.
 4. Для formula subtotal дополнительно проверить, что в `slice_id=312` строка `ВОЛГА -> Всего по ОП -> %` показывает `18.1%`, а не `57.9%`.
+5. Для column totals проверить, что в `Data -> Options` больше нет formatting-controls для `Columns subtotal`, а `Columns total` использует общий label/colors и отдельный per-metric D3 format.
 
 ---
 
@@ -104,3 +118,4 @@
 | ---- | ---- |
 | 2026-04-02 | План: alignment в transformProps; маппинг adaptive-сентинелов; убрать дубль adaptive в control panel; manifest mtime; документация. |
 | 2026-04-20 | Formula subtotal для per-metric overrides: пересчёт SQL-формулы на уровне группы, fallback в пустую ячейку + warning, runtime fix через `pivotData.getRowKeys/getColKeys`, документация и версия `0.0.136`. |
+| 2026-04-21 | Column totals formatting: удалить `Show row subtotals` и subtotal-formatting UI из `Data -> Options`; перевести column totals на `Per-Metric Total Overrides`, `Total label/font/size/background`; добавить `Columns subtotal` label + font size/color/background; сохранить legacy global total number format как fallback; версия `0.0.142`. |

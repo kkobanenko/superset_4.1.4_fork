@@ -38,6 +38,7 @@ import {
 } from '@superset-ui/core';
 import { ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0, MetricsLayoutEnum } from '../types';
 import MetricSubtotalSettingsControl from './components/MetricSubtotalSettingsControl';
+import MetricTotalSettingsControl from './components/MetricTotalSettingsControl';
 import FieldSettingsCollapseControl from './components/FieldSettingsCollapseControl';
 import RemoveFieldInlineCheckbox from './components/RemoveFieldInlineCheckbox';
 
@@ -688,104 +689,6 @@ const config: ControlPanelConfig = {
         ],
         [
           {
-            name: 'rowSubTotals',
-            config: {
-              type: 'CheckboxControl',
-              label: t('Show rows subtotal'),
-              default: false,
-              renderTrigger: true,
-              description: t('Display row level subtotal'),
-            },
-          },
-        ],
-        [
-          {
-            name: 'globalTableSettings.rowSubTotalsLabel',
-            config: {
-              type: 'TextControl',
-              label: t('Rows subtotal label'),
-              renderTrigger: true,
-              default: t('Subtotal'),
-              description: t('Header label for row subtotal rows'),
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowSubTotals?.value === true,
-            },
-          },
-          {
-            name: 'globalTableSettings.rowSubTotalsValueFormat.valueFormat',
-            config: {
-              ...sharedControls.y_axis_format,
-              label: t('Rows subtotal number format'),
-              renderTrigger: true,
-              description: t('D3 number format for row subtotal cells'),
-              choices: [
-                [
-                  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
-                  t('Adaptive formatting, empty instead 0'),
-                ],
-                ...(sharedControls.y_axis_format.choices || []),
-              ],
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowSubTotals?.value === true &&
-                controls?.transposePivot?.value === false,
-            },
-          },
-        ],
-        [
-          {
-            name: 'globalTableSettings.rowSubTotalsValueFormat.dateFormat',
-            config: {
-              type: 'SelectControl',
-              freeForm: true,
-              label: t('Rows subtotal date format'),
-              default: SMART_DATE_ID,
-              renderTrigger: true,
-              choices: D3_TIME_FORMAT_OPTIONS,
-              description: t('D3 time format for row subtotal cells'),
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowSubTotals?.value === true,
-            },
-          },
-        ],
-        [
-          {
-            name: 'globalTableSettings.rowSubTotalsValueFormat.fontSize',
-            config: {
-              type: 'NumberControl',
-              label: t('Rows subtotal font size (px)'),
-              renderTrigger: true,
-              default: undefined,
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowSubTotals?.value === true,
-            },
-          },
-          {
-            name: 'globalTableSettings.rowSubTotalsValueFormat.fontColor',
-            config: {
-              type: 'ColorPickerControl',
-              label: t('Rows subtotal font color'),
-              renderTrigger: true,
-              default: undefined,
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowSubTotals?.value === true,
-            },
-          },
-        ],
-        [
-          {
-            name: 'globalTableSettings.rowSubTotalsValueFormat.backgroundColor',
-            config: {
-              type: 'ColorPickerControl',
-              label: t('Rows subtotal background color'),
-              renderTrigger: true,
-              default: undefined,
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.rowSubTotals?.value === true,
-            },
-          },
-        ],
-        [
-          {
             name: 'colTotals',
             config: {
               type: 'CheckboxControl',
@@ -798,70 +701,52 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'globalTableSettings.columnTotalsMetricSettings',
+            config: {
+              type: MetricTotalSettingsControl,
+              label: t('Per-Metric Total Overrides'),
+              renderTrigger: true,
+              default: {},
+              description: t('Customize total settings for each metric'),
+              mapStateToProps: ({ controls }: { controls: Record<string, any> }) => ({
+                metrics: controls?.metrics?.value || [],
+              }),
+              visibility: ({ controls }: { controls?: any }) =>
+                controls?.colTotals?.value === true,
+            },
+          },
+        ],
+        [
+          {
             name: 'globalTableSettings.columnTotalsLabel',
             config: {
               type: 'TextControl',
-              label: t('Columns total label'),
+              label: t('Total label'),
               renderTrigger: true,
               default: t('Total'),
-              description: t('Header label for the columns total row'),
+              description: t('Label for the columns total row'),
               visibility: ({ controls }: { controls?: any }) =>
                 controls?.colTotals?.value === true,
             },
           },
-          {
-            name: 'globalTableSettings.columnTotalsValueFormat.valueFormat',
-            config: {
-              ...sharedControls.y_axis_format,
-              label: t('Columns total number format'),
-              renderTrigger: true,
-              description: t('D3 number format for the columns total row'),
-              choices: [
-                [
-                  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
-                  t('Adaptive formatting, empty instead 0'),
-                ],
-                ...(sharedControls.y_axis_format.choices || []),
-              ],
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.colTotals?.value === true &&
-                controls?.transposePivot?.value === false,
-            },
-          },
-        ],
-        [
-          {
-            name: 'globalTableSettings.columnTotalsValueFormat.dateFormat',
-            config: {
-              type: 'SelectControl',
-              freeForm: true,
-              label: t('Columns total date format'),
-              default: SMART_DATE_ID,
-              renderTrigger: true,
-              choices: D3_TIME_FORMAT_OPTIONS,
-              description: t('D3 time format for the columns total row'),
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.colTotals?.value === true,
-            },
-          },
-        ],
-        [
           {
             name: 'globalTableSettings.columnTotalsValueFormat.fontSize',
             config: {
               type: 'NumberControl',
-              label: t('Columns total font size (px)'),
+              label: t('Total font size (px)'),
               renderTrigger: true,
               default: undefined,
               visibility: ({ controls }: { controls?: any }) =>
                 controls?.colTotals?.value === true,
             },
           },
+        ],
+        [
           {
             name: 'globalTableSettings.columnTotalsValueFormat.fontColor',
             config: {
               type: 'ColorPickerControl',
-              label: t('Columns total font color'),
+              label: t('Total font color'),
               renderTrigger: true,
               default: undefined,
               visibility: ({ controls }: { controls?: any }) =>
@@ -874,7 +759,7 @@ const config: ControlPanelConfig = {
             name: 'globalTableSettings.columnTotalsValueFormat.backgroundColor',
             config: {
               type: 'ColorPickerControl',
-              label: t('Columns total background color'),
+              label: t('Total background color'),
               renderTrigger: true,
               default: undefined,
               visibility: ({ controls }: { controls?: any }) =>
@@ -902,48 +787,11 @@ const config: ControlPanelConfig = {
               label: t('Columns subtotal label'),
               renderTrigger: true,
               default: t('Subtotal'),
-              description: t('Header label for column subtotal columns'),
+              description: t('Header label for the columns subtotal row'),
               visibility: ({ controls }: { controls?: any }) =>
                 controls?.colSubTotals?.value === true,
             },
           },
-          {
-            name: 'globalTableSettings.colSubTotalsValueFormat.valueFormat',
-            config: {
-              ...sharedControls.y_axis_format,
-              label: t('Columns subtotal number format'),
-              renderTrigger: true,
-              description: t('D3 number format for column subtotal cells'),
-              choices: [
-                [
-                  ADAPTIVE_FORMATTING_EMPTY_INSTEAD_0,
-                  t('Adaptive formatting, empty instead 0'),
-                ],
-                ...(sharedControls.y_axis_format.choices || []),
-              ],
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.colSubTotals?.value === true &&
-                controls?.transposePivot?.value === true,
-            },
-          },
-        ],
-        [
-          {
-            name: 'globalTableSettings.colSubTotalsValueFormat.dateFormat',
-            config: {
-              type: 'SelectControl',
-              freeForm: true,
-              label: t('Columns subtotal date format'),
-              default: SMART_DATE_ID,
-              renderTrigger: true,
-              choices: D3_TIME_FORMAT_OPTIONS,
-              description: t('D3 time format for column subtotal cells'),
-              visibility: ({ controls }: { controls?: any }) =>
-                controls?.colSubTotals?.value === true,
-            },
-          },
-        ],
-        [
           {
             name: 'globalTableSettings.colSubTotalsValueFormat.fontSize',
             config: {
@@ -955,6 +803,8 @@ const config: ControlPanelConfig = {
                 controls?.colSubTotals?.value === true,
             },
           },
+        ],
+        [
           {
             name: 'globalTableSettings.colSubTotalsValueFormat.fontColor',
             config: {
@@ -966,8 +816,6 @@ const config: ControlPanelConfig = {
                 controls?.colSubTotals?.value === true,
             },
           },
-        ],
-        [
           {
             name: 'globalTableSettings.colSubTotalsValueFormat.backgroundColor',
             config: {
@@ -4898,6 +4746,71 @@ const config: ControlPanelConfig = {
         if (ctvf.backgroundColor !== undefined) {
           resultFormData['globalTableSettings.columnTotalsValueFormat.backgroundColor'] = ctvf.backgroundColor;
         }
+      }
+
+      // Новый контракт totals: per-metric block c object value.
+      // Для старых chart settings legacy global total number format показываем
+      // как fallback у всех метрик, чтобы новый UI отражал фактическое поведение.
+      if (
+        formData['globalTableSettings.columnTotalsMetricSettings'] === undefined &&
+        Array.isArray(formData.metrics)
+      ) {
+        const nextMetricSettings: Record<string, any> = {};
+        const existingMetricSettings =
+          gts.columnTotalsMetricSettings &&
+          typeof gts.columnTotalsMetricSettings === 'object'
+            ? (gts.columnTotalsMetricSettings as Record<string, unknown>)
+            : {};
+
+        Object.entries(existingMetricSettings).forEach(([metricName, settings]) => {
+          if (!settings || typeof settings !== 'object') {
+            return;
+          }
+          nextMetricSettings[metricName] = settings;
+        });
+
+        const legacyTotalValueFormat =
+          gts.columnTotalsValueFormat &&
+          typeof gts.columnTotalsValueFormat === 'object'
+            ? (gts.columnTotalsValueFormat as Record<string, unknown>).valueFormat
+            : undefined;
+
+        if (
+          typeof legacyTotalValueFormat === 'string' &&
+          legacyTotalValueFormat.length > 0
+        ) {
+          ensureIsArray(formData.metrics).forEach((metric: QueryFormMetric) => {
+            const metricLabel = getMetricLabel(metric);
+            if (!metricLabel) {
+              return;
+            }
+            const existingSettings = nextMetricSettings[metricLabel];
+            const existingFormat =
+              existingSettings &&
+              typeof existingSettings === 'object' &&
+              (existingSettings as Record<string, any>).totalValueFormat &&
+              typeof (existingSettings as Record<string, any>).totalValueFormat ===
+                'object'
+                ? ((existingSettings as Record<string, any>).totalValueFormat as Record<
+                    string,
+                    unknown
+                  >)
+                : {};
+
+            if (existingFormat.valueFormat === undefined) {
+              nextMetricSettings[metricLabel] = {
+                ...(existingSettings as Record<string, unknown>),
+                totalValueFormat: {
+                  ...existingFormat,
+                  valueFormat: legacyTotalValueFormat,
+                },
+              };
+            }
+          });
+        }
+
+        resultFormData['globalTableSettings.columnTotalsMetricSettings'] =
+          nextMetricSettings;
       }
       
       // Синхронизируем colSubTotalsValueFormat

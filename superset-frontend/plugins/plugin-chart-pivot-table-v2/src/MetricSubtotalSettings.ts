@@ -12,3 +12,8 @@ export interface MetricSubtotalSettingsType {
   subtotalAggregation?: 'sum' | 'max' | 'min' | 'formula'; // Переопределение агрегации для метрики
   subtotalValueFormat?: ValueCellFormatSettings; // Переопределение формата/цветов
 }
+
+export interface MetricTotalSettingsType {
+  totalAggregation?: 'sum' | 'max' | 'min' | 'formula'; // Переопределение агрегации для итогов колонок
+  totalValueFormat?: ValueCellFormatSettings; // Переопределение формата итогов по колонкам
+}

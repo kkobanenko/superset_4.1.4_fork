@@ -148,3 +148,56 @@ test('parseSqlFormula falls back to last backtick when mapping is absent', () =>
   expect(parsed.isValid).toBe(true);
   expect(parsed.baseMetrics).toEqual(['Продажи: Сумма без НДС', 'Значение']);
 });
+
+test('computeFormulaValue for column total uses metric labels in total keys', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['Факт', 'План', '%'],
+      metricsSqlExpressions: {
+        '%': 'SUM(`Факт`) / SUM(`План`)',
+      },
+      metricNameMapping: {},
+    },
+    cols: ['Год', 'metric'],
+    rows: ['ОП'],
+  });
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+
+  setValue(['Волга'], ['2024', 'Факт'], 100);
+  setValue(['Сибирь'], ['2024', 'Факт'], 50);
+  setValue(['Волга'], ['2024', 'План'], 400);
+  setValue(['Сибирь'], ['2024', 'План'], 100);
+  setValue([], ['2024', 'Факт'], 150);
+  setValue([], ['2024', 'План'], 500);
+
+  const pivotData = {
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    '%',
+    [],
+    ['2024', '%'],
+    false,
+    false,
+    pivotData,
+    ['ОП'],
+    ['Год', 'metric'],
+    'metric',
+    { '%': 'SUM(`Факт`) / SUM(`План`)' },
+    ['Факт', 'План', '%'],
+    {},
+  );
+
+  expect(result).toBeCloseTo(150 / 500, 10);
+});

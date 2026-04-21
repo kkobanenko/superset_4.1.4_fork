@@ -481,6 +481,18 @@ export class TableRenderer extends Component {
     return this.props.tableOptions?.globalTableSettings || {};
   }
 
+  getColumnTotalMetricSettings(metricName) {
+    if (!metricName) {
+      return null;
+    }
+    const globalTableSettings = this.getGlobalTableSettings();
+    const metricSettings = globalTableSettings?.columnTotalsMetricSettings;
+    if (!metricSettings || typeof metricSettings !== 'object') {
+      return null;
+    }
+    return metricSettings[metricName] || null;
+  }
+
   getMetricsLabelStyleSettings() {
     const globalTableSettings = this.getGlobalTableSettings();
     return {
@@ -922,13 +934,15 @@ export class TableRenderer extends Component {
         // Для итога колонки при transposePivot = false: rowKey пустой, colKey содержит все измерения колонок
         // Заменяем метрику в colKey на индекс базовой метрики
         if (targetColKey.length > metricKeyIndex) {
-          targetColKey[metricKeyIndex] = baseMetricIndex;
+          const currentMetricValue = targetColKey[metricKeyIndex];
+          targetColKey[metricKeyIndex] =
+            typeof currentMetricValue === 'number' ? baseMetricIndex : baseMetricName;
         } else {
           // Если colKey короче, расширяем его
           while (targetColKey.length <= metricKeyIndex) {
             targetColKey.push(null);
           }
-          targetColKey[metricKeyIndex] = baseMetricIndex;
+          targetColKey[metricKeyIndex] = baseMetricName;
         }
       } else {
         // Для transposePivot = true или других случаев - пока не поддерживаем
@@ -2834,40 +2848,78 @@ export class TableRenderer extends Component {
         }
       }
 
-      if (!isPerMetricSubtotal && !transposePivot && metricsSqlExpressions && metricKey) {
-        const metricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
-        if (metricName && metricsSqlExpressions[metricName]) {
-          // Метрика является формулой, вычисляем значение по формуле
+      const totalMetricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
+      const columnTotalMetricSettings = !isPerMetricSubtotal && totalMetricName
+        ? this.getColumnTotalMetricSettings(totalMetricName)
+        : null;
+      const totalAggregation = columnTotalMetricSettings?.totalAggregation || 'sum';
+
+      // Для total по метрике поддерживаем per-metric Aggregation:
+      // sum (по умолчанию), min, max, formula.
+      if (!isPerMetricSubtotal && !transposePivot && metricKey && totalMetricName) {
+        if (totalAggregation === 'min' || totalAggregation === 'max') {
+          const rowKeys = pivotData.getRowKeys();
+          let result = totalAggregation === 'min' ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+          let hasValue = false;
+          rowKeys.forEach(rowKey => {
+            const val = pivotData.getAggregator(rowKey, colKey).value();
+            if (val === null || val === undefined || Number.isNaN(val)) {
+              return;
+            }
+            const num = typeof val === 'number' ? val : Number.parseFloat(val);
+            if (Number.isNaN(num)) {
+              return;
+            }
+            hasValue = true;
+            if (totalAggregation === 'min') {
+              result = Math.min(result, num);
+            } else {
+              result = Math.max(result, num);
+            }
+          });
+          aggValue = hasValue ? result : null;
+        } else if (
+          totalAggregation === 'formula' ||
+          (totalAggregation === 'sum' &&
+            metricsSqlExpressions &&
+            metricsSqlExpressions[totalMetricName])
+        ) {
           const formulaValue = this.computeFormulaValue(
-            metricName,
-            [], // rowKey для итога колонки пустой
+            totalMetricName,
+            [],
             colKey,
-            false, // isRowSubtotal
-            false, // isColSubtotal (это итог колонки, а не подытог)
+            false,
+            false,
             pivotData,
             rowAttrs,
             colAttrs,
             metricKey,
             metricsSqlExpressions,
             metricsOrder,
-            metricNameMapping
+            metricNameMapping,
           );
           if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
             aggValue = formulaValue;
+          } else if (totalAggregation === 'formula') {
+            aggValue = null;
+            console.warn('[PivotTableV2] Formula column total fallback to empty value', {
+              metric: totalMetricName,
+              rowKey: [],
+              colKey,
+            });
           }
-          // Если formulaValue равен null, используем стандартное значение aggValue
         }
       }
 
       // ── Per-metric subtotal: стили и формат для total row ──
-      let perMetricTotalStyleRef = null;
-      let perMetricTotalFormatOverride = null;
+      let perMetricSubtotalTotalStyleRef = null;
+      let perMetricSubtotalFormatOverride = null;
       if (isPerMetricSubtotal) {
         const pmInfo = this.getPerMetricSubtotalInfo(colKey, colAttrs);
         if (pmInfo?.metricSettings?.subtotalValueFormat) {
           const fmt = pmInfo.metricSettings.subtotalValueFormat;
-          perMetricTotalStyleRef = this.buildValueCellStyleRef(fmt);
-          perMetricTotalFormatOverride = fmt;
+          perMetricSubtotalTotalStyleRef = this.buildValueCellStyleRef(fmt);
+          perMetricSubtotalFormatOverride = fmt;
         }
       }
 
@@ -2875,11 +2927,16 @@ export class TableRenderer extends Component {
         ? this.buildValueCellStyleRef(globalTableSettings.columnTotalsValueFormat)
         : null;
 
+      const columnTotalMetricFormat = columnTotalMetricSettings?.totalValueFormat;
+      const columnTotalMetricStyleRef = columnTotalMetricFormat
+        ? this.buildValueCellStyleRef(columnTotalMetricFormat)
+        : null;
+
       // Обработка адаптивного форматирования для итогов колонок
       let totalRowFormatSettings = globalTableSettings?.columnTotalsValueFormat;
       if (isAdaptiveFormatting(totalRowFormatSettings?.valueFormat)) {
         // Для итогов колонок метрика определяется по colKey (когда transposePivot = false)
-        const adaptiveMetricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
+        const adaptiveMetricName = totalMetricName;
         const adaptiveMetricFormat = adaptiveMetricName ? this.getMetricFormat(adaptiveMetricName) : undefined;
         if (adaptiveMetricFormat) {
           totalRowFormatSettings = { ...totalRowFormatSettings, valueFormat: adaptiveMetricFormat };
@@ -2889,11 +2946,14 @@ export class TableRenderer extends Component {
         }
       }
 
-      // Для per-metric subtotals используем формат из MetricSubtotalSettings
-      const effectiveTotalFormat = isPerMetricSubtotal && perMetricTotalFormatOverride
-        ? perMetricTotalFormatOverride
-        : totalRowFormatSettings;
-      const totalMetricName = this.getMetricNameForCell([], colKey, rowAttrs, colAttrs);
+      // Для per-metric subtotals используем subtotal overrides.
+      // Для обычных total cells сначала используем per-metric column total override,
+      // затем legacy/common global total format как fallback.
+      const effectiveTotalFormat = isPerMetricSubtotal && perMetricSubtotalFormatOverride
+        ? perMetricSubtotalFormatOverride
+        : !isPerMetricSubtotal && columnTotalMetricFormat?.valueFormat
+          ? { ...(totalRowFormatSettings || {}), ...columnTotalMetricFormat }
+          : totalRowFormatSettings;
       const totalMetricSettings = totalMetricName
         ? this.getFieldSettings(totalMetricName)
         : null;
@@ -2908,7 +2968,11 @@ export class TableRenderer extends Component {
       );
 
       // Объединяем ref callbacks: per-metric стили + глобальные total стили + padding
-      const allTotalRefs = [perMetricTotalStyleRef, totalRowStyleRef].filter(Boolean);
+      const allTotalRefs = [
+        perMetricSubtotalTotalStyleRef,
+        totalRowStyleRef,
+        columnTotalMetricStyleRef,
+      ].filter(Boolean);
       const combinedRef = allTotalRefs.length > 0
         ? (element) => {
           if (element) {

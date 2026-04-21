@@ -297,4 +297,161 @@ describe('PivotTableChart transformProps', () => {
     expect(result.metricNameMapping?.['Продажи: Сумма без НДС']).toBe('Факт');
     expect(result.metricNameMapping?.Значение).toBe('План');
   });
+
+  it('keeps first matching SQL metric name mapping when raw term is shared', () => {
+    const chartPropsWithDuplicateRawMetric = new ChartProps<QueryFormData>({
+      formData: {
+        ...formData,
+        metrics: [
+          {
+            expressionType: 'SQL',
+            label: 'Факт',
+            sqlExpression: 'SUM(if(`Дата` < now(),`Продажи: Сумма без НДС`, 0.))',
+          },
+          {
+            expressionType: 'SQL',
+            label: 'Факт по документам',
+            sqlExpression: 'SUM(`Продажи: Сумма без НДС`)',
+          },
+          {
+            expressionType: 'SQL',
+            label: 'План',
+            sqlExpression: 'SUM(`Значение`) * 1000',
+          },
+          {
+            expressionType: 'SQL',
+            label: '%',
+            sqlExpression:
+              'SUM(if(`Дата` < now(),`Продажи: Сумма без НДС`, 0.)) / SUM(`Значение` * 1000)',
+          },
+        ],
+      } as QueryFormData,
+      width: 800,
+      height: 600,
+      queriesData: chartProps.queriesData,
+      hooks: { setDataMask },
+      filterState: { selectedFilters: {} },
+      datasource: { verboseMap: {}, columnFormats: {} },
+      theme: supersetTheme,
+    });
+
+    const result = transformProps(chartPropsWithDuplicateRawMetric as any);
+    expect(result.metricNameMapping?.['Продажи: Сумма без НДС']).toBe('Факт');
+  });
+
+  it('preserves explicit per-metric column total formatting settings', () => {
+    const chartPropsWithColumnTotalOverrides = new ChartProps<QueryFormData>({
+      formData: {
+        ...formData,
+        globalTableSettings: {
+          columnTotalsLabel: 'Total',
+          columnTotalsMetricSettings: {
+            metric1: {
+              totalAggregation: 'formula',
+              totalValueFormat: {
+                valueFormat: '.1%',
+              },
+            },
+          },
+        },
+      } as QueryFormData,
+      width: 800,
+      height: 600,
+      queriesData: chartProps.queriesData,
+      hooks: { setDataMask },
+      filterState: { selectedFilters: {} },
+      datasource: { verboseMap: {}, columnFormats: {} },
+      theme: supersetTheme,
+    });
+
+    const result = transformProps(chartPropsWithColumnTotalOverrides as any);
+    expect(result.globalTableSettings?.columnTotalsMetricSettings).toEqual({
+      metric1: {
+        totalAggregation: 'formula',
+        totalValueFormat: {
+          valueFormat: '.1%',
+        },
+      },
+    });
+  });
+
+  it('migrates legacy column total number format to per-metric overrides', () => {
+    const chartPropsWithLegacyColumnTotalsFormat = new ChartProps<QueryFormData>({
+      formData: {
+        ...formData,
+        globalTableSettings: {
+          columnTotalsLabel: 'Total',
+          columnTotalsValueFormat: {
+            valueFormat: '.1%',
+            fontColor: '#123456',
+          },
+        },
+      } as QueryFormData,
+      width: 800,
+      height: 600,
+      queriesData: chartProps.queriesData,
+      hooks: { setDataMask },
+      filterState: { selectedFilters: {} },
+      datasource: { verboseMap: {}, columnFormats: {} },
+      theme: supersetTheme,
+    });
+
+    const result = transformProps(chartPropsWithLegacyColumnTotalsFormat as any);
+    expect(result.globalTableSettings?.columnTotalsValueFormat).toEqual({
+      valueFormat: '.1%',
+      fontColor: '#123456',
+    });
+    expect(result.globalTableSettings?.columnTotalsMetricSettings).toEqual({
+      metric1: {
+        totalValueFormat: {
+          valueFormat: '.1%',
+        },
+      },
+      metric2: {
+        totalValueFormat: {
+          valueFormat: '.1%',
+        },
+      },
+    });
+  });
+
+  it('preserves column total font size and column subtotal formatting settings', () => {
+    const chartPropsWithColumnFormatting = new ChartProps<QueryFormData>({
+      formData: {
+        ...formData,
+        globalTableSettings: {
+          columnTotalsLabel: 'Total',
+          columnTotalsValueFormat: {
+            fontSize: 18,
+            fontColor: '#111111',
+          },
+          colSubTotalsLabel: 'Subtotal',
+          colSubTotalsValueFormat: {
+            fontSize: 14,
+            fontColor: '#222222',
+            backgroundColor: '#eeeeee',
+          },
+        },
+      } as QueryFormData,
+      width: 800,
+      height: 600,
+      queriesData: chartProps.queriesData,
+      hooks: { setDataMask },
+      filterState: { selectedFilters: {} },
+      datasource: { verboseMap: {}, columnFormats: {} },
+      theme: supersetTheme,
+    });
+
+    const result = transformProps(chartPropsWithColumnFormatting as any);
+    expect(result.globalTableSettings?.columnTotalsValueFormat).toEqual({
+      fontSize: 18,
+      fontColor: '#111111',
+    });
+    expect(result.globalTableSettings?.colSubTotalsLabel).toBe('Subtotal');
+    expect(result.globalTableSettings?.colSubTotalsValueFormat).toEqual({
+      fontSize: 14,
+      fontColor: '#222222',
+      backgroundColor: '#eeeeee',
+    });
+  });
 });

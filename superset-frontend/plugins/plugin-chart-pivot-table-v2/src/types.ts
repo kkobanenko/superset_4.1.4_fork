@@ -35,11 +35,13 @@ import { ColorFormatters } from '@superset-ui/chart-controls';
 import type {
   ValueCellFormatSettings,
   MetricSubtotalSettingsType,
+  MetricTotalSettingsType,
 } from './MetricSubtotalSettings';
 
 export type {
   ValueCellFormatSettings,
   MetricSubtotalSettingsType,
+  MetricTotalSettingsType,
 } from './MetricSubtotalSettings';
 
 export interface PivotTableStylesProps {
@@ -205,6 +207,7 @@ export interface GlobalTableSettings {
   columnTotalsValueFormat?: ValueCellFormatSettings;
   rowSubTotalsValueFormat?: ValueCellFormatSettings;
   colSubTotalsValueFormat?: ValueCellFormatSettings;
+  columnTotalsMetricSettings?: Record<string, MetricTotalSettingsType>;
 }
 
 // Расширенная форма данных для Pivot Table V2
