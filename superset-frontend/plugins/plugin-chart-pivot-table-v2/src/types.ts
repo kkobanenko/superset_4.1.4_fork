@@ -191,6 +191,7 @@ export interface GlobalTableSettings {
   rowTotalsEnabled?: boolean; // нужен/не нужен общий итог по строкам
   rowTotalsPosition?: 'left' | 'right'; // позиция итога по строкам
   rowTotalsLabel?: string; // наименование итога по строкам
+  rowSearchEnabled?: boolean; // показывать/не показывать строку поиска по иерархии строк
 
   // Заголовок измерения метрик (строка/столбец "Мера"/"Metric").
   metricsLabel?: string;

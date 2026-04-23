@@ -781,6 +781,20 @@ const config: ControlPanelConfig = {
         ],
         [
           {
+            name: 'globalTableSettings.rowSearchEnabled',
+            config: {
+              type: 'CheckboxControl',
+              label: t('Search box'),
+              default: false,
+              renderTrigger: true,
+              description: t(
+                'Whether to include a client-side search box that filters rows by full row path',
+              ),
+            },
+          },
+        ],
+        [
+          {
             name: 'globalTableSettings.colSubTotalsLabel',
             config: {
               type: 'TextControl',
@@ -4852,6 +4866,9 @@ const config: ControlPanelConfig = {
       }
       if (gts.colSubTotalsLabel !== undefined) {
         resultFormData['globalTableSettings.colSubTotalsLabel'] = gts.colSubTotalsLabel;
+      }
+      if (gts.rowSearchEnabled !== undefined) {
+        resultFormData['globalTableSettings.rowSearchEnabled'] = gts.rowSearchEnabled;
       }
     }
     

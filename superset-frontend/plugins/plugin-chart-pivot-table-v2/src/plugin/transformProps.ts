@@ -693,6 +693,11 @@ function buildGlobalTableSettings(
   if (formData['globalTableSettings.metricsLabelAlignment'] !== undefined) {
     out.metricsLabelAlignment = formData['globalTableSettings.metricsLabelAlignment'];
   }
+  if (formData['globalTableSettings.rowSearchEnabled'] !== undefined) {
+    out.rowSearchEnabled = Boolean(
+      formData['globalTableSettings.rowSearchEnabled'],
+    );
+  }
 
   // Добавляем другие поля из существующего объекта (если они еще не добавлены)
   if (existing && typeof existing === 'object') {

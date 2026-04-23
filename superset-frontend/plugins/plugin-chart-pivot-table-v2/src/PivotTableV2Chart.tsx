@@ -16,12 +16,13 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { MinusSquareOutlined, PlusSquareOutlined } from '@ant-design/icons';
 import {
   AdhocMetric,
   BinaryQueryObjectFilterClause,
   CurrencyFormatter,
+  DataRecord,
   DataRecordValue,
   FeatureFlag,
   getColumnLabel,
@@ -34,8 +35,10 @@ import {
   t,
 } from '@superset-ui/core';
 import { styled, useTheme } from '@apache-superset/core/ui';
+import { Input, Space } from '@superset-ui/core/components';
 import { aggregatorTemplates, PivotTable, sortAs } from './react-pivottable';
 import {
+  DateFormatter,
   FilterType,
   MetricsLayoutEnum,
   PivotTableV2Props,
@@ -51,12 +54,22 @@ const Styles = styled.div<PivotTableStylesProps>`
       width: ${
         typeof width === 'string' ? parseInt(width, 10) : width - margin * 2
       }px;
+      display: flex;
+      flex-direction: column;
  `}
+`;
+
+const SearchToolbar = styled.div`
+  ${({ theme }) => `
+    padding-bottom: ${theme.sizeUnit * 2}px;
+  `}
 `;
 
 const PivotTableWrapper = styled.div`
   ${({ theme }) => `
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+    height: auto;
     max-width: inherit;
     overflow: auto;
 
@@ -109,6 +122,38 @@ type AggregatorFn = (
   colKey: unknown[],
 ) => { value: () => unknown; format: (x: unknown) => string };
 type AggregatorTemplate = (valsList: string[]) => AggregatorFn;
+
+function formatRowSearchValue(
+  value: DataRecordValue,
+  formatter?: DateFormatter,
+): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  if (formatter) {
+    try {
+      return String((formatter as (nextValue: DataRecordValue) => string)(value));
+    } catch {
+      // Если форматтер не смог преобразовать значение, используем исходное.
+    }
+  }
+
+  return String(value);
+}
+
+function buildRowPathSearchText(
+  record: DataRecord,
+  rowFields: string[],
+  dateFormatters: Record<string, DateFormatter | undefined>,
+): string {
+  return rowFields
+    .map(field =>
+      formatRowSearchValue(record[field] as DataRecordValue, dateFormatters[field]),
+    )
+    .filter(value => value.length > 0)
+    .join(' / ');
+}
 
 const baseAggregatorsFactory = (
   formatter: NumberFormatter,
@@ -224,6 +269,7 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
   } = props;
 
   const theme = useTheme();
+  const [rowSearchQuery, setRowSearchQuery] = useState('');
   const defaultAggregatorName = aggregateFunction || 'Sum';
   // valueFormat в Superset обычно всегда заполнен контролом y_axis_format,
   // но на всякий случай держим безопасный fallback.
@@ -378,23 +424,6 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
     };
   }, [defaultAggregatorName, metricAggregationByName]);
 
-  const unpivotedData = useMemo(
-    () =>
-      data.reduce(
-        (acc: Record<string, any>[], record: Record<string, any>) => [
-          ...acc,
-          ...metricNames
-            .map((name: string) => ({
-              ...record,
-              [METRIC_KEY]: name,
-              value: record[name],
-            }))
-            .filter(record => record.value !== null),
-        ],
-        [],
-      ),
-    [data, metricNames],
-  );
   const groupbyRows = useMemo(
     () => groupbyRowsRaw.map(getColumnLabel),
     [groupbyRowsRaw],
@@ -429,6 +458,59 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
     metricsLayout,
     transposePivot,
   ]);
+
+  const searchRowFields = useMemo(
+    () => (transposePivot ? groupbyColumns : groupbyRows),
+    [groupbyColumns, groupbyRows, transposePivot],
+  );
+
+  const normalizedRowSearchQuery = useMemo(
+    () => rowSearchQuery.trim().toLocaleLowerCase(),
+    [rowSearchQuery],
+  );
+
+  const hasSearchableRows = searchRowFields.length > 0;
+
+  const filteredData = useMemo(() => {
+    if (
+      globalTableSettings?.rowSearchEnabled !== true ||
+      normalizedRowSearchQuery.length === 0 ||
+      !hasSearchableRows
+    ) {
+      return data;
+    }
+
+    return data.filter(record =>
+      buildRowPathSearchText(record, searchRowFields, dateFormatters)
+        .toLocaleLowerCase()
+        .includes(normalizedRowSearchQuery),
+    );
+  }, [
+    data,
+    dateFormatters,
+    globalTableSettings?.rowSearchEnabled,
+    hasSearchableRows,
+    normalizedRowSearchQuery,
+    searchRowFields,
+  ]);
+
+  const unpivotedData = useMemo(
+    () =>
+      filteredData.reduce(
+        (acc: Record<string, any>[], record: Record<string, any>) => [
+          ...acc,
+          ...metricNames
+            .map((name: string) => ({
+              ...record,
+              [METRIC_KEY]: name,
+              value: record[name],
+            }))
+            .filter(record => record.value !== null),
+        ],
+        [],
+      ),
+    [filteredData, metricNames],
+  );
 
   const handleChange = useCallback(
     (filters: SelectedFiltersType) => {
@@ -729,6 +811,25 @@ export default function PivotTableV2Chart(props: PivotTableV2Props) {
 
   return (
     <Styles height={height} width={width} margin={theme.sizeUnit * 4}>
+      {globalTableSettings?.rowSearchEnabled && (
+        <SearchToolbar>
+          <Space direction="horizontal" size={4}>
+            {t('Search')}
+            <Input
+              aria-label={t('Search rows by full path')}
+              allowClear
+              disabled={!hasSearchableRows}
+              placeholder={
+                hasSearchableRows
+                  ? t('Search rows by full path')
+                  : t('No row fields available for search')
+              }
+              value={rowSearchQuery}
+              onChange={event => setRowSearchQuery(event.target.value)}
+            />
+          </Space>
+        </SearchToolbar>
+      )}
       <PivotTableWrapper>
         <PivotTable
           data={unpivotedData}

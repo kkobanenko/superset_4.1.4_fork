@@ -454,4 +454,23 @@ describe('PivotTableChart transformProps', () => {
       backgroundColor: '#eeeeee',
     });
   });
+
+  it('preserves row search toggle from flat global table setting key', () => {
+    const chartPropsWithRowSearch = new ChartProps<QueryFormData>({
+      formData: {
+        ...formData,
+        'globalTableSettings.rowSearchEnabled': true,
+      } as QueryFormData,
+      width: 800,
+      height: 600,
+      queriesData: chartProps.queriesData,
+      hooks: { setDataMask },
+      filterState: { selectedFilters: {} },
+      datasource: { verboseMap: {}, columnFormats: {} },
+      theme: supersetTheme,
+    });
+
+    const result = transformProps(chartPropsWithRowSearch as any);
+    expect(result.globalTableSettings?.rowSearchEnabled).toBe(true);
+  });
 });
