@@ -667,11 +667,23 @@ export class TableRenderer extends Component {
         // Это лучше работает для выражений вида SUM(if(`Дата` < now(), `Продажи`, 0.)).
         sqlMetricName = candidate;
       }
+      const namesMapping = this.props?.namesMapping || {};
+      const mappedFromSql =
+        sqlMetricName && metricNameMapping ? metricNameMapping[sqlMetricName] : null;
+      const mappedFromVerbose =
+        sqlMetricName && typeof namesMapping[sqlMetricName] === 'string'
+          ? namesMapping[sqlMetricName]
+          : null;
       const displayMetricName = sqlMetricName
-        ? ((metricNameMapping && metricNameMapping[sqlMetricName]) || sqlMetricName)
+        ? mappedFromSql || mappedFromVerbose || sqlMetricName
         : null;
 
-      terms.push({ token, term: fullTerm, metricName: displayMetricName });
+      terms.push({
+        token,
+        term: fullTerm,
+        metricName: displayMetricName,
+        sqlMetricName,
+      });
       simplifiedExpression += token;
       idx = closeIdx + 1;
     }
@@ -680,9 +692,22 @@ export class TableRenderer extends Component {
       return { baseMetrics: [], operations: [], expression: '', terms: [], isValid: false };
     }
 
-    const expression = simplifiedExpression.replace(/\s+/g, '');
+    // Поддержка SQL-формы деления через NULLIF(x, 0):
+    // для нашего арифметического движка это эквивалентно обычному "x",
+    // потому что защита от деления на ноль уже есть в evaluateFormulaExpression.
+    // Пример: a/NULLIF(b,0) -> a/(b)
+    let normalizedExpression = simplifiedExpression;
+    // Нормализуем безопасное деление через NULLIF(x, 0) в простую скобочную форму.
+    // В evaluateFormulaExpression деление на 0 уже возвращает null.
+    normalizedExpression = normalizedExpression
+      .replace(/nullif\s*\(/gi, '(')
+      .replace(/,\s*0(?:\.0+)?\s*\)/gi, ')');
+
+    const expression = normalizedExpression.replace(/\s+/g, '');
     const operations = (expression.match(/[+\-*/]/g) || []).filter(Boolean);
-    const hasOnlyAllowedTokens = /^([()+\-*/.]|__TERM_\d+__)+$/.test(expression);
+    const hasOnlyAllowedTokens = /^(?:__TERM_\d+__|[()+\-*/]|(?:\d+\.\d+|\d+|\.\d+))+$/.test(
+      expression,
+    );
     const allTermsMapped = terms.every(
       t => typeof t.metricName === 'string' && t.metricName.length > 0,
     );
@@ -814,15 +839,58 @@ export class TableRenderer extends Component {
           }
         }
       }
-      if (baseMetricIndex === -1) {
-        return null;
-      }
-
       // Находим позицию metricKey в colAttrs
       const metricKeyIndex = colAttrs.indexOf(metricKey);
       if (metricKeyIndex === -1) {
         return null;
       }
+
+      // Кандидаты имени/индекса метрики:
+      // 1) индекс (если известен и ключи метрик числовые),
+      // 2) исходное имя,
+      // 3) обратный маппинг из namesMapping (когда в PivotData ключ raw, а отображается alias).
+      const metricCandidates = [];
+      if (baseMetricIndex !== -1) {
+        metricCandidates.push(baseMetricIndex);
+      }
+      metricCandidates.push(baseMetricName);
+      const namesMapping = this.props?.namesMapping || {};
+      Object.entries(namesMapping).forEach(([rawKey, displayValue]) => {
+        if (
+          typeof displayValue === 'string' &&
+          displayValue.trim() === String(baseMetricName).trim()
+        ) {
+          metricCandidates.push(rawKey);
+        }
+      });
+      const uniqueMetricCandidates = Array.from(new Set(metricCandidates));
+
+      const getAggNumericValueByCandidates = (baseRowKey, baseColKey) => {
+        for (const metricCandidate of uniqueMetricCandidates) {
+          const candidateColKey = [...baseColKey];
+          candidateColKey[metricKeyIndex] = metricCandidate;
+          const aggCandidate = pivotData.getAggregator(baseRowKey, candidateColKey);
+          if (!aggCandidate) {
+            continue;
+          }
+          const valueCandidate = aggCandidate.value();
+          if (
+            valueCandidate === null ||
+            valueCandidate === undefined ||
+            (typeof valueCandidate === 'number' && Number.isNaN(valueCandidate))
+          ) {
+            continue;
+          }
+          const parsed =
+            typeof valueCandidate === 'number'
+              ? valueCandidate
+              : Number.parseFloat(valueCandidate);
+          if (!Number.isNaN(parsed)) {
+            return parsed;
+          }
+        }
+        return null;
+      };
 
       if (isRowSubtotal && !transposePivot) {
         // Для подытога строки при transposePivot = false нужно суммировать leaf-ячейки
@@ -896,23 +964,11 @@ export class TableRenderer extends Component {
         for (const normalRowKey of matchingRowKeys) {
           for (const normalColKey of matchingLeafColKeys) {
             const baseMetricColKey = [...normalColKey];
-            const leafMetricValue = baseMetricColKey[metricKeyIndex];
-            baseMetricColKey[metricKeyIndex] =
-              typeof leafMetricValue === 'number' ? baseMetricIndex : baseMetricName;
-
-            const normalAgg = pivotData.getAggregator(normalRowKey, baseMetricColKey);
-            if (!normalAgg) {
-              continue;
-            }
-            const normalValue = normalAgg.value();
-            if (normalValue === null || normalValue === undefined || Number.isNaN(normalValue)) {
-              continue;
-            }
-            const numValue =
-              typeof normalValue === 'number'
-                ? normalValue
-                : Number.parseFloat(normalValue);
-            if (!Number.isNaN(numValue)) {
+            const numValue = getAggNumericValueByCandidates(
+              normalRowKey,
+              baseMetricColKey,
+            );
+            if (numValue !== null) {
               sum += numValue;
               foundAny = true;
             }
@@ -929,14 +985,17 @@ export class TableRenderer extends Component {
         while (targetColKey.length <= metricKeyIndex) {
           targetColKey.push(null);
         }
-        targetColKey[metricKeyIndex] = baseMetricIndex;
+        targetColKey[metricKeyIndex] =
+          baseMetricIndex !== -1 ? baseMetricIndex : baseMetricName;
       } else if (!transposePivot && rowKey.length === 0 && colKey.length > 0) {
         // Для итога колонки при transposePivot = false: rowKey пустой, colKey содержит все измерения колонок
         // Заменяем метрику в colKey на индекс базовой метрики
         if (targetColKey.length > metricKeyIndex) {
           const currentMetricValue = targetColKey[metricKeyIndex];
           targetColKey[metricKeyIndex] =
-            typeof currentMetricValue === 'number' ? baseMetricIndex : baseMetricName;
+            typeof currentMetricValue === 'number' && baseMetricIndex !== -1
+              ? baseMetricIndex
+              : baseMetricName;
         } else {
           // Если colKey короче, расширяем его
           while (targetColKey.length <= metricKeyIndex) {
@@ -949,20 +1008,7 @@ export class TableRenderer extends Component {
         return null;
       }
 
-      // Получаем агрегатор для базовой метрики
-      const agg = pivotData.getAggregator(targetRowKey, targetColKey);
-      if (!agg) {
-        return null;
-      }
-
-      const value = agg.value();
-      // Проверяем, что значение валидно (не null, не undefined, не NaN)
-      if (value === null || value === undefined || (typeof value === 'number' && Number.isNaN(value))) {
-        return null;
-      }
-
-      const result = typeof value === 'number' ? value : Number.parseFloat(value);
-      return result;
+      return getAggNumericValueByCandidates(targetRowKey, targetColKey);
     } catch (error) {
       // В случае ошибки возвращаем null
       if (process.env.NODE_ENV === 'development') {
@@ -996,13 +1042,25 @@ export class TableRenderer extends Component {
       return null;
     }
 
+    const normalizedMetricsOrder = Array.isArray(metricsOrder)
+      ? metricsOrder
+          .filter(metric => typeof metric === 'string' && metric.length > 0)
+          .map(metric => metric.trim())
+      : [];
+    const explicitMappedMetrics = new Set(
+      (parsed.terms || [])
+        .map(term => (typeof term?.metricName === 'string' ? term.metricName.trim() : ''))
+        .filter(metricName => normalizedMetricsOrder.includes(metricName)),
+    );
+
     // Получаем значения базовых метрик для каждого агрегатного терма
     const termValues = {};
     for (const termInfo of parsed.terms) {
       if (!termInfo?.metricName || !termInfo?.token) {
         return null;
       }
-      const value = this.getBaseMetricValue(
+      let resolvedMetricName = termInfo.metricName;
+      let value = this.getBaseMetricValue(
         termInfo.metricName,
         rowKey,
         colKey,
@@ -1011,13 +1069,73 @@ export class TableRenderer extends Component {
         pivotData,
         rowAttrs,
         colAttrs,
-        metricKey
+        metricKey,
       );
 
+      // Fallback для кейсов, когда SQL-терм не удалось связать с label метрики:
+      // пробуем оставшиеся non-formula метрики из metricsOrder.
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        for (const metricName of normalizedMetricsOrder) {
+          if (!metricName || metricName === formulaMetricName?.trim()) {
+            continue;
+          }
+          if (explicitMappedMetrics.has(metricName)) {
+            continue;
+          }
+          const fallbackValue = this.getBaseMetricValue(
+            metricName,
+            rowKey,
+            colKey,
+            isRowSubtotal,
+            isColSubtotal,
+            pivotData,
+            rowAttrs,
+            colAttrs,
+            metricKey,
+          );
+          if (
+            fallbackValue !== null &&
+            fallbackValue !== undefined &&
+            !Number.isNaN(fallbackValue)
+          ) {
+            value = fallbackValue;
+            resolvedMetricName = metricName;
+            break;
+          }
+        }
+      }
 
       if (value === null || value === undefined || Number.isNaN(value)) {
         // Если значение базовой метрики не найдено, возвращаем null
         return null;
+      }
+
+      // Нормализуем значение базовой метрики до "сырого" агрегатного терма,
+      // если сама метрика хранится как SUM(raw) * K, а в формуле используется SUM(raw).
+      const resolvedMetricSqlExpression =
+        resolvedMetricName && metricsSqlExpressions
+          ? metricsSqlExpressions[resolvedMetricName]
+          : null;
+      if (
+        typeof resolvedMetricSqlExpression === 'string' &&
+        typeof termInfo?.sqlMetricName === 'string' &&
+        termInfo.sqlMetricName.length > 0
+      ) {
+        const escapedSqlMetricName = termInfo.sqlMetricName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          '\\$&',
+        );
+        const scaledMetricRegex = new RegExp(
+          `^\\s*sum\\s*\\(\\s*\\\`${escapedSqlMetricName}\\\`\\s*\\)\\s*\\*\\s*(\\d+(?:\\.\\d+)?)\\s*$`,
+          'i',
+        );
+        const match = resolvedMetricSqlExpression.match(scaledMetricRegex);
+        if (match) {
+          const scale = Number.parseFloat(match[1]);
+          if (!Number.isNaN(scale) && scale !== 0 && scale !== 1) {
+            value /= scale;
+          }
+        }
       }
 
       termValues[termInfo.token] = value;

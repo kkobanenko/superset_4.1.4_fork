@@ -201,3 +201,383 @@ test('computeFormulaValue for column total uses metric labels in total keys', ()
 
   expect(result).toBeCloseTo(150 / 500, 10);
 });
+
+test('computeFormulaValue supports NULLIF for row subtotal formula', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['Факт', 'План', 'Отклонение'],
+      metricsSqlExpressions: {
+        Отклонение:
+          '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000)/NULLIF(SUM(`Значение`) * 1000, 0)',
+      },
+      metricNameMapping: {
+        'Продажи: Сумма без НДС': 'Факт',
+        Значение: 'План',
+      },
+    },
+    cols: ['Месяц', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const rowKeys = [
+    ['Волга', 'RM-1'],
+    ['Волга', 'RM-2'],
+  ];
+  const colKeys = [
+    ['Апрель 2026г', 'Факт'],
+    ['Апрель 2026г', 'План'],
+    ['Апрель 2026г', 'Отклонение'],
+  ];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+
+  // Волга: Факт=18.4млн, План=86млн -> 18.4/86 - 1 = -0.786...
+  setValue(['Волга', 'RM-1'], ['Апрель 2026г', 'Факт'], 10_000_000);
+  setValue(['Волга', 'RM-2'], ['Апрель 2026г', 'Факт'], 8_400_000);
+  setValue(['Волга', 'RM-1'], ['Апрель 2026г', 'План'], 40_000);
+  setValue(['Волга', 'RM-2'], ['Апрель 2026г', 'План'], 46_000);
+
+  const pivotData = {
+    getRowKeys() {
+      return rowKeys;
+    },
+    getColKeys() {
+      return colKeys;
+    },
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    'Отклонение',
+    ['Волга'],
+    ['Апрель 2026г', 'Отклонение'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Месяц', 'metric'],
+    'metric',
+    {
+      Отклонение:
+        '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000)/NULLIF(SUM(`Значение`) * 1000, 0)',
+    },
+    ['Факт', 'План', 'Отклонение'],
+    {
+      'Продажи: Сумма без НДС': 'Факт',
+      Значение: 'План',
+    },
+  );
+
+  const parsed = renderer.parseSqlFormula(
+    '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000)/NULLIF(SUM(`Значение`) * 1000, 0)',
+    ['Факт', 'План', 'Отклонение'],
+    {
+      'Продажи: Сумма без НДС': 'Факт',
+      Значение: 'План',
+    },
+  );
+  expect(parsed.isValid).toBe(true);
+
+  expect(result).toBeCloseTo(18_400_000 / (86_000 * 1000) - 1, 10);
+});
+
+test('computeFormulaValue supports NULLIF for column total formula', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['Факт', 'План', 'Отклонение'],
+      metricsSqlExpressions: {
+        Отклонение:
+          '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000)/NULLIF(SUM(`Значение`) * 1000, 0)',
+      },
+      metricNameMapping: {
+        'Продажи: Сумма без НДС': 'Факт',
+        Значение: 'План',
+      },
+    },
+    cols: ['Месяц', 'metric'],
+    rows: ['ОП'],
+  });
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+
+  setValue([], ['Апрель 2026г', 'Факт'], 209_000_000);
+  setValue([], ['Апрель 2026г', 'План'], 666_000);
+
+  const pivotData = {
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    'Отклонение',
+    [],
+    ['Апрель 2026г', 'Отклонение'],
+    false,
+    false,
+    pivotData,
+    ['ОП'],
+    ['Месяц', 'metric'],
+    'metric',
+    {
+      Отклонение:
+        '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000)/NULLIF(SUM(`Значение`) * 1000, 0)',
+    },
+    ['Факт', 'План', 'Отклонение'],
+    {
+      'Продажи: Сумма без НДС': 'Факт',
+      Значение: 'План',
+    },
+  );
+
+  expect(result).toBeCloseTo(209_000_000 / (666_000 * 1000) - 1, 10);
+});
+
+test('computeFormulaValue works when base metric is absent in metricsOrder but exists in pivot keys', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      // Специально не включаем raw-метрики из формулы в metricsOrder.
+      metricsOrder: ['План', 'Факт', 'Отклонение'],
+      metricsSqlExpressions: {
+        Отклонение: 'SUM(`fact_raw`) / NULLIF(SUM(`plan_raw`), 0) - 1',
+      },
+      metricNameMapping: {},
+    },
+    cols: ['Месяц', 'metric'],
+    rows: ['ОП'],
+  });
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+
+  setValue([], ['Апрель 2026г', 'fact_raw'], 209_000_000);
+  setValue([], ['Апрель 2026г', 'plan_raw'], 666_000_000);
+
+  const pivotData = {
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    'Отклонение',
+    [],
+    ['Апрель 2026г', 'Отклонение'],
+    false,
+    false,
+    pivotData,
+    ['ОП'],
+    ['Месяц', 'metric'],
+    'metric',
+    {
+      Отклонение: 'SUM(`fact_raw`) / NULLIF(SUM(`plan_raw`), 0) - 1',
+    },
+    ['План', 'Факт', 'Отклонение'],
+    {},
+  );
+
+  expect(result).toBeCloseTo(209_000_000 / 666_000_000 - 1, 10);
+});
+
+test('computeFormulaValue uses namesMapping fallback for raw SQL metric names', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'Metric',
+      metricsOrder: ['План                            ', 'Факт', 'Отклонение'],
+      metricsSqlExpressions: {
+        Отклонение:
+          '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+      },
+      metricNameMapping: {
+        Значение: 'План                            ',
+      },
+    },
+    namesMapping: {
+      'Продажи: Сумма без НДС': 'Факт',
+    },
+    cols: ['Дата', 'Metric'],
+    rows: ['ОП'],
+  });
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+
+  setValue([], ['Апрель 2026', 'Факт'], 209_000_000);
+  setValue([], ['Апрель 2026', 'План                            '], 666_000);
+
+  const pivotData = {
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    'Отклонение',
+    [],
+    ['Апрель 2026', 'Отклонение'],
+    false,
+    false,
+    pivotData,
+    ['ОП'],
+    ['Дата', 'Metric'],
+    'Metric',
+    {
+      Отклонение:
+        '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+    },
+    ['План                            ', 'Факт', 'Отклонение'],
+    {
+      Значение: 'План                            ',
+    },
+  );
+
+  expect(result).toBeCloseTo(209_000_000 / (666_000 * 1000) - 1, 10);
+});
+
+test('computeFormulaValue falls back to remaining non-formula metric when one raw term is unmapped', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'Metric',
+      metricsOrder: ['План                            ', 'Факт', 'Отклонение'],
+      metricsSqlExpressions: {
+        'План                            ': 'SUM(`Значение`) * 1000',
+        Факт: null,
+        Отклонение:
+          '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+      },
+      metricNameMapping: {
+        Значение: 'План                            ',
+      },
+    },
+    cols: ['Дата', 'Metric'],
+    rows: ['ОП'],
+  });
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+
+  setValue([], ['Апрель 2026', 'План                            '], 666_000_000);
+  setValue([], ['Апрель 2026', 'Факт'], 209_000_000);
+
+  const pivotData = {
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    'Отклонение',
+    [],
+    ['Апрель 2026', 'Отклонение'],
+    false,
+    false,
+    pivotData,
+    ['ОП'],
+    ['Дата', 'Metric'],
+    'Metric',
+    {
+      'План                            ': 'SUM(`Значение`) * 1000',
+      Отклонение:
+        '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+    },
+    ['План                            ', 'Факт', 'Отклонение'],
+    {
+      Значение: 'План                            ',
+    },
+  );
+
+  expect(result).toBeCloseTo(209_000_000 / 666_000_000 - 1, 10);
+});
+
+test('computeFormulaValue normalizes scaled base metric SUM(raw)*K back to raw SUM(raw)', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'Metric',
+      metricsOrder: ['План                            ', 'Факт', 'Отклонение'],
+      metricsSqlExpressions: {
+        'План                            ': 'SUM(`Значение`) * 1000',
+        Факт: null,
+        Отклонение:
+          '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+      },
+      metricNameMapping: {
+        Значение: 'План                            ',
+      },
+    },
+    cols: ['Дата', 'Metric'],
+    rows: ['ОП'],
+  });
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+
+  // План-метрика уже хранится как SUM(`Значение`) * 1000.
+  setValue([], ['Апрель 2026', 'План                            '], 666_000_000);
+  setValue([], ['Апрель 2026', 'Факт'], 209_000_000);
+
+  const pivotData = {
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    'Отклонение',
+    [],
+    ['Апрель 2026', 'Отклонение'],
+    false,
+    false,
+    pivotData,
+    ['ОП'],
+    ['Дата', 'Metric'],
+    'Metric',
+    {
+      'План                            ': 'SUM(`Значение`) * 1000',
+      Отклонение:
+        '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+    },
+    ['План                            ', 'Факт', 'Отклонение'],
+    {
+      Значение: 'План                            ',
+    },
+  );
+
+  expect(result).toBeCloseTo(209_000_000 / 666_000_000 - 1, 10);
+});
