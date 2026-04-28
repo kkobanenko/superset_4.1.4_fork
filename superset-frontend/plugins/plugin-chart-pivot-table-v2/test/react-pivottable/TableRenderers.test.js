@@ -521,6 +521,73 @@ test('computeFormulaValue falls back to remaining non-formula metric when one ra
   expect(result).toBeCloseTo(209_000_000 / 666_000_000 - 1, 10);
 });
 
+test('computeFormulaValue maps raw simple metric name to display label via namesMapping', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'Metric',
+      metricsOrder: ['План', 'Факт', 'Отклонение'],
+      metricsSqlExpressions: {
+        План: 'SUM(`Значение`) * 1000',
+        Отклонение:
+          '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+      },
+      metricNameMapping: {
+        Значение: 'План',
+      },
+    },
+    namesMapping: {
+      'Продажи: Сумма без НДС': 'Факт',
+    },
+    cols: ['Дата', 'Metric'],
+    rows: ['ОП'],
+  });
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], ['Апрель 2026', 'План'], 20_300_000);
+  setValue(['Восток', 'RM-2'], ['Апрель 2026', 'План'], 44_600_000);
+  setValue(['Восток', 'RM-1'], ['Апрель 2026', 'Факт'], 3_100_000);
+  setValue(['Восток', 'RM-2'], ['Апрель 2026', 'Факт'], 5_510_000);
+
+  const pivotData = {
+    getRowKeys: () => [['Восток', 'RM-1'], ['Восток', 'RM-2']],
+    getColKeys: () => [['Апрель 2026', 'План'], ['Апрель 2026', 'Факт'], ['Апрель 2026', 'Отклонение']],
+    getAggregator(rowKey, colKey) {
+      const value = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => value ?? null,
+      };
+    },
+  };
+
+  const result = renderer.computeFormulaValue(
+    'Отклонение',
+    ['Восток'],
+    ['Апрель 2026', 'Отклонение'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'Metric'],
+    'Metric',
+    {
+      План: 'SUM(`Значение`) * 1000',
+      Отклонение:
+        '(SUM(`Продажи: Сумма без НДС`) - SUM(`Значение`) * 1000) / NULLIF(SUM(`Значение`) * 1000, 0)',
+    },
+    ['План', 'Факт', 'Отклонение'],
+    {
+      Значение: 'План',
+    },
+    [['Апрель 2026', 'Отклонение']],
+    0,
+  );
+
+  expect(result).toBeCloseTo((8_610_000 - 64_900_000) / 64_900_000, 10);
+});
+
 test('computeFormulaValue normalizes scaled base metric SUM(raw)*K back to raw SUM(raw)', () => {
   const renderer = new TableRenderer({
     tableOptions: {
@@ -639,6 +706,56 @@ test('getBaseMetricValue for row subtotal sums current metric column once, not N
   expect(result).toBeCloseTo(20.3e6 + 44.6e6, 2);
 });
 
+test('getBaseMetricValue row subtotal with transposePivot true uses same sum path as false', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['Факт', 'План', 'X'],
+      transposePivot: true,
+    },
+    cols: ['M', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const rowKeys = [
+    ['Восток', 'RM-1'],
+    ['Восток', 'RM-2'],
+  ];
+  const colKeys = [
+    ['G', 'Факт'],
+    ['G', 'План'],
+    ['G', 'X'],
+  ];
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], ['G', 'План'], 20.3e6);
+  setValue(['Восток', 'RM-2'], ['G', 'План'], 44.6e6);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return { value: () => v ?? null };
+    },
+  };
+
+  const result = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['G', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['M', 'metric'],
+    'metric',
+  );
+  expect(result).toBeCloseTo(20.3e6 + 44.6e6, 2);
+});
+
 test('getBaseMetricValue row subtotal with two period columns picks single leaf when colKey is fully specified', () => {
   const renderer = new TableRenderer({
     tableOptions: {
@@ -753,4 +870,251 @@ test('getBaseMetricValue row subtotal uses colIndex+visibleColKeys to pick corre
   );
 
   expect(result).toBeCloseTo(30e6, 0);
+});
+
+test('getBaseMetricValue row subtotal: visibleColKeys order can differ from getColKeys (no pFulls index bug)', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['План'],
+    },
+    cols: ['Дата', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const rowKeys = [
+    ['Восток', 'RM-1'],
+    ['Восток', 'RM-2'],
+  ];
+  // Порядок в PivotData (getColKeys) — P2, потом P1. В сетке колонки P1, P2.
+  const colKeys = [
+    ['P2', 'План'],
+    ['P1', 'План'],
+  ];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], ['P1', 'План'], 10e6);
+  setValue(['Восток', 'RM-2'], ['P1', 'План'], 20e6);
+  setValue(['Восток', 'RM-1'], ['P2', 'План'], 3e6);
+  setValue(['Восток', 'RM-2'], ['P2', 'План'], 4e6);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => v ?? null,
+      };
+    },
+  };
+
+  const visibleColKeys = [
+    ['P1', 'План'],
+    ['P2', 'План'],
+  ];
+
+  // colIndex 1 = вторая колонка в сетке = P2 (3+4 M), а не pFulls[1] = вторая в getColKeys = P1
+  const resultP2 = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['P2', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'metric'],
+    'metric',
+    visibleColKeys,
+    1,
+  );
+  expect(resultP2).toBeCloseTo(7e6, 0);
+
+  const resultP1 = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['P1', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'metric'],
+    'metric',
+    visibleColKeys,
+    0,
+  );
+  expect(resultP1).toBeCloseTo(30e6, 0);
+});
+
+test('getBaseMetricValue row subtotal: Date in getColKeys vs string in visibleColKeys still resolves one leaf', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['План'],
+    },
+    cols: ['Дата', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const d1 = new Date('2026-04-01T00:00:00.000Z');
+  const rowKeys = [
+    ['Восток', 'RM-1'],
+    ['Восток', 'RM-2'],
+  ];
+  const colKeys = [
+    [d1, 'План'],
+    [new Date('2026-05-01T00:00:00.000Z'), 'План'],
+  ];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], [d1, 'План'], 10e6);
+  setValue(['Восток', 'RM-2'], [d1, 'План'], 20e6);
+  setValue(['Восток', 'RM-1'], colKeys[1], 1);
+  setValue(['Восток', 'RM-2'], colKeys[1], 2);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => v ?? null,
+      };
+    },
+  };
+
+  const visibleColKeys = [
+    ['2026-04-01', 'План'],
+    ['2026-05-01', 'План'],
+  ];
+
+  const result = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['2026-04-01', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'metric'],
+    'metric',
+    visibleColKeys,
+    0,
+  );
+  expect(result).toBeCloseTo(30e6, 0);
+});
+
+test('getBaseMetricValue row subtotal: duplicate leaves in getColKeys (Date vs ISO) are not double-counted', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['План'],
+    },
+    cols: ['Дата', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const d1 = new Date('2026-04-01T00:00:00.000Z');
+  const rowKeys = [['Восток', 'RM-1'], ['Восток', 'RM-2']];
+  // Один и тот же период дважды в getColKeys в разном виде — JSON.stringify-дедуп не сработал бы.
+  const colKeys = [
+    [d1, 'План'],
+    ['2026-04-01T00:00:00.000Z', 'План'],
+  ];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], colKeys[0], 10e6);
+  setValue(['Восток', 'RM-2'], colKeys[0], 20e6);
+  setValue(['Восток', 'RM-1'], colKeys[1], 10e6);
+  setValue(['Восток', 'RM-2'], colKeys[1], 20e6);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => v ?? null,
+      };
+    },
+  };
+
+  const visibleColKeys = [[d1, 'План']];
+  // Короткий colKey без слота метрики в prefix — широкий фильтр, оба colKeys в кандидатах
+  const result = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    [d1],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'metric'],
+    'metric',
+    visibleColKeys,
+    0,
+  );
+  expect(result).toBeCloseTo(30e6, 0);
+});
+
+test('getBaseMetricValue row subtotal ignores subtotal rowKey duplicates from getRowKeys', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['План'],
+    },
+    cols: ['Дата', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const rowKeys = [
+    ['Восток'], // subtotal key must not be included in sum
+    ['Восток', 'RM-1'],
+    ['Восток', 'RM-2'],
+  ];
+  const colKeys = [['Апрель 2026', 'План']];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток'], ['Апрель 2026', 'План'], 64.9e6);
+  setValue(['Восток', 'RM-1'], ['Апрель 2026', 'План'], 20.3e6);
+  setValue(['Восток', 'RM-2'], ['Апрель 2026', 'План'], 44.6e6);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => v ?? null,
+      };
+    },
+  };
+
+  const result = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['Апрель 2026', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'metric'],
+    'metric',
+    [['Апрель 2026', 'План']],
+    0,
+  );
+
+  expect(result).toBeCloseTo(64.9e6, 2);
 });

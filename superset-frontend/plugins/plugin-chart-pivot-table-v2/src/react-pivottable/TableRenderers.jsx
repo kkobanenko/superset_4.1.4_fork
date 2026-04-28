@@ -35,6 +35,18 @@ import {
 const METRIC_SUBTOTAL_MARKER = '\u200B__METRIC_SUBTOTAL__';
 const NON_ZERO_EPSILON = 1e-9;
 
+/** В консоли: localStorage.setItem('PIVOT_V2_DEBUG','1'); location.reload() — логи getBaseMetricValue (подытог строки). */
+function isPivotV2DebugEnabled() {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+  try {
+    return window.localStorage?.getItem('PIVOT_V2_DEBUG') === '1';
+  } catch {
+    return false;
+  }
+}
+
 // Константа для проверки адаптивного форматирования (поддерживаем оба варианта)
 const isAdaptiveFormatting = (valueFormat) => {
   return (
@@ -139,6 +151,26 @@ function colMetricSlotsMatch(a, b, metricsOrder) {
 }
 
 /**
+ * Ключ в metricsSqlExpressions может отличаться пробелами от label в colKey (Superset / SQL).
+ * Без этого computeFormulaValue не вызывается и подытоги метрик-формул остаются на «сыром» agg.
+ */
+function findMetricsSqlExpressionKey(metricName, metricsSqlExpressions) {
+  if (metricName == null || !metricsSqlExpressions) {
+    return null;
+  }
+  if (Object.prototype.hasOwnProperty.call(metricsSqlExpressions, metricName)) {
+    return metricName;
+  }
+  const t = String(metricName).trim();
+  for (const k of Object.keys(metricsSqlExpressions)) {
+    if (k != null && String(k).trim() === t) {
+      return k;
+    }
+  }
+  return null;
+}
+
+/**
  * Сравнение не-метрических измерений в colKey: trim, number/string, даты, чтобы
  * colKey в рендере и ключи из getColKeys() сопоставлялись.
  */
@@ -154,6 +186,15 @@ function colDimensionLooseEqual(a, b) {
   }
   if (a instanceof Date && b instanceof Date) {
     return a.getTime() === b.getTime();
+  }
+  // В getColKeys() встречается Date, в visibleColKeys — строка даты: сравнение по timestamp
+  if (a instanceof Date && typeof b === 'string') {
+    const t = new Date(b).getTime();
+    return !Number.isNaN(t) && t === a.getTime();
+  }
+  if (b instanceof Date && typeof a === 'string') {
+    const t = new Date(a).getTime();
+    return !Number.isNaN(t) && t === b.getTime();
   }
   if (typeof a === 'number' && typeof b === 'number' && !Number.isNaN(a) && !Number.isNaN(b)) {
     return a === b;
@@ -917,6 +958,22 @@ export class TableRenderer extends Component {
       }
       metricCandidates.push(baseMetricName);
       const namesMapping = this.props?.namesMapping || {};
+      // reverse mapping: raw SQL metric -> display label in pivot keys
+      const directMappedMetric = namesMapping[baseMetricName];
+      if (typeof directMappedMetric === 'string' && directMappedMetric.length > 0) {
+        metricCandidates.push(directMappedMetric);
+      } else if (baseMetricName != null) {
+        const baseMetricTrimmed = String(baseMetricName).trim();
+        Object.entries(namesMapping).forEach(([rawKey, displayValue]) => {
+          if (
+            typeof rawKey === 'string' &&
+            typeof displayValue === 'string' &&
+            rawKey.trim() === baseMetricTrimmed
+          ) {
+            metricCandidates.push(displayValue);
+          }
+        });
+      }
       Object.entries(namesMapping).forEach(([rawKey, displayValue]) => {
         if (
           typeof displayValue === 'string' &&
@@ -954,10 +1011,9 @@ export class TableRenderer extends Component {
         return null;
       };
 
-      if (isRowSubtotal && !transposePivot) {
-        // Для подытога строки при transposePivot = false нужно суммировать leaf-ячейки
-        // той же группы строк и того же полного col-prefix, а затем подставить базовую метрику.
-        // Это корректно работает и для нескольких уровней rows/cols.
+      if (isRowSubtotal) {
+        // Подытог строки: сумма по leaf row при фиксированной колонке.
+        // Работает и при transposePivot: в PivotData rows/cols уже в развёрнутом виде.
         const rowKeys =
           typeof pivotData.getRowKeys === 'function'
             ? pivotData.getRowKeys()
@@ -971,7 +1027,14 @@ export class TableRenderer extends Component {
         }
 
         const matchingRowKeys = rowKeys.filter(leafRowKey => {
-          if (!Array.isArray(leafRowKey) || leafRowKey.length < rowKey.length) {
+          // Берём только leaf-строки. В getRowKeys() могут присутствовать subtotal-ключи
+          // (например ['ВОСТОК']), и их повторное суммирование вместе с leaf
+          // (['ВОСТОК','RM-1'], ['ВОСТОК','RM-2']) давало ~2x.
+          if (
+            !Array.isArray(leafRowKey) ||
+            leafRowKey.length < rowKey.length ||
+            leafRowKey.length !== rowAttrs.length
+          ) {
             return false;
           }
           for (let i = 0; i < rowKey.length; i += 1) {
@@ -1076,54 +1139,191 @@ export class TableRenderer extends Component {
           });
         }
 
-        // На всякий случай убираем дубликаты листовых ключей (один и тот же period+metric дважды в getColKeys).
-        const seenLeaf = new Set();
-        matchingLeafColKeys = matchingLeafColKeys.filter(lk => {
-          const sig = JSON.stringify(lk);
-          if (seenLeaf.has(sig)) {
-            return false;
+        // Убираем дубликаты листовых ключей: в getColKeys() один и тот же столбец (период + метрика)
+        // иногда присутствует двумя элементами с разным представлением даты (Date vs ISO-строка
+        // и т.д.). JSON.stringify тогда не совпадает, и сумма getBaseMetricValue удваивала ~2×
+        // для SQL-формул «План» и сходных.
+        const uniqueLeafColKeys = [];
+        for (const lk of matchingLeafColKeys) {
+          if (!Array.isArray(lk)) {
+            continue;
           }
-          seenLeaf.add(sig);
-          return true;
-        });
+          const isSameLeafAsKept = uniqueLeafColKeys.some((kept) => {
+            if (!Array.isArray(kept) || kept.length !== lk.length) {
+              return false;
+            }
+            for (let i = 0; i < lk.length; i += 1) {
+              if (i === metricKeyIndex) {
+                if (!colMetricSlotsMatch(lk[i], kept[i], metricsOrder)) {
+                  return false;
+                }
+              } else if (!colDimensionLooseEqual(lk[i], kept[i])) {
+                return false;
+              }
+            }
+            return true;
+          });
+          if (!isSameLeafAsKept) {
+            uniqueLeafColKeys.push(lk);
+          }
+        }
+        matchingLeafColKeys = uniqueLeafColKeys;
 
-        // Однозначно привязываемся к N-й полнодлинной колонке в порядке видимой сетки
-        // (нужно, если strict/loose find дал 0 или >1 кандидатов — иначе подытог «План»
-        // падает в сырой agg пивота (~2× при двух периодах) или суммирует лишние листы).
+        // Привязка к той колонке, которую рисует сетка: visibleColKeys[colIndex].
+        // Порядок полных листьев в visibleColKeys (фильтры, свёртки, expand) не обязан совпадать
+        // с порядком getColKeys(); старый способ pFulls[ N ] по N-му полному листу в getColKeys
+        // давал 2× и другие ошибки при несовпадении сортировок.
         if (typeof colIndex === 'number' && Array.isArray(visibleColKeys) && (colKeys || []).length) {
-          const pFulls = (colKeys || []).filter(
-            lk => Array.isArray(lk) && lk.length === colAttrs.length,
-          );
-          let fullLeafCountBefore = 0;
-          for (let cj = 0; cj < colIndex; cj += 1) {
-            const ck = visibleColKeys[cj];
-            if (Array.isArray(ck) && ck.length === colAttrs.length) {
-              fullLeafCountBefore += 1;
+          const vk = visibleColKeys[colIndex];
+          if (Array.isArray(vk) && vk.length === colAttrs.length) {
+            // Для per-metric виртуальных ключей: свёрнутые уровни — MARKER, нужна не одна, а совокупность листьев
+            // (её строит фильтр выше). Здесь не перезаписываем matchingLeafColKeys.
+            const hasCollapsedWildcardDim = colAttrs.some(
+              (__, i) => i !== metricKeyIndex && vk[i] === METRIC_SUBTOTAL_MARKER,
+            );
+            const metricValRaw = vk[metricKeyIndex];
+            const isPlainOnlyMetricSlotMarker = metricValRaw === METRIC_SUBTOTAL_MARKER;
+            if (!hasCollapsedWildcardDim && !isPlainOnlyMetricSlotMarker) {
+              const normMetricForVisibleMatch = (val) => {
+                if (
+                  typeof val === 'string' &&
+                  val.length > 0 &&
+                  val.startsWith(METRIC_SUBTOTAL_MARKER) &&
+                  val !== METRIC_SUBTOTAL_MARKER
+                ) {
+                  return val.slice(METRIC_SUBTOTAL_MARKER.length);
+                }
+                return val;
+              };
+              const vkMet = normMetricForVisibleMatch(metricValRaw);
+              // Тот же объект ключа, что в getColKeys (visibleKeys даёт ссылки на элементы colKeys)
+              let fromVisible = (colKeys || []).find(lk => lk === vk);
+              if (!fromVisible) {
+                fromVisible = (colKeys || []).find(lk => {
+                if (!Array.isArray(lk) || lk.length !== colAttrs.length) {
+                  return false;
+                }
+                for (let i = 0; i < colAttrs.length; i += 1) {
+                  if (i === metricKeyIndex) {
+                    if (!colMetricSlotsMatch(lk[i], vkMet, metricsOrder)) {
+                      return false;
+                    }
+                  } else if (!colDimensionLooseEqual(lk[i], vk[i])) {
+                    return false;
+                  }
+                }
+                return true;
+              });
+              }
+              if (!fromVisible) {
+                const normVk = vk.map((v, i) =>
+                  i === metricKeyIndex ? normMetricForVisibleMatch(v) : v,
+                );
+                fromVisible = (colKeys || []).find(
+                  lk =>
+                    Array.isArray(lk) &&
+                    lk.length === colAttrs.length &&
+                    flatKey(lk) === flatKey(normVk),
+                );
+              }
+              if (fromVisible) {
+                matchingLeafColKeys = [fromVisible];
+              }
             }
           }
-          if (fullLeafCountBefore < pFulls.length) {
-            const want = pFulls[fullLeafCountBefore];
-            const pick = matchingLeafColKeys.find(
-              lk =>
-                colMetricSlotsMatch(
-                  lk[metricKeyIndex],
-                  want[metricKeyIndex],
-                  metricsOrder,
-                ) &&
-                colAttrs.every(
-                  (__, i) =>
-                    i === metricKeyIndex || colDimensionLooseEqual(lk[i], want[i]),
-                ),
+        }
+
+        // Резерв, если find по visibleColKeys не сработал и кандидатов 0 или >1: N-я полная колонка
+        // в getColKeys() по счётчику full leaf перед colIndex (устаревшая, но лучшая, чем ничего).
+        if (matchingLeafColKeys.length === 0 || matchingLeafColKeys.length > 1) {
+          if (typeof colIndex === 'number' && Array.isArray(visibleColKeys) && (colKeys || []).length) {
+            const pFulls = (colKeys || []).filter(
+              lk => Array.isArray(lk) && lk.length === colAttrs.length,
             );
-            if (pick) {
-              matchingLeafColKeys = [pick];
-            } else if (want) {
-              matchingLeafColKeys = [want];
+            let fullLeafCountBefore = 0;
+            for (let cj = 0; cj < colIndex; cj += 1) {
+              const ck = visibleColKeys[cj];
+              if (Array.isArray(ck) && ck.length === colAttrs.length) {
+                fullLeafCountBefore += 1;
+              }
+            }
+            if (fullLeafCountBefore < pFulls.length) {
+              const want = pFulls[fullLeafCountBefore];
+              const pick = matchingLeafColKeys.find(
+                lk =>
+                  colMetricSlotsMatch(
+                    lk[metricKeyIndex],
+                    want[metricKeyIndex],
+                    metricsOrder,
+                  ) &&
+                  colAttrs.every(
+                    (__, i) =>
+                      i === metricKeyIndex || colDimensionLooseEqual(lk[i], want[i]),
+                  ),
+              );
+              if (pick) {
+                matchingLeafColKeys = [pick];
+              } else if (want) {
+                matchingLeafColKeys = [want];
+              }
+            }
+          }
+        }
+
+        // Если осталось >1 листа (pFulls не вошёл: fullLeafCountBefore >= pFulls.length
+        // при prefix-колонках; или fromVisible и pFulls не сузили) — сужаем по visibleColKeys[colIndex]
+        // через пересечение с текущим списком кандидатов.
+        if (matchingLeafColKeys.length > 1 && typeof colIndex === 'number' && Array.isArray(visibleColKeys)) {
+          const vk = visibleColKeys[colIndex];
+          const bySameRef = vk && matchingLeafColKeys.find(lk => lk === vk);
+          if (bySameRef) {
+            matchingLeafColKeys = [bySameRef];
+          } else if (Array.isArray(vk) && vk.length === colAttrs.length) {
+            const normM = (val) => {
+              if (
+                typeof val === 'string' &&
+                val.length > 0 &&
+                val.startsWith(METRIC_SUBTOTAL_MARKER) &&
+                val !== METRIC_SUBTOTAL_MARKER
+              ) {
+                return val.slice(METRIC_SUBTOTAL_MARKER.length);
+              }
+              return val;
+            };
+            const vkM = normM(vk[metricKeyIndex]);
+            const narrowed = matchingLeafColKeys.filter(lk => {
+              if (!Array.isArray(lk) || lk.length !== colAttrs.length) {
+                return false;
+              }
+              for (let i = 0; i < colAttrs.length; i += 1) {
+                if (i === metricKeyIndex) {
+                  if (!colMetricSlotsMatch(lk[i], vkM, metricsOrder)) {
+                    return false;
+                  }
+                } else if (!colDimensionLooseEqual(lk[i], vk[i])) {
+                  return false;
+                }
+              }
+              return true;
+            });
+            if (narrowed.length === 1) {
+              matchingLeafColKeys = narrowed;
             }
           }
         }
 
         if (matchingRowKeys.length === 0 || matchingLeafColKeys.length === 0) {
+          if (isPivotV2DebugEnabled()) {
+            // eslint-disable-next-line no-console
+            console.info('[PivotTableV2][getBaseMetricValue row subtotal] null: no row or col keys', {
+              baseMetricName,
+              rowKey,
+              colKey,
+              colIndex,
+              matchingRowKeysLength: matchingRowKeys.length,
+              matchingLeafColKeysLength: matchingLeafColKeys.length,
+            });
+          }
           return null;
         }
 
@@ -1145,7 +1345,30 @@ export class TableRenderer extends Component {
         }
 
         if (!foundAny) {
+          if (isPivotV2DebugEnabled()) {
+            // eslint-disable-next-line no-console
+            console.info('[PivotTableV2][getBaseMetricValue row subtotal] null: no numeric agg', {
+              baseMetricName,
+              rowKey,
+              colKey,
+              colIndex,
+            });
+          }
           return null;
+        }
+        if (isPivotV2DebugEnabled()) {
+          // eslint-disable-next-line no-console
+          console.info('[PivotTableV2][getBaseMetricValue row subtotal]', {
+            baseMetricName,
+            transposePivot,
+            rowKey,
+            colKey,
+            colIndex,
+            matchingRowKeysCount: matchingRowKeys.length,
+            matchingLeafColKeysCount: matchingLeafColKeys.length,
+            leafColKeys: matchingLeafColKeys.map((k) => k.map((v) => (v instanceof Date ? v.toISOString() : v))),
+            sum,
+          });
         }
         return sum;
       } else if (isColSubtotal && !transposePivot) {
@@ -1208,7 +1431,11 @@ export class TableRenderer extends Component {
       return null;
     }
 
-    const sqlExpression = metricsSqlExpressions[formulaMetricName];
+    const sqlExprKey = findMetricsSqlExpressionKey(
+      formulaMetricName,
+      metricsSqlExpressions,
+    );
+    const sqlExpression = sqlExprKey != null ? metricsSqlExpressions[sqlExprKey] : null;
     if (!sqlExpression) {
       // Если метрика не является формулой, возвращаем null (будет использовано стандартное поведение)
       return null;
@@ -1239,6 +1466,7 @@ export class TableRenderer extends Component {
 
     // Получаем значения базовых метрик для каждого агрегатного терма
     const termValues = {};
+    const usedFallbackMetrics = new Set();
     for (const termInfo of parsed.terms) {
       if (!termInfo?.metricName || !termInfo?.token) {
         return null;
@@ -1268,6 +1496,9 @@ export class TableRenderer extends Component {
           if (explicitMappedMetrics.has(metricName)) {
             continue;
           }
+          if (usedFallbackMetrics.has(metricName)) {
+            continue;
+          }
           const fallbackValue = this.getBaseMetricValue(
             metricName,
             rowKey,
@@ -1288,6 +1519,7 @@ export class TableRenderer extends Component {
           ) {
             value = fallbackValue;
             resolvedMetricName = metricName;
+            usedFallbackMetrics.add(metricName);
             break;
           }
         }
@@ -2623,12 +2855,13 @@ export class TableRenderer extends Component {
         }
       }
 
-      if (!isPerMetricSubtotal && isRowSubtotalRow && !transposePivot && metricsSqlExpressions && metricKey) {
+      if (!isPerMetricSubtotal && isRowSubtotalRow && metricsSqlExpressions && metricKey) {
         const metricName = this.getMetricNameForCell(rowKey, colKey, rowAttrs, colAttrs, colIndex);
-        if (metricName && metricsSqlExpressions[metricName]) {
+        const sqlExprKey = findMetricsSqlExpressionKey(metricName, metricsSqlExpressions);
+        if (metricName && sqlExprKey && metricsSqlExpressions[sqlExprKey]) {
           // Метрика является формулой, вычисляем значение по формуле
           const formulaValue = this.computeFormulaValue(
-            metricName,
+            sqlExprKey,
             rowKey,
             colKey,
             true, // isRowSubtotal
@@ -3192,12 +3425,13 @@ export class TableRenderer extends Component {
           aggValue = hasValue ? result : null;
         } else if (
           totalAggregation === 'formula' ||
-          (totalAggregation === 'sum' &&
-            metricsSqlExpressions &&
-            metricsSqlExpressions[totalMetricName])
+          (totalAggregation === 'sum' && metricsSqlExpressions)
         ) {
-          const formulaValue = this.computeFormulaValue(
-            totalMetricName,
+          const totalSqlKey =
+            findMetricsSqlExpressionKey(totalMetricName, metricsSqlExpressions) || totalMetricName;
+          if (totalSqlKey && metricsSqlExpressions[totalSqlKey] != null) {
+            const formulaValue = this.computeFormulaValue(
+            totalSqlKey,
             [],
             colKey,
             false,
@@ -3221,6 +3455,7 @@ export class TableRenderer extends Component {
               rowKey: [],
               colKey,
             });
+          }
           }
         }
       }
