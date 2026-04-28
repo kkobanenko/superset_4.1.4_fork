@@ -114,6 +114,30 @@ const parseLabel = value => {
   return String(value);
 };
 
+/**
+ * Сравнение «слота» метрики в colKey/rowKey: индекс в metricsOrder и строковое имя
+ * считаются одной и той же метрикой; строки сравниваются с trim().
+ * Нужно, чтобы не суммировать одну и ту же колонку N раз при N метриках в сетке.
+ */
+function colMetricSlotsMatch(a, b, metricsOrder) {
+  if (a === b) {
+    return true;
+  }
+  if (typeof a === 'string' && typeof b === 'string' && a.trim() === b.trim()) {
+    return true;
+  }
+  const order = Array.isArray(metricsOrder) ? metricsOrder : [];
+  if (typeof a === 'number' && typeof b === 'string') {
+    const byIndex = order[a];
+    return typeof byIndex === 'string' && byIndex.trim() === b.trim();
+  }
+  if (typeof b === 'number' && typeof a === 'string') {
+    const byIndex = order[b];
+    return typeof byIndex === 'string' && byIndex.trim() === a.trim();
+  }
+  return false;
+}
+
 function displayCell(value, allowRenderHtml) {
   if (allowRenderHtml && typeof value === 'string') {
     return safeHtmlSpan(value);
@@ -920,6 +944,22 @@ export class TableRenderer extends Component {
           return true;
         });
 
+        // Если colKey у текущей ячейки уже указывает на конкретную метрику (колонка «План»,
+        // «Факт» и т.д.), нельзя подбирать все листовые colKey с совпадением префикса
+        // без слота метрики — иначе получится N итераций (N = число метрик) с одной и
+        // той же переподстановкой baseMetricName и N-кратное завышение подытога.
+        // Для colKey с сентинелом подытога по метрикам (METRIC_…) оставляем прежнюю
+        // логику: фильтр без сравнения по слоту метрики.
+        const colMetricRef =
+          colKey.length > metricKeyIndex ? colKey[metricKeyIndex] : undefined;
+        const hasConcreteMetricInColKey =
+          colMetricRef !== undefined &&
+          colMetricRef !== null &&
+          colMetricRef !== METRIC_SUBTOTAL_MARKER &&
+          !(
+            typeof colMetricRef === 'string' && colMetricRef.startsWith(METRIC_SUBTOTAL_MARKER)
+          );
+
         const matchingLeafColKeys = colKeys.filter(leafColKey => {
           if (!Array.isArray(leafColKey) || leafColKey.length !== colAttrs.length) {
             return false;
@@ -927,6 +967,11 @@ export class TableRenderer extends Component {
 
           for (let i = 0; i < colAttrs.length; i += 1) {
             if (i === metricKeyIndex) {
+              if (hasConcreteMetricInColKey) {
+                if (!colMetricSlotsMatch(leafColKey[i], colKey[i], metricsOrder)) {
+                  return false;
+                }
+              }
               continue;
             }
 

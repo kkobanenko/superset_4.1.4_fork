@@ -581,3 +581,60 @@ test('computeFormulaValue normalizes scaled base metric SUM(raw)*K back to raw S
 
   expect(result).toBeCloseTo(209_000_000 / 666_000_000 - 1, 10);
 });
+
+test('getBaseMetricValue for row subtotal sums current metric column once, not N times (N=metrics in layout)', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['Факт', 'План', 'X'],
+    },
+    cols: ['M', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const rowKeys = [
+    ['Восток', 'RM-1'],
+    ['Восток', 'RM-2'],
+  ];
+  const colKeys = [
+    ['G', 'Факт'],
+    ['G', 'План'],
+    ['G', 'X'],
+  ];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], ['G', 'План'], 20.3e6);
+  setValue(['Восток', 'RM-2'], ['G', 'План'], 44.6e6);
+  setValue(['Восток', 'RM-1'], ['G', 'Факт'], 1);
+  setValue(['Восток', 'RM-2'], ['G', 'Факт'], 2);
+  setValue(['Восток', 'RM-1'], ['G', 'X'], 100);
+  setValue(['Восток', 'RM-2'], ['G', 'X'], 200);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => v ?? null,
+      };
+    },
+  };
+
+  const result = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['G', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['M', 'metric'],
+    'metric',
+  );
+
+  expect(result).toBeCloseTo(20.3e6 + 44.6e6, 2);
+});
