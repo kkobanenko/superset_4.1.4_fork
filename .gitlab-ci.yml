@@ -346,7 +346,7 @@ build-docker-lean:
     - if: $CI_PIPELINE_SOURCE == "web"
       when: manual
       allow_failure: false
-  timeout: 3h  # Сборка может занять до 3 часов (frontend build может быть долгим)
+  timeout: 5h  # Сборка может занять до 5 часов (frontend build может быть долгим)
 
 # Опциональная сборка dev образа (для разработки)
 build-docker-dev:
@@ -549,5 +549,5 @@ build-docker-dev:
     - if: $CI_COMMIT_BRANCH == "dev"
       when: manual
   # tags: []  # Убрано требование тега docker для совместимости с разными runner'ами
-  timeout: 3h  # Сборка может занять до 3 часов (frontend build может быть долгим)
+  timeout: 5h  # Сборка может занять до 5 часов (frontend build может быть долгим)
 
