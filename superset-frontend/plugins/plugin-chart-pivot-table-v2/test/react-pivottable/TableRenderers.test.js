@@ -638,3 +638,57 @@ test('getBaseMetricValue for row subtotal sums current metric column once, not N
 
   expect(result).toBeCloseTo(20.3e6 + 44.6e6, 2);
 });
+
+test('getBaseMetricValue row subtotal with two period columns picks single leaf when colKey is fully specified', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['План'],
+    },
+    cols: ['Дата', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const rowKeys = [
+    ['Восток', 'RM-1'],
+    ['Восток', 'RM-2'],
+  ];
+  const colKeys = [
+    ['2026-01-01', 'План'],
+    ['2026-02-01', 'План'],
+  ];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], ['2026-01-01', 'План'], 10e6);
+  setValue(['Восток', 'RM-2'], ['2026-01-01', 'План'], 20e6);
+  setValue(['Восток', 'RM-1'], ['2026-02-01', 'План'], 1e6);
+  setValue(['Восток', 'RM-2'], ['2026-02-01', 'План'], 2e6);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => v ?? null,
+      };
+    },
+  };
+
+  const result = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['2026-01-01', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'metric'],
+    'metric',
+  );
+
+  expect(result).toBeCloseTo(30e6, 0);
+});

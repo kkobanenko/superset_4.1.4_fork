@@ -138,6 +138,20 @@ function colMetricSlotsMatch(a, b, metricsOrder) {
   return false;
 }
 
+/**
+ * Сравнение значений не-метрических измерений в colKey (период, статус…).
+ * Строки сравниваем с trim(), чтобы не расходилось с листовыми ключами PivotData.
+ */
+function colDimensionSlotsMatch(a, b) {
+  if (a === b) {
+    return true;
+  }
+  if (typeof a === 'string' && typeof b === 'string' && a.trim() === b.trim()) {
+    return true;
+  }
+  return false;
+}
+
 function displayCell(value, allowRenderHtml) {
   if (allowRenderHtml && typeof value === 'string') {
     return safeHtmlSpan(value);
@@ -960,42 +974,92 @@ export class TableRenderer extends Component {
             typeof colMetricRef === 'string' && colMetricRef.startsWith(METRIC_SUBTOTAL_MARKER)
           );
 
-        const matchingLeafColKeys = colKeys.filter(leafColKey => {
-          if (!Array.isArray(leafColKey) || leafColKey.length !== colAttrs.length) {
-            return false;
-          }
-
-          for (let i = 0; i < colAttrs.length; i += 1) {
-            if (i === metricKeyIndex) {
-              if (hasConcreteMetricInColKey) {
-                if (!colMetricSlotsMatch(leafColKey[i], colKey[i], metricsOrder)) {
-                  return false;
-                }
-              }
-              continue;
+        // Полностью заданный colKey (период + метрика + пр.): берём ровно один листовой colKey.
+        // Иначе при undefined/null в слоте периода фильтр ниже «молчит» по этому слоту и в подытог
+        // попадают все периоды сразу → ~2× при двух датах в данных (типично для SQL-метрики «План»,
+        // тогда как SIMPLE «Факт» идёт без computeFormulaValue).
+        const colKeyNonMetricSlotsConcrete =
+          hasConcreteMetricInColKey &&
+          colKey.length === colAttrs.length &&
+          colKey.every((v, idx) => {
+            if (idx === metricKeyIndex) {
+              return true;
             }
+            return (
+              v !== undefined &&
+              v !== null &&
+              v !== METRIC_SUBTOTAL_MARKER &&
+              !(typeof v === 'string' && v.startsWith(METRIC_SUBTOTAL_MARKER))
+            );
+          });
 
-            const currentColValue = colKey[i];
-            if (
-              currentColValue === undefined ||
-              currentColValue === null ||
-              currentColValue === METRIC_SUBTOTAL_MARKER
-            ) {
-              continue;
-            }
-
-            if (
-              typeof currentColValue === 'string' &&
-              currentColValue.startsWith(METRIC_SUBTOTAL_MARKER)
-            ) {
-              continue;
-            }
-
-            if (leafColKey[i] !== currentColValue) {
+        let matchingLeafColKeys;
+        if (colKeyNonMetricSlotsConcrete) {
+          const exactLeaf = colKeys.find(lk => {
+            if (!Array.isArray(lk) || lk.length !== colAttrs.length) {
               return false;
             }
-          }
+            for (let i = 0; i < colAttrs.length; i += 1) {
+              if (i === metricKeyIndex) {
+                if (!colMetricSlotsMatch(lk[i], colKey[i], metricsOrder)) {
+                  return false;
+                }
+              } else if (!colDimensionSlotsMatch(lk[i], colKey[i])) {
+                return false;
+              }
+            }
+            return true;
+          });
+          matchingLeafColKeys = exactLeaf ? [exactLeaf] : [];
+        } else {
+          matchingLeafColKeys = colKeys.filter(leafColKey => {
+            if (!Array.isArray(leafColKey) || leafColKey.length !== colAttrs.length) {
+              return false;
+            }
 
+            for (let i = 0; i < colAttrs.length; i += 1) {
+              if (i === metricKeyIndex) {
+                if (hasConcreteMetricInColKey) {
+                  if (!colMetricSlotsMatch(leafColKey[i], colKey[i], metricsOrder)) {
+                    return false;
+                  }
+                }
+                continue;
+              }
+
+              const currentColValue = colKey[i];
+              if (
+                currentColValue === undefined ||
+                currentColValue === null ||
+                currentColValue === METRIC_SUBTOTAL_MARKER
+              ) {
+                continue;
+              }
+
+              if (
+                typeof currentColValue === 'string' &&
+                currentColValue.startsWith(METRIC_SUBTOTAL_MARKER)
+              ) {
+                continue;
+              }
+
+              if (!colDimensionSlotsMatch(leafColKey[i], currentColValue)) {
+                return false;
+              }
+            }
+
+            return true;
+          });
+        }
+
+        // На всякий случай убираем дубликаты листовых ключей (один и тот же period+metric дважды в getColKeys).
+        const seenLeaf = new Set();
+        matchingLeafColKeys = matchingLeafColKeys.filter(lk => {
+          const sig = JSON.stringify(lk);
+          if (seenLeaf.has(sig)) {
+            return false;
+          }
+          seenLeaf.add(sig);
           return true;
         });
 
