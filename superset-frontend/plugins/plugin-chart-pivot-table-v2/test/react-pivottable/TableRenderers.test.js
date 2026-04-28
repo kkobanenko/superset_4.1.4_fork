@@ -692,3 +692,65 @@ test('getBaseMetricValue row subtotal with two period columns picks single leaf 
 
   expect(result).toBeCloseTo(30e6, 0);
 });
+
+test('getBaseMetricValue row subtotal uses colIndex+visibleColKeys to pick correct period when colKey mismatches pivot strings', () => {
+  const renderer = new TableRenderer({
+    tableOptions: {
+      metricKey: 'metric',
+      metricsOrder: ['План'],
+    },
+    cols: ['Дата', 'metric'],
+    rows: ['ОП', 'РМ'],
+  });
+
+  const rowKeys = [
+    ['Восток', 'RM-1'],
+    ['Восток', 'RM-2'],
+  ];
+  // Pivot keys use canonical "P1"; ячейка передаёт «другой» label периода — без colIndex подобрались бы оба периода.
+  const colKeys = [
+    ['P1', 'План'],
+    ['P2', 'План'],
+  ];
+
+  const values = new Map();
+  const setValue = (rowKey, colKey, value) => {
+    values.set(JSON.stringify([rowKey, colKey]), value);
+  };
+  setValue(['Восток', 'RM-1'], ['P1', 'План'], 10e6);
+  setValue(['Восток', 'RM-2'], ['P1', 'План'], 20e6);
+  setValue(['Восток', 'RM-1'], ['P2', 'План'], 999);
+  setValue(['Восток', 'RM-2'], ['P2', 'План'], 1);
+
+  const pivotData = {
+    getRowKeys: () => rowKeys,
+    getColKeys: () => colKeys,
+    getAggregator(rowKey, colKey) {
+      const v = values.get(JSON.stringify([rowKey, colKey]));
+      return {
+        value: () => v ?? null,
+      };
+    },
+  };
+
+  const visibleColKeys = [
+    ['P1', 'План'],
+    ['P2', 'План'],
+  ];
+
+  const result = renderer.getBaseMetricValue(
+    'План',
+    ['Восток'],
+    ['WRONG_LABEL', 'План'],
+    true,
+    false,
+    pivotData,
+    ['ОП', 'РМ'],
+    ['Дата', 'metric'],
+    'metric',
+    visibleColKeys,
+    0,
+  );
+
+  expect(result).toBeCloseTo(30e6, 0);
+});

@@ -139,17 +139,29 @@ function colMetricSlotsMatch(a, b, metricsOrder) {
 }
 
 /**
- * Сравнение значений не-метрических измерений в colKey (период, статус…).
- * Строки сравниваем с trim(), чтобы не расходилось с листовыми ключами PivotData.
+ * Сравнение не-метрических измерений в colKey: trim, number/string, даты, чтобы
+ * colKey в рендере и ключи из getColKeys() сопоставлялись.
  */
-function colDimensionSlotsMatch(a, b) {
+function colDimensionLooseEqual(a, b) {
   if (a === b) {
     return true;
+  }
+  if (a == null && b == null) {
+    return true;
+  }
+  if (a == null || b == null) {
+    return false;
+  }
+  if (a instanceof Date && b instanceof Date) {
+    return a.getTime() === b.getTime();
+  }
+  if (typeof a === 'number' && typeof b === 'number' && !Number.isNaN(a) && !Number.isNaN(b)) {
+    return a === b;
   }
   if (typeof a === 'string' && typeof b === 'string' && a.trim() === b.trim()) {
     return true;
   }
-  return false;
+  return String(a).trim() === String(b).trim();
 }
 
 function displayCell(value, allowRenderHtml) {
@@ -853,7 +865,19 @@ export class TableRenderer extends Component {
   // Получение значения базовой метрики из подытогов/итогов
   // Для подытога строки: создаем colKey с базовой метрикой
   // Для итога колонки: создаем rowKey или colKey с базовой метрикой (в зависимости от transposePivot)
-  getBaseMetricValue(baseMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey) {
+  getBaseMetricValue(
+    baseMetricName,
+    rowKey,
+    colKey,
+    isRowSubtotal,
+    isColSubtotal,
+    pivotData,
+    rowAttrs,
+    colAttrs,
+    metricKey,
+    visibleColKeys,
+    colIndex,
+  ) {
     if (!baseMetricName || !pivotData || !metricKey) {
       return null;
     }
@@ -1004,7 +1028,7 @@ export class TableRenderer extends Component {
                 if (!colMetricSlotsMatch(lk[i], colKey[i], metricsOrder)) {
                   return false;
                 }
-              } else if (!colDimensionSlotsMatch(lk[i], colKey[i])) {
+              } else if (!colDimensionLooseEqual(lk[i], colKey[i])) {
                 return false;
               }
             }
@@ -1043,7 +1067,7 @@ export class TableRenderer extends Component {
                 continue;
               }
 
-              if (!colDimensionSlotsMatch(leafColKey[i], currentColValue)) {
+              if (!colDimensionLooseEqual(leafColKey[i], currentColValue)) {
                 return false;
               }
             }
@@ -1062,6 +1086,42 @@ export class TableRenderer extends Component {
           seenLeaf.add(sig);
           return true;
         });
+
+        // Однозначно привязываемся к N-й полнодлинной колонке в порядке видимой сетки
+        // (нужно, если strict/loose find дал 0 или >1 кандидатов — иначе подытог «План»
+        // падает в сырой agg пивота (~2× при двух периодах) или суммирует лишние листы).
+        if (typeof colIndex === 'number' && Array.isArray(visibleColKeys) && (colKeys || []).length) {
+          const pFulls = (colKeys || []).filter(
+            lk => Array.isArray(lk) && lk.length === colAttrs.length,
+          );
+          let fullLeafCountBefore = 0;
+          for (let cj = 0; cj < colIndex; cj += 1) {
+            const ck = visibleColKeys[cj];
+            if (Array.isArray(ck) && ck.length === colAttrs.length) {
+              fullLeafCountBefore += 1;
+            }
+          }
+          if (fullLeafCountBefore < pFulls.length) {
+            const want = pFulls[fullLeafCountBefore];
+            const pick = matchingLeafColKeys.find(
+              lk =>
+                colMetricSlotsMatch(
+                  lk[metricKeyIndex],
+                  want[metricKeyIndex],
+                  metricsOrder,
+                ) &&
+                colAttrs.every(
+                  (__, i) =>
+                    i === metricKeyIndex || colDimensionLooseEqual(lk[i], want[i]),
+                ),
+            );
+            if (pick) {
+              matchingLeafColKeys = [pick];
+            } else if (want) {
+              matchingLeafColKeys = [want];
+            }
+          }
+        }
 
         if (matchingRowKeys.length === 0 || matchingLeafColKeys.length === 0) {
           return null;
@@ -1128,7 +1188,22 @@ export class TableRenderer extends Component {
   }
 
   // Вычисление значения формулы для подытогов/итогов
-  computeFormulaValue(formulaMetricName, rowKey, colKey, isRowSubtotal, isColSubtotal, pivotData, rowAttrs, colAttrs, metricKey, metricsSqlExpressions, metricsOrder, metricNameMapping) {
+  computeFormulaValue(
+    formulaMetricName,
+    rowKey,
+    colKey,
+    isRowSubtotal,
+    isColSubtotal,
+    pivotData,
+    rowAttrs,
+    colAttrs,
+    metricKey,
+    metricsSqlExpressions,
+    metricsOrder,
+    metricNameMapping,
+    visibleColKeys,
+    colIndex,
+  ) {
     if (!formulaMetricName || !metricsSqlExpressions) {
       return null;
     }
@@ -1179,6 +1254,8 @@ export class TableRenderer extends Component {
         rowAttrs,
         colAttrs,
         metricKey,
+        visibleColKeys,
+        colIndex,
       );
 
       // Fallback для кейсов, когда SQL-терм не удалось связать с label метрики:
@@ -1201,6 +1278,8 @@ export class TableRenderer extends Component {
             rowAttrs,
             colAttrs,
             metricKey,
+            visibleColKeys,
+            colIndex,
           );
           if (
             fallbackValue !== null &&
@@ -2520,6 +2599,8 @@ export class TableRenderer extends Component {
             metricsSqlExpressions,
             metricsOrder,
             metricNameMapping,
+            visibleColKeys,
+            colIndex,
           );
           if (
             formulaValue !== null &&
@@ -2558,7 +2639,9 @@ export class TableRenderer extends Component {
             metricKey,
             metricsSqlExpressions,
             metricsOrder,
-            metricNameMapping
+            metricNameMapping,
+            visibleColKeys,
+            colIndex,
           );
           if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
             aggValue = formulaValue;
@@ -3053,6 +3136,8 @@ export class TableRenderer extends Component {
             metricsSqlExpressions,
             metricsOrder,
             metricNameMapping,
+            undefined,
+            undefined,
           );
           if (
             formulaValue !== null &&
@@ -3124,6 +3209,8 @@ export class TableRenderer extends Component {
             metricsSqlExpressions,
             metricsOrder,
             metricNameMapping,
+            undefined,
+            undefined,
           );
           if (formulaValue !== null && formulaValue !== undefined && !Number.isNaN(formulaValue)) {
             aggValue = formulaValue;
