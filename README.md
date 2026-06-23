@@ -19,33 +19,33 @@ under the License.
 
 # Superset Fork
 
-Apache Superset `4.1.4` fork with custom `Pivot Table V2` behavior and isolated local dev stack on `http://localhost:18088`.
+Форк Apache Superset `4.1.4` с доработками `Pivot Table V2` и изолированным локальным dev-окружением на `http://localhost:18088`.
 
-Use this README as quick map: what to rebuild, restart, and verify after each kind of change. Deep details live in linked docs.
+Этот README — краткая шпаргалка: что пересобрать, перезапустить и проверить после каждого типа изменений. Подробности — в связанных документах.
 
-## Key Docs
+## Ключевые документы
 
-| Document | Use when |
+| Документ | Когда нужен |
 | --- | --- |
-| [`docker/README.dev.md`](docker/README.dev.md) | Need local dev stack, logs, reset, troubleshooting |
-| [`START_SUPERSET.md`](START_SUPERSET.md) | Need step-by-step local start on `18088` |
-| [`REBUILD_DOCKER_IMAGE.md`](REBUILD_DOCKER_IMAGE.md) | Need image rebuild flow tied to CI/CD |
-| [`PRD.md`](PRD.md) | Need fork feature context or status |
-| [`superset-frontend/plugins/plugin-chart-pivot-table-v2/`](superset-frontend/plugins/plugin-chart-pivot-table-v2/) | Need plugin source |
+| [`docker/README.dev.md`](docker/README.dev.md) | Локальный dev-стек, логи, сброс, troubleshooting |
+| [`START_SUPERSET.md`](START_SUPERSET.md) | Пошаговый запуск на порту `18088` |
+| [`REBUILD_DOCKER_IMAGE.md`](REBUILD_DOCKER_IMAGE.md) | Пересборка образа через CI/CD |
+| [`PRD.md`](PRD.md) | Контекст и статус доработок форка |
+| [`superset-frontend/plugins/plugin-chart-pivot-table-v2/`](superset-frontend/plugins/plugin-chart-pivot-table-v2/) | Исходники плагина |
 
-## Change -> Required Actions
+## Изменение -> что сделать
 
-| If you changed | Do before test deploy or handoff |
+| Что изменили | Действия перед тестовым деплоем или передачей |
 | --- | --- |
-| Frontend or plugin code in `superset-frontend/` | Run `npm run plugins:build` and `npm run build`, then restart or rebuild dev container. Verify UI on `http://localhost:18088`. |
-| Backend Python code in `superset/` | Rebuild or restart dev container. If schema did not change, restart may be enough. Verify app starts and login works. |
-| Docker files or dev config like `docker-compose.dev.yml` or `superset_config_dev.py` | Rebuild dev container with `docker compose -f docker/docker-compose.dev.yml up -d --build`. Verify container status and runtime env. |
-| DB schema or migration code | Rebuild or restart container, then run `docker compose -f docker/docker-compose.dev.yml exec superset_dev superset db upgrade`. Verify app starts after upgrade. |
-| Docs only | No deploy action required. |
+| Frontend или плагин в `superset-frontend/` | `npm run plugins:build` и `npm run build`, затем перезапуск или пересборка dev-контейнера. Проверить UI на `http://localhost:18088`. |
+| Backend Python в `superset/` | Пересобрать или перезапустить dev-контейнер. Если схема БД не менялась — может хватить restart. Проверить старт приложения и вход. |
+| Docker-файлы или dev-конфиг (`docker-compose.dev.yml`, `superset_config_dev.py`) | `docker compose -f docker/docker-compose.dev.yml up -d --build`. Проверить статус контейнера и env. |
+| Схема БД или миграции | Пересобрать или перезапустить контейнер, затем `docker compose -f docker/docker-compose.dev.yml exec superset_dev superset db upgrade`. Проверить старт после upgrade. |
+| Только документация | Деплой не нужен. |
 
-## Common Procedures
+## Типовые процедуры
 
-### Rebuild frontend assets
+### Пересборка frontend-ассетов
 
 ```bash
 cd superset-frontend
@@ -53,78 +53,78 @@ npm run plugins:build
 npm run build
 ```
 
-### Rebuild or restart local dev stack
+### Пересборка или перезапуск локального dev-стека
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml up -d --build
 ```
 
-If image rebuild is not needed and only app restart is needed:
+Если пересборка образа не нужна — только перезапуск приложения:
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml restart superset_dev
 ```
 
-### Initialize or upgrade local metadata DB
+### Инициализация или обновление метаданных БД
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml exec superset_dev superset db upgrade
 docker compose -f docker/docker-compose.dev.yml exec superset_dev superset init
 ```
 
-Run `superset init` on first start or when local setup needs re-initialization.
+`superset init` — при первом запуске или когда локальное окружение нужно переинициализировать.
 
-### Check running version or env
+### Проверка версии или env
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml exec superset_dev printenv SUPERSET_VERSION
 docker compose -f docker/docker-compose.dev.yml ps
 ```
 
-If your change is shipped as fork build artifact, keep versioning aligned with current project practice before handing build to others.
+Если изменение уходит в сборку форка — синхронизируйте версию с текущей практикой проекта перед передачей сборки.
 
-## Verification Checklist
+## Чеклист проверки
 
-- Open `http://localhost:18088`
-- Login with `admin` / `admin` in local dev stack
-- If UI changed, verify target screen or chart behavior in browser
-- If config or build changed, verify container is running and `SUPERSET_VERSION` is what you expect
-- If migration changed, verify app starts after `superset db upgrade`
+- Открыть `http://localhost:18088`
+- Войти: `admin` / `admin`
+- Если менялся UI — проверить нужный экран или чарт в браузере
+- Если менялись конфиг или сборка — убедиться, что контейнер работает и `SUPERSET_VERSION` ожидаемый
+- Если менялись миграции — убедиться, что приложение стартует после `superset db upgrade`
 
-Useful debug pages already used in this fork:
+Страницы для отладки в этом форке:
 
-- Explore page: `http://localhost:18088/explore/?form_data_key=v56qw5jg_sY&dashboard_page_id=n1VbmsWxakwba3O0a9bhN&slice_id=166`
+- Explore: `http://localhost:18088/explore/?form_data_key=v56qw5jg_sY&dashboard_page_id=n1VbmsWxakwba3O0a9bhN&slice_id=166`
 - Dashboard: `http://localhost:18088/superset/dashboard/16/`
 
-## Local Dev Stack
+## Локальный dev-стек
 
 - Superset: `18088`
 - Postgres: `15432`
 - Redis: `16379`
 
-Primary local entrypoint:
+Запуск:
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml up -d
 ```
 
-For logs:
+Логи:
 
 ```bash
 docker compose -f docker/docker-compose.dev.yml logs -f superset_dev
 ```
 
-## Notes For Fork Changes
+## Заметки по форку
 
-- `Pivot Table V2` is main customized area in this fork.
-- Frontend changes can require both asset rebuild and app restart before browser shows correct files.
-- Do not invent production deploy steps from this README. If prod flow matters, use project CI/CD and image docs first.
+- Основная зона доработок — `Pivot Table V2`.
+- Изменения frontend часто требуют и пересборки ассетов, и перезапуска приложения — иначе браузер может показать старые файлы.
+- Процедуры prod-деплоя здесь не описаны. Для prod смотрите CI/CD и документацию по образам проекта.
 
 ## Upstream Superset
 
-Need general Superset documentation instead of fork procedure?
+Общая документация Apache Superset:
 
-- [Official docs](https://superset.apache.org)
-- [Installation and configuration](https://superset.apache.org/docs/installation/architecture/)
-- [Contributor guide](https://github.com/apache/superset/blob/master/CONTRIBUTING.md)
+- [Официальная документация](https://superset.apache.org)
+- [Установка и конфигурация](https://superset.apache.org/docs/installation/architecture/)
+- [Руководство для контрибьюторов](https://github.com/apache/superset/blob/master/CONTRIBUTING.md)
 - [REST API](https://superset.apache.org/docs/rest-api)
